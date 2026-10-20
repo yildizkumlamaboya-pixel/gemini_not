@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.yildiz.notasistani",
+    "sha256_cert_fingerprints": ["F9:3A:C8:07:44:6C:50:09:70:79:B5:3D:C5:81:DA:F6:B9:68:CB:CD:C8:CE:7D:FF:ED:79:BA:44:D3:F1:B1:DB"]
+  }
+}]
