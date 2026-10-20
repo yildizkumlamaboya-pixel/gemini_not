@@ -137,6 +137,48 @@ nav button.act b{background:linear-gradient(135deg,rgba(37,99,235,.13),rgba(6,18
 .recbar.on{display:flex}
 .recbar i{width:9px;height:9px;border-radius:50%;background:#ef4444;animation:pul 1.4s ease-out infinite}
 .mono{font-family:var(--mono)}
+.cam{position:fixed;inset:0;z-index:40;background:#000;display:flex;flex-direction:column}
+.camstage{position:relative;flex:1;overflow:hidden}
+.camstage video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000}
+.camstage canvas{position:absolute;pointer-events:none}
+.camflash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+.camflash.on{animation:fl .35s ease-out}
+@keyframes fl{from{opacity:.85}to{opacity:0}}
+.camtop{position:absolute;top:0;left:0;right:0;z-index:2;display:flex;gap:8px;align-items:center;padding:calc(10px + env(safe-area-inset-top)) 12px 14px;background:linear-gradient(rgba(0,0,0,.55),transparent)}
+.cbtn{background:rgba(255,255,255,.14);color:#fff;border:1px solid rgba(255,255,255,.22);box-shadow:none;min-width:44px;height:44px;border-radius:14px;padding:0 12px;backdrop-filter:blur(8px)}
+.cbtn:hover{border-color:rgba(255,255,255,.4);box-shadow:none}
+.cbtn.act{background:var(--acc);border-color:var(--acc)}
+.camst{flex:1;color:#e2e8f0;font-size:12px;font-weight:600;text-shadow:0 1px 3px #000}
+.cambot{background:#0b0f19;padding:10px 12px calc(14px + env(safe-area-inset-bottom));display:grid;gap:10px}
+.camfields{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
+.camfields:empty{display:none}
+.camfields input{flex:1 0 130px;background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.16);color:#fff;padding:9px 10px;font-size:14px}
+.camfields input:focus{background:rgba(255,255,255,.14);box-shadow:none}
+.camtpls{margin:0;padding:2px 0}
+.camtpls button{background:rgba(255,255,255,.08);color:#e2e8f0;border-color:rgba(255,255,255,.16);box-shadow:none}
+.camtpls button i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:2px}
+.camrow{display:flex;align-items:center;justify-content:space-between;padding:0 6px}
+.shutter{width:76px;height:76px;border-radius:50%;padding:0;background:#fff;border:6px solid #0b0f19;box-shadow:0 0 0 3px #fff}
+.shutter:active{transform:scale(.92)}
+.camthumb{width:54px;height:54px;border-radius:14px;overflow:hidden;position:relative;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16)}
+.camthumb img{width:100%;height:100%;object-fit:cover}
+.camthumb b{position:absolute;right:3px;top:3px;background:var(--acc);color:#fff;font-size:11px;border-radius:9px;padding:0 6px}
+.tplrow{display:flex;gap:10px;align-items:center;padding:9px;border:1px solid var(--line);border-radius:14px;margin-bottom:8px;cursor:pointer;background:#fff}
+.tplrow.sel{border-color:var(--acc);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+.tplrow img{width:96px;height:72px;border-radius:10px;object-fit:cover;flex:none}
+.tplrow .bd{flex:1;min-width:0}
+.tplprev{display:block;width:100%;border-radius:14px;margin-top:8px}
+.seg{display:flex;gap:4px;background:#f1f5f9;border-radius:12px;padding:4px;flex-wrap:wrap}
+.seg button{flex:1;border:0;box-shadow:none;background:transparent;padding:8px 6px;font-size:13px;border-radius:9px}
+.seg button.act{background:#fff;color:var(--acc);box-shadow:0 1px 4px rgba(15,23,42,.12)}
+.swatches{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.swatches span{width:30px;height:30px;border-radius:50%;cursor:pointer;border:3px solid #fff;box-shadow:0 0 0 1px var(--line)}
+.swatches span.act{box-shadow:0 0 0 2px var(--acc)}
+.swatches input{width:42px;height:34px;padding:2px;flex:none}
+.checks{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.checks label{margin:0;display:flex;align-items:center;gap:6px;font-size:13px;color:var(--tx);font-weight:500;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:8px}
+.frow{margin-bottom:6px}
+.frow input{padding:8px 10px}
 .cnt{display:inline-block;min-width:18px;padding:1px 6px;margin-left:2px;border-radius:10px;font:700 11px/16px var(--mono);background:rgba(37,99,235,.12);color:var(--acc)}
 .cnt.bad{background:#fee2e2;color:#b91c1c}
 .chips button.act .cnt{background:rgba(255,255,255,.25);color:#fff}
@@ -254,6 +296,10 @@ details.card[open] summary{margin-bottom:6px}
     </div>
   </div>
   <div class="card">
+    <h3>Fotoğraf şablonları</h3>
+    <button style="width:100%" onclick="openTplList()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 15h18M8 19h3"/></svg> Şablonları düzenle</button>
+  </div>
+  <div class="card">
     <h3>Yedek</h3>
     <div class="row">
       <button onclick="exportData()">Dışa aktar</button>
@@ -300,7 +346,7 @@ details.card[open] summary{margin-bottom:6px}
   <label>Fotoğraflar</label>
   <div class="pgrid" id="nPhotos"></div>
   <div class="row" style="margin-top:8px">
-    <button class="sm" onclick="$('camIn').click()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8a2 2 0 0 1 2-2h2l1.5-2h5L16 6h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.5"/></svg> Kamera</button>
+    <button class="sm" onclick="openCam()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8a2 2 0 0 1 2-2h2l1.5-2h5L16 6h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.5"/></svg> Kamera</button>
     <button class="sm" onclick="$('galIn').click()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="m21 15-4.5-4.5L5 21"/></svg> Galeriden</button>
   </div>
   <div class="mut" id="phStat" style="margin-top:6px"></div>
@@ -385,6 +431,74 @@ details.card[open] summary{margin-bottom:6px}
     <button class="pri" onclick="recFinish()">✔ Bitir</button>
   </div>
 </div></div></div>
+
+<!-- CANLI KAMERA -->
+<div class="cam hidden" id="cam">
+  <div class="camstage" id="camStage"><video id="camV" playsinline muted autoplay></video><canvas id="camO"></canvas><div class="camflash" id="camFlash"></div></div>
+  <div class="camtop">
+    <button class="cbtn" onclick="closeCam()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    <span class="camst" id="camSt"></span>
+    <button class="cbtn hidden" id="camTorch" onclick="camTorch()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg></button>
+    <button class="cbtn" onclick="camFlip()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></svg></button>
+  </div>
+  <div class="cambot">
+    <div class="camfields" id="camFields"></div>
+    <div class="chips camtpls" id="camTpls"></div>
+    <div class="camrow">
+      <div class="camthumb" id="camThumb" onclick="closeCam()"></div>
+      <button class="shutter" onclick="camShot()" aria-label="Çek"></button>
+      <button class="cbtn" onclick="openTplList()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 15h18M8 19h3"/></svg></button>
+    </div>
+  </div>
+</div>
+
+<!-- ŞABLON LİSTESİ -->
+<div class="modal" id="mTpls" style="z-index:61"><div class="sheet">
+  <div class="row"><h3 style="margin:0">Fotoğraf şablonları</h3><button class="sm ghost" style="flex:0 0 auto" onclick="closeM('mTpls')">✕</button></div>
+  <div class="row" style="margin:12px 0">
+    <input id="tpAI" placeholder="✨ Tarif et, AI şablon yapsın">
+    <button class="sm pri" style="flex:0 0 auto" id="tpAIBtn" onclick="tplAINew()">Yap</button>
+  </div>
+  <div id="tplList"></div>
+  <button style="width:100%;margin-top:4px" onclick="tplEdit()">＋ Boş şablon</button>
+</div></div>
+
+<!-- ŞABLON DÜZENLE -->
+<div class="modal" id="mTplEd" style="z-index:62"><div class="sheet">
+  <div class="row"><h3 style="margin:0">Şablon</h3><button class="sm ghost" style="flex:0 0 auto" onclick="closeM('mTplEd')">✕</button></div>
+  <canvas id="tplPrev" class="tplprev"></canvas>
+  <div class="row" style="margin-top:10px">
+    <input id="teAI" placeholder="✨ AI ile değiştir: örn. kırmızı yap, plaka ekle">
+    <button class="sm ai" style="flex:0 0 auto" id="teAIBtn" onclick="tplAIEdit()">Uygula</button>
+  </div>
+  <div class="row">
+    <div><label>Şablon adı</label><input id="teName"></div>
+    <div><label>Başlık</label><input id="teTitle"></div>
+  </div>
+  <label>Görünüm</label>
+  <div class="seg" id="teStyle"><button data-v="card">Kart</button><button data-v="band">Şerit</button><button data-v="minimal">Sade</button></div>
+  <label>Konum</label>
+  <div class="seg" id="tePos"><button data-v="tl">↖ Sol üst</button><button data-v="tr">↗ Sağ üst</button><button data-v="bl">↙ Sol alt</button><button data-v="br">↘ Sağ alt</button></div>
+  <label>Boyut</label>
+  <div class="seg" id="teSize"><button data-v="S">Küçük</button><button data-v="M">Orta</button><button data-v="L">Büyük</button></div>
+  <label>Renk</label>
+  <div class="swatches" id="teColors"></div>
+  <label>Gösterilecekler</label>
+  <div class="checks" id="teShow"></div>
+  <label>Alanlar (çekimde doldurulur)</label>
+  <div id="teFields"></div>
+  <button class="sm" onclick="teAddField()">＋ Alan ekle</button>
+  <label>Firma logosu</label>
+  <div class="row">
+    <button class="sm" onclick="$('logoIn').click()">Logo yükle</button>
+    <button class="sm ghost" style="flex:0 0 auto" onclick="clearLogo()">Kaldır</button>
+  </div>
+  <input type="file" id="logoIn" accept="image/*" class="hidden">
+  <div class="row" style="margin-top:14px">
+    <button class="ghost" id="teDel" style="color:var(--bad)">Sil</button>
+    <button class="pri" onclick="tplSave()">Kaydet</button>
+  </div>
+</div></div>
 
 <div class="toast" id="toast"></div>
 
@@ -629,7 +743,7 @@ function renderNotes(){
   const q=$('nSearch').value.toLocaleLowerCase('tr');
   const tags=[...new Set(notes.flatMap(n=>n.tags))];
   $('tagChips').innerHTML=tags.length?`<button class="${tagF?'':'act'}" onclick="tagF='';renderNotes()">Tümü</button>`+tags.map(t=>`<button class="${tagF===t?'act':''}" onclick="tagF='${esc(t)}';renderNotes()">#${esc(t)}</button>`).join(''):'';
-  let list=notes.filter(n=>(!tagF||n.tags.includes(tagF))&&(!q||(n.title+' '+n.body+' '+n.tags.join(' ')+' '+(n.photos||[]).map(p=>p.addr).join(' ')).toLocaleLowerCase('tr').includes(q)));
+  let list=notes.filter(n=>(!tagF||n.tags.includes(tagF))&&(!q||(n.title+' '+n.body+' '+n.tags.join(' ')+' '+(n.photos||[]).map(p=>[p.addr,p.tpl,p.title,...Object.values(p.fields||{})].join(' ')).join(' ')).toLocaleLowerCase('tr').includes(q)));
   list.sort((a,b)=>(b.pinned-a.pinned)||(b.updated-a.updated));
   $('noteList').innerHTML=list.length?list.map(n=>`<div class="item note" onclick="openNote('${n.id}')"><div class="bd"><div class="t">${n.pinned?'<span class="pin">📌</span> ':''}${esc(n.title)}</div><div class="prev">${esc(n.body)}</div>${n.photos?.length?`<div class="nthumbs">${n.photos.slice(0,4).map(p=>`<img data-pid="${p.id}" alt="">`).join('')}${n.photos.length>4?`<span class="mut" style="align-self:center">+${n.photos.length-4}</span>`:''}</div>${n.photos[0].addr?`<div class="ploc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>${esc(n.photos[0].addr)}</div>`:''}`:''}<div>${n.tags.map(t=>`<span class="tag">#${esc(t)}</span>`).join('')}<span class="mut" style="font-size:11px"> ${fmt(toLocal(new Date(n.updated)))}</span></div></div></div>`).join(''):'<div class="empty">Not yok</div>';
   hydrate($('noteList'));
@@ -646,7 +760,7 @@ async function photoURL(id){if(purl[id])return purl[id];const b=await DB.get(id)
 function hydrate(root){root.querySelectorAll('img[data-pid]').forEach(async im=>{try{im.src=await photoURL(im.dataset.pid)}catch{}})}
 const blobToB64=(b,full)=>new Promise(r=>{const f=new FileReader();f.onload=()=>r(full?f.result:f.result.split(',')[1]);f.readAsDataURL(b)});
 function stampDate(ts){const d=new Date(ts);return `${pad(d.getDate())}.${pad(d.getMonth()+1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`}
-function photoNote(){openNote();$('camIn').click()}
+function photoNote(){openNote();openCam()}
 function closeNote(){edNew.forEach(id=>DB.del(id).catch(()=>{}));edNew=new Set();closeM('mNote')}
 $('camIn').onchange=e=>{addPhotoFiles([...e.target.files],true);e.target.value=''};
 $('galIn').onchange=e=>{addPhotoFiles([...e.target.files],false);e.target.value=''};
@@ -670,28 +784,91 @@ async function loadImg(file){
   try{return await createImageBitmap(file,{imageOrientation:'from-image'})}catch{}
   return await new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=URL.createObjectURL(file)});
 }
+// ---------- Şablonlar ----------
+const SANS='Inter, system-ui, sans-serif',MONO='"JetBrains Mono", ui-monospace, monospace';
+const TPL_BASE={name:'Şablon',title:'',style:'card',pos:'bl',size:'M',color:'#2563eb',show:{time:true,date:true,day:true,addr:true,coords:false,logo:false},fields:[]};
+const TPL_DEF=[
+  {id:'t_zk',name:'Zaman ve Konum',title:'',style:'band',pos:'bl',color:'#2563eb',show:{time:true,date:true,day:true,addr:true,coords:true,logo:false},fields:[]},
+  {id:'t_teslim',name:'Teslim alındı',title:'TESLİM ALINDI',color:'#2563eb',show:{logo:true},fields:[{label:'Firma',value:''},{label:'Adet',value:''}]},
+  {id:'t_kon',name:'Kumlama öncesi',title:'KUMLAMA ÖNCESİ',color:'#f97316',show:{logo:true},fields:[{label:'Firma',value:''},{label:'Parça',value:''}]},
+  {id:'t_kson',name:'Kumlama sonrası',title:'KUMLAMA SONRASI',color:'#0891b2',show:{logo:true},fields:[{label:'Firma',value:''},{label:'Parça',value:''}]},
+  {id:'t_boya',name:'Boya sonrası',title:'BOYA SONRASI',color:'#10b981',show:{logo:true},fields:[{label:'Firma',value:''},{label:'RAL',value:''}]},
+  {id:'t_sevk',name:'Sevkiyat',title:'SEVKİYAT',color:'#6366f1',show:{logo:true},fields:[{label:'Firma',value:''},{label:'Plaka',value:''},{label:'Adet',value:''}]},
+  {id:'t_hasar',name:'Hasar tespiti',title:'HASAR TESPİTİ',color:'#ef4444',show:{logo:true,coords:true},fields:[{label:'Firma',value:''},{label:'Açıklama',value:''}]},
+];
+function normTpl(t){
+  t=t||{};const o={...TPL_BASE,...t,show:{...TPL_BASE.show,...(t.show||{})}};
+  if(!['band','card','minimal'].includes(o.style))o.style='card';
+  if(!['tl','tr','bl','br'].includes(o.pos))o.pos='bl';
+  if(!['S','M','L'].includes(o.size))o.size='M';
+  if(!/^#[0-9a-f]{6}$/i.test(o.color||''))o.color='#2563eb';
+  o.fields=(Array.isArray(o.fields)?o.fields:[]).filter(f=>f&&String(f.label||'').trim()).slice(0,6).map(f=>({label:String(f.label).trim().slice(0,24),value:String(f.value??'').slice(0,60)}));
+  for(const k in o.show)o.show[k]=!!o.show[k];
+  o.name=String(o.name||'Şablon').slice(0,30);o.title=String(o.title||'').slice(0,28);o.id=o.id||('t'+uid());
+  return o;
+}
+let tpls=LS.get('na_tpls',null);if(!Array.isArray(tpls)||!tpls.length){tpls=TPL_DEF.map(normTpl);LS.set('na_tpls',tpls)}
+let tplSel=LS.get('na_tplsel','t_zk'),tplVals=LS.get('na_tplvals',{});
+const saveTpls=()=>{LS.set('na_tpls',tpls);LS.set('na_tplsel',tplSel)};
+const curTpl=()=>tpls.find(t=>t.id===tplSel)||tpls[0];
+function fieldVals(t){const v=tplVals[t.id]||{},o={};for(const f of t.fields||[])o[f.label]=v[f.label]??f.value??'';return o}
+let logoImg=null;
+function loadLogo(){const d=LS.get('na_logo','');logoImg=null;if(d){const i=new Image();i.onload=()=>{logoImg=i;camDraw();if($('mTplEd').classList.contains('on'))tePrev()};i.src=d}}
+const SAMPLE_LOC={lat:38.4237,lng:27.1428,acc:6,addr:'Ankara Caddesi No:12, Şirinyer, Buca, İzmir'};
+function rr(x,X,Y,W,H,r){x.beginPath();x.moveTo(X+r,Y);x.arcTo(X+W,Y,X+W,Y+H,r);x.arcTo(X+W,Y+H,X,Y+H,r);x.arcTo(X,Y+H,X,Y,r);x.arcTo(X,Y,X+W,Y,r);x.closePath()}
+function textOn(c){const n=parseInt(c.slice(1),16),r=n>>16,g=n>>8&255,b=n&255;return (r*299+g*587+b*114)/1000>165?'#0f172a':'#fff'}
+function wrapText(x,text,maxW){const out=[];let cur='';for(const wd of String(text).split(' ')){const t=cur?cur+' '+wd:wd;if(x.measureText(t).width>maxW&&cur){out.push(cur);cur=wd}else cur=t}if(cur)out.push(cur);return out}
+// Tek çizim motoru: canlı önizleme, şablon önizlemesi ve kaydedilen fotoğraf aynı fonksiyonla çizilir
+function drawStamp(x,w,h,t,d){
+  t=normTpl(t);
+  const u=Math.max(11,Math.round(Math.min(w,h)*({S:.026,M:.034,L:.044}[t.size]))),p=Math.round(u*.8),acc=Math.max(3,Math.round(u*.22)),gap=Math.round(u*.55);
+  const F={time:`700 ${Math.round(u*2.1)}px ${MONO}`,title:`800 ${Math.round(u*1.02)}px ${SANS}`,line:`500 ${u}px ${SANS}`,mono:`600 ${Math.round(u*.85)}px ${MONO}`};
+  const D=new Date(d.ts),timeTxt=`${pad(D.getHours())}:${pad(D.getMinutes())}`,hasTime=t.show.time,hasTitle=!!t.title;
+  const raw=[];
+  const dateTxt=[t.show.date?`${pad(D.getDate())}.${pad(D.getMonth()+1)}.${D.getFullYear()}`:'',t.show.day?GUN[D.getDay()]:''].filter(Boolean).join(' · ');
+  if(dateTxt)raw.push({f:'line',t:dateTxt});
+  for(const[k,v]of Object.entries(d.fields||{}))if(String(v).trim())raw.push({f:'line',t:`${k}: ${v}`});
+  if(t.show.addr)raw.push({f:'line',t:'📍 '+(d.loc?.addr||(d.loc?`${d.loc.lat.toFixed(5)}, ${d.loc.lng.toFixed(5)}`:(d.live?'Konum alınıyor…':'Konum alınamadı')))});
+  if(t.show.coords&&d.loc)raw.push({f:'mono',t:`${d.loc.lat.toFixed(6)}, ${d.loc.lng.toFixed(6)}  ±${d.loc.acc} m`});
+  const band=t.style==='band',maxW=(band?w-2*p:Math.min(w*.84,Math.max(u*17,w*.62)))-2*p-acc-gap;
+  const lines=[];for(const r of raw){x.font=F[r.f];for(const s of wrapText(x,r.t,maxW))lines.push({...r,t:s})}
+  const lh=l=>(l.f==='mono'?u*.85:u)*1.45;
+  let titleW=0,timeW=0;
+  if(hasTitle){x.font=F.title;titleW=x.measureText(t.title).width+u}
+  if(hasTime){x.font=F.time;timeW=x.measureText(timeTxt).width}
+  const headH=hasTime?u*2.45:hasTitle?u*1.75:0;
+  const contentW=Math.max(titleW+(hasTime?(hasTitle?gap:0)+timeW:0),...lines.map(l=>{x.font=F[l.f];return x.measureText(l.t).width+acc+gap}),u*4);
+  const linesH=lines.reduce((s,l)=>s+lh(l),0);
+  const boxW=band?w:Math.min(w-2*p,contentW+2*p),boxH=p*2+headH+(headH&&lines.length?u*.35:0)+linesH;
+  const top=t.pos[0]==='t',right=t.pos[1]==='r',m=band?0:p;
+  const bx=band?0:(right?w-boxW-m:m),by=top?m:h-boxH-m;
+  x.save();x.textBaseline='middle';
+  if(band){const y0=top?0:by-u*2,y1=top?boxH+u*2:h,g=x.createLinearGradient(0,top?y1:y0,0,top?y0:y1);g.addColorStop(0,'rgba(15,23,42,0)');g.addColorStop(.35,'rgba(15,23,42,.55)');g.addColorStop(1,'rgba(15,23,42,.84)');x.fillStyle=g;x.fillRect(0,y0,w,y1-y0)}
+  else if(t.style==='card'){x.fillStyle='rgba(15,23,42,.62)';rr(x,bx,by,boxW,boxH,u*.6);x.fill()}
+  const sh=on=>{x.shadowColor='rgba(0,0,0,.6)';x.shadowBlur=on?u*.35:0};
+  let cy=by+p,cx=bx+p;
+  if(headH){const mid=cy+headH/2;
+    if(hasTitle){sh(0);x.fillStyle=t.color;const bh=u*1.65;rr(x,cx,mid-bh/2,titleW,bh,u*.38);x.fill();x.fillStyle=textOn(t.color);x.font=F.title;x.fillText(t.title,cx+u*.5,mid+u*.04);cx+=titleW+gap}
+    if(hasTime){sh(1);x.fillStyle='#fff';x.font=F.time;x.fillText(timeTxt,cx,mid+u*.08)}
+    cy+=headH+(lines.length?u*.35:0)}
+  if(lines.length){sh(0);x.fillStyle=t.color;rr(x,bx+p,cy+u*.1,acc,linesH-u*.2,acc/2);x.fill()}
+  for(const l of lines){const hh=lh(l);sh(1);x.font=F[l.f];x.fillStyle=l.f==='mono'?'#a5f3fc':'#fff';x.fillText(l.t,bx+p+acc+gap,cy+hh/2);cy+=hh}
+  if(t.show.logo&&logoImg&&logoImg.width){sh(0);const LH=u*3.2,LW=Math.min(w*.35,LH*logoImg.width/logoImg.height),LH2=LW*logoImg.height/logoImg.width;
+    x.globalAlpha=.95;x.drawImage(logoImg,right?p:w-LW-p,top?h-LH2-p:p,LW,LH2);x.globalAlpha=1}
+  x.restore();
+}
+function autoTitle(){
+  if($('nTitle').value.trim()||!edPhotos.length)return;
+  const p=edPhotos[edPhotos.length-1];
+  $('nTitle').value=[p.tpl&&p.tpl!=='Zaman ve Konum'?p.tpl:'',p.fields?.Firma||'',p.addr?p.addr.split(',')[0]:'',stampDate(p.ts)].filter(Boolean).join(' · ');
+}
+function photoMeta(id,ts,loc,t,fields){return {id,ts,lat:loc?.lat??null,lng:loc?.lng??null,acc:loc?.acc??null,addr:loc?.addr||'',title:t.title||'',tpl:t.name,fields:Object.fromEntries(Object.entries(fields).filter(([k,v])=>String(v).trim()))}}
 async function stampPhoto(file,ts,loc){
-  const img=await loadImg(file),max=1600,sc=Math.min(1,max/Math.max(img.width,img.height));
-  const w=Math.round(img.width*sc),h=Math.round(img.height*sc);
+  const t=curTpl(),fields=fieldVals(t);
+  const img=await loadImg(file),sc=Math.min(1,2048/Math.max(img.width,img.height)),w=Math.round(img.width*sc),h=Math.round(img.height*sc);
   const c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d');x.drawImage(img,0,0,w,h);
-  const u=Math.max(15,Math.round(Math.min(w,h)*0.034)),pd=Math.round(u*0.9),maxW=w-pd*2-u*0.6;
-  const d=new Date(ts);
-  const rows=[{t:`📅 ${stampDate(ts)} · ${GUN[d.getDay()]}`,big:1}];
-  if(loc){if(loc.addr)rows.push({t:'📍 '+loc.addr});rows.push({t:`🧭 ${loc.lat.toFixed(6)}, ${loc.lng.toFixed(6)}  ±${loc.acc} m`,mono:1})}
-  else rows.push({t:'📍 Konum alınamadı'});
-  const font=r=>r.big?`700 ${Math.round(u*1.15)}px Inter, system-ui, sans-serif`:r.mono?`600 ${Math.round(u*.85)}px "JetBrains Mono", monospace`:`500 ${u}px Inter, system-ui, sans-serif`;
-  const lines=[];
-  for(const r of rows){x.font=font(r);let cur='';for(const wd of r.t.split(' ')){const tt=cur?cur+' '+wd:wd;if(x.measureText(tt).width>maxW&&cur){lines.push({...r,t:cur});cur='   '+wd}else cur=tt}lines.push({...r,t:cur})}
-  const lh=l=>(l.big?u*1.15:l.mono?u*.85:u)*1.4;
-  const bandH=lines.reduce((s,l)=>s+lh(l),0)+pd*2;
-  const g=x.createLinearGradient(0,h-bandH-u*2,0,h);g.addColorStop(0,'rgba(15,23,42,0)');g.addColorStop(.35,'rgba(15,23,42,.55)');g.addColorStop(1,'rgba(15,23,42,.82)');
-  x.fillStyle=g;x.fillRect(0,h-bandH-u*2,w,bandH+u*2);
-  const ag=x.createLinearGradient(0,h-bandH,0,h);ag.addColorStop(0,'#2563eb');ag.addColorStop(1,'#06b6d4');
-  x.fillStyle=ag;x.fillRect(pd,h-bandH+pd,Math.max(3,u*.22),bandH-pd*2);
-  let y=h-bandH+pd;x.textBaseline='top';x.shadowColor='rgba(0,0,0,.5)';x.shadowBlur=u*.3;
-  for(const l of lines){x.font=font(l);x.fillStyle=l.mono?'#a5f3fc':'#fff';x.fillText(l.t,pd+u*.6,y+(lh(l)-(l.big?u*1.15:l.mono?u*.85:u))/2);y+=lh(l)}
-  img.close?.();
-  return await new Promise(r=>c.toBlob(r,'image/jpeg',.85));
+  drawStamp(x,w,h,t,{ts,loc,fields});img.close?.();
+  return {blob:await new Promise(r=>c.toBlob(r,'image/jpeg',.88)),t,fields};
 }
 async function addPhotoFiles(files,fromCam){
   if(!files.length)return;
@@ -703,15 +880,136 @@ async function addPhotoFiles(files,fromCam){
     $('phStat').innerHTML=`<span class="spin"></span> Fotoğraf işleniyor ${i+1}/${files.length}...`;
     try{
       const f=files[i],ts=fromCam?Date.now():(f.lastModified||Date.now());
-      const blob=await stampPhoto(f,ts,loc),id='p'+uid();
-      await DB.put(id,blob);edNew.add(id);
-      edPhotos.push({id,ts,lat:loc?.lat??null,lng:loc?.lng??null,acc:loc?.acc??null,addr:loc?.addr||''});
+      const {blob,t,fields}=await stampPhoto(f,ts,loc),id='p'+uid();
+      await DB.put(id,blob);edNew.add(id);edPhotos.push(photoMeta(id,ts,loc,t,fields));
     }catch(e){toastMsg('⚠️ Fotoğraf işlenemedi: '+esc(e.message||e))}
   }
   $('phStat').textContent=loc?'':'⚠️ Konum alınamadı — konum iznini ve GPS\'i kontrol et.';
-  if(!$('nTitle').value.trim()&&edPhotos.length)$('nTitle').value=(edPhotos[0].addr?edPhotos[0].addr.split(',')[0]+' · ':'')+stampDate(edPhotos[0].ts);
-  renderEdPhotos();
+  autoTitle();renderEdPhotos();
 }
+// ---------- Canlı kamera ----------
+let cam={stream:null,facing:'environment',loc:null,timer:null,torch:false,shots:0};
+async function openCam(){
+  if(!navigator.mediaDevices?.getUserMedia){$('camIn').click();return}
+  if(!$('mNote').classList.contains('on'))openNote();
+  $('cam').classList.remove('hidden');document.body.style.overflow='hidden';
+  cam.shots=0;$('camThumb').innerHTML='';$('camSt').textContent='';
+  renderCamTpls();renderCamFields();
+  cam.loc=locCache;
+  getLoc().then(l=>{cam.loc=l;$('camSt').textContent=l?'':'⚠️ Konum alınamadı';camDraw()});
+  await camStart();
+  clearInterval(cam.timer);cam.timer=setInterval(camDraw,1000);
+}
+async function camStart(){
+  camStopStream();
+  try{cam.stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:cam.facing},width:{ideal:1920},height:{ideal:1440}},audio:false})}
+  catch(e){closeCam();toastMsg('Kamera açılamadı — sistem kamerası açılıyor');$('camIn').click();return}
+  const v=$('camV');v.srcObject=cam.stream;v.onloadedmetadata=()=>{camLayout();camDraw()};
+  try{await v.play()}catch{}
+  const tr=cam.stream.getVideoTracks()[0],caps=tr.getCapabilities?.()||{};cam.torch=false;
+  $('camTorch').classList.toggle('hidden',!caps.torch);$('camTorch').classList.remove('act');
+  setTimeout(()=>{camLayout();camDraw()},400);
+}
+function camStopStream(){cam.stream?.getTracks().forEach(t=>t.stop());cam.stream=null}
+function closeCam(){clearInterval(cam.timer);camStopStream();$('cam').classList.add('hidden');document.body.style.overflow=''}
+function camLayout(){
+  const v=$('camV'),st=$('camStage').getBoundingClientRect(),vw=v.videoWidth,vh=v.videoHeight;if(!vw)return;
+  const s=Math.min(st.width/vw,st.height/vh),dw=vw*s,dh=vh*s,c=$('camO'),dpr=devicePixelRatio||1;
+  Object.assign(c.style,{left:(st.width-dw)/2+'px',top:(st.height-dh)/2+'px',width:dw+'px',height:dh+'px'});
+  c.width=Math.round(dw*dpr);c.height=Math.round(dh*dpr);
+}
+window.addEventListener('resize',()=>{if(cam.stream){camLayout();camDraw()}});
+function camDraw(){
+  if(!cam.stream)return;const c=$('camO');if(!c.width)return;const x=c.getContext('2d');x.clearRect(0,0,c.width,c.height);
+  const t=curTpl();drawStamp(x,c.width,c.height,t,{ts:Date.now(),loc:cam.loc,fields:fieldVals(t),live:true});
+}
+async function camShot(){
+  const v=$('camV');if(!v.videoWidth)return;
+  const sc=Math.min(1,2048/Math.max(v.videoWidth,v.videoHeight)),w=Math.round(v.videoWidth*sc),h=Math.round(v.videoHeight*sc);
+  const c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d');x.drawImage(v,0,0,w,h);
+  const t=curTpl(),ts=Date.now(),fields=fieldVals(t);drawStamp(x,w,h,t,{ts,loc:cam.loc,fields});
+  const fl=$('camFlash');fl.classList.remove('on');void fl.offsetWidth;fl.classList.add('on');
+  const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',.88)),id='p'+uid();
+  await DB.put(id,blob);edNew.add(id);edPhotos.push(photoMeta(id,ts,cam.loc,t,fields));
+  cam.shots++;$('camThumb').innerHTML=`<img src="${URL.createObjectURL(blob)}"><b>${cam.shots}</b>`;
+  autoTitle();renderEdPhotos();
+}
+async function camTorch(){const tr=cam.stream?.getVideoTracks()[0];if(!tr)return;cam.torch=!cam.torch;try{await tr.applyConstraints({advanced:[{torch:cam.torch}]})}catch{cam.torch=false}$('camTorch').classList.toggle('act',cam.torch)}
+function camFlip(){cam.facing=cam.facing==='environment'?'user':'environment';camStart()}
+function renderCamTpls(){
+  $('camTpls').innerHTML=tpls.map(t=>`<button class="${t.id===tplSel?'act':''}" onclick="selTpl('${t.id}')"><i style="background:${t.color}"></i> ${esc(t.name)}</button>`).join('')+`<button onclick="openTplList()">＋</button>`;
+  $('camTpls').querySelector('.act')?.scrollIntoView({inline:'center',block:'nearest'});
+}
+function renderCamFields(){
+  const t=curTpl(),v=fieldVals(t);
+  $('camFields').innerHTML=(t.fields||[]).map(f=>`<input data-l="${esc(f.label)}" value="${esc(v[f.label])}" placeholder="${esc(f.label)}">`).join('');
+}
+$('camFields').oninput=e=>{const i=e.target;if(!i.dataset.l)return;const t=curTpl();(tplVals[t.id]=tplVals[t.id]||{})[i.dataset.l]=i.value;LS.set('na_tplvals',tplVals);camDraw()};
+function selTpl(id){tplSel=id;saveTpls();renderCamTpls();renderCamFields();camDraw();if($('mTpls').classList.contains('on'))renderTplList()}
+// ---------- Şablon yöneticisi ----------
+function previewTo(cv,t,W){
+  const dpr=devicePixelRatio||1,H=Math.round(W*.75);cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);
+  const x=cv.getContext('2d'),g=x.createLinearGradient(0,0,cv.width,cv.height);g.addColorStop(0,'#7c8ba1');g.addColorStop(1,'#334155');x.fillStyle=g;x.fillRect(0,0,cv.width,cv.height);
+  x.fillStyle='rgba(255,255,255,.10)';for(let i=0;i<6;i++)x.fillRect(cv.width*(.08+i*.15),cv.height*.2,cv.width*.09,cv.height*.55);
+  const f={};(t.fields||[]).forEach(fl=>f[fl.label]=fl.value||'Örnek');
+  drawStamp(x,cv.width,cv.height,t,{ts:Date.now(),loc:SAMPLE_LOC,fields:f});
+}
+function openTplList(){renderTplList();$('mTpls').classList.add('on')}
+function renderTplList(){
+  $('tplList').innerHTML=tpls.map(t=>{const cv=document.createElement('canvas');previewTo(cv,t,192);
+    return `<div class="tplrow ${t.id===tplSel?'sel':''}" onclick="selTpl('${t.id}')"><img src="${cv.toDataURL('image/jpeg',.7)}" alt=""><div class="bd"><b>${esc(t.name)}</b><div class="mut">${{card:'Kart',band:'Şerit',minimal:'Sade'}[t.style]}${t.fields.length?' · '+t.fields.map(f=>esc(f.label)).join(', '):''}</div></div><button class="sm" onclick="event.stopPropagation();tplEdit('${t.id}')">Düzenle</button></div>`}).join('');
+}
+let edT=null;
+const COLORS=['#2563eb','#06b6d4','#10b981','#6366f1','#f97316','#ef4444','#0f172a','#ffffff'];
+function tplEdit(id){
+  const src=tpls.find(t=>t.id===id);edT=normTpl(src?JSON.parse(JSON.stringify(src)):{id:'t'+uid(),name:'Yeni şablon',title:'',fields:[{label:'Firma',value:''}]});
+  $('teDel').classList.toggle('hidden',!src);$('teDel').onclick=()=>{if(!confirm('Şablon silinsin mi?'))return;tpls=tpls.filter(t=>t.id!==edT.id);if(!tpls.length)tpls=TPL_DEF.map(normTpl);if(tplSel===edT.id)tplSel=tpls[0].id;saveTpls();closeM('mTplEd');renderTplList();renderCamTpls();renderCamFields();camDraw()};
+  fillTplEd();$('mTplEd').classList.add('on');
+}
+function fillTplEd(){
+  $('teName').value=edT.name;$('teTitle').value=edT.title;$('teAI').value='';
+  for(const[id,k]of[['teStyle','style'],['tePos','pos'],['teSize','size']])[...$(id).children].forEach(b=>b.classList.toggle('act',b.dataset.v===edT[k]));
+  $('teColors').innerHTML=COLORS.map(c=>`<span style="background:${c}" class="${c===edT.color?'act':''}" data-c="${c}"></span>`).join('')+`<input type="color" id="teColor" value="${edT.color}">`;
+  $('teShow').innerHTML=[['time','Saat'],['date','Tarih'],['day','Gün'],['addr','Adres'],['coords','Koordinat'],['logo','Logo']].map(([k,l])=>`<label><input type="checkbox" data-k="${k}" ${edT.show[k]?'checked':''}> ${l}</label>`).join('');
+  renderTeFields();tePrev();
+}
+function renderTeFields(){$('teFields').innerHTML=edT.fields.map((f,i)=>`<div class="row frow"><input data-i="${i}" data-p="label" value="${esc(f.label)}" placeholder="Alan adı"><input data-i="${i}" data-p="value" value="${esc(f.value)}" placeholder="Sabit değer (boş: çekimde yaz)"><button class="sm ghost" style="flex:0 0 auto" onclick="edT.fields.splice(${i},1);renderTeFields();tePrev()">✕</button></div>`).join('')}
+function teAddField(){if(edT.fields.length>=6){toastMsg('En fazla 6 alan');return}edT.fields.push({label:'',value:''});renderTeFields();$('teFields').querySelector('.frow:last-child input').focus()}
+function tePrev(){const cv=$('tplPrev'),W=cv.getBoundingClientRect().width||340;previewTo(cv,edT,W)}
+$('teName').oninput=e=>{edT.name=e.target.value};
+$('teTitle').oninput=e=>{edT.title=e.target.value;tePrev()};
+['teStyle','tePos','teSize'].forEach(id=>$(id).onclick=e=>{const b=e.target.closest('button');if(!b)return;edT[{teStyle:'style',tePos:'pos',teSize:'size'}[id]]=b.dataset.v;fillTplEd()});
+$('teColors').onclick=e=>{const c=e.target.dataset?.c;if(c){edT.color=c;fillTplEd()}};
+$('teColors').oninput=e=>{if(e.target.id==='teColor'){edT.color=e.target.value;tePrev()}};
+$('teShow').onchange=e=>{const k=e.target.dataset.k;if(k){edT.show[k]=e.target.checked;if(k==='logo'&&e.target.checked&&!logoImg)toastMsg('Logo yüklemeyi unutma');tePrev()}};
+$('teFields').oninput=e=>{const i=e.target.dataset.i;if(i==null)return;edT.fields[+i][e.target.dataset.p]=e.target.value;tePrev()};
+function tplSave(){
+  edT=normTpl(edT);const i=tpls.findIndex(t=>t.id===edT.id);if(i>=0)tpls[i]=edT;else tpls.push(edT);
+  tplSel=edT.id;saveTpls();closeM('mTplEd');renderTplList();renderCamTpls();renderCamFields();camDraw();toastMsg('✔ Şablon kaydedildi');
+}
+$('logoIn').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;
+  try{const img=await loadImg(f),sc=Math.min(1,400/Math.max(img.width,img.height)),c=document.createElement('canvas');c.width=Math.round(img.width*sc);c.height=Math.round(img.height*sc);c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+    LS.set('na_logo',c.toDataURL('image/png'));edT&&(edT.show.logo=true);loadLogo();fillTplEd();toastMsg('✔ Logo yüklendi')}catch{toastMsg('Logo okunamadı')}};
+function clearLogo(){LS.set('na_logo','');loadLogo();tePrev()}
+const TPL_SYS=`Bir kumlama ve boya atölyesi için fotoğraf damgası şablonu tasarlıyorsun. Sadece JSON döndür:
+{"name":"kısa ad","title":"damgadaki başlık, BÜYÜK HARF, en fazla 24 karakter, istenmezse boş","style":"card|band|minimal","pos":"bl|br|tl|tr","size":"S|M|L","color":"#RRGGBB","show":{"time":true,"date":true,"day":true,"addr":true,"coords":false,"logo":false},"fields":[{"label":"Firma","value":""}]}
+card=köşede yarı saydam kart, band=altta/üstte tam genişlik şerit, minimal=arka plansız yazı. pos: b=alt t=üst, l=sol r=sağ.
+fields: çekim anında doldurulacak alanlar (en fazla 6); value sabit değer istenirse dolu, yoksa boş. Kullanıcının istemediği alanı ekleme. Rengi isteğe uygun seç (kırmızı #ef4444, mavi #2563eb, yeşil #10b981, turuncu #f97316, mor #6366f1, lacivert #1e3a8a, siyah #0f172a).`;
+async function tplAINew(){
+  const d=$('tpAI').value.trim();if(!d){$('tpAI').focus();return}
+  const b=$('tpAIBtn');busy(b,true,'');
+  try{const r=await gemini('İstek: '+d,{system:TPL_SYS,json:true});edT=normTpl({...r,id:'t'+uid()});$('teDel').classList.add('hidden');fillTplEd();$('mTplEd').classList.add('on');$('tpAI').value=''}
+  catch(e){toastMsg('⚠️ '+esc(e.message))}
+  busy(b,false);
+}
+async function tplAIEdit(){
+  const d=$('teAI').value.trim();if(!d){$('teAI').focus();return}
+  const b=$('teAIBtn');busy(b,true,'');
+  try{const {id,...cur}=edT;const r=await gemini(`Mevcut şablon: ${JSON.stringify(cur)}\nİstenen değişiklik: ${d}\nDeğişmeyen kısımları aynen koru ve tam şablonu döndür.`,{system:TPL_SYS,json:true});edT=normTpl({...edT,...r,id:edT.id});fillTplEd()}
+  catch(e){toastMsg('⚠️ '+esc(e.message))}
+  busy(b,false);
+}
+loadLogo();
 function renderEdPhotos(){
   $('nPhotos').innerHTML=edPhotos.map((p,i)=>`<div class="ph" onclick="viewPhoto(${i})"><img data-pid="${p.id}" alt=""><span>${stampDate(p.ts)}</span></div>`).join('');
   hydrate($('nPhotos'));
@@ -720,7 +1018,7 @@ async function viewPhoto(i){
   const p=edPhotos[i];if(!p)return;
   $('pvImg').src=await photoURL(p.id);
   const has=p.lat!=null,map=has?`https://www.google.com/maps?q=${p.lat},${p.lng}`:'';
-  $('pvMeta').innerHTML=`<div>📅 <b>${stampDate(p.ts)}</b> · ${GUN[new Date(p.ts).getDay()]}</div>`+(p.addr?`<div>📍 ${esc(p.addr)}</div>`:'')+(has?`<div class="mut">🧭 <b>${p.lat}, ${p.lng}</b> ±${p.acc} m</div>`:'<div class="mut">Konum bilgisi yok</div>');
+  $('pvMeta').innerHTML=(p.tpl?`<div><span class="tag">${esc(p.tpl)}</span></div>`:'')+Object.entries(p.fields||{}).map(([k,v])=>`<div>${esc(k)}: <b style="font-family:inherit">${esc(v)}</b></div>`).join('')+`<div>📅 <b>${stampDate(p.ts)}</b> · ${GUN[new Date(p.ts).getDay()]}</div>`+(p.addr?`<div>📍 ${esc(p.addr)}</div>`:'')+(has?`<div class="mut">🧭 <b>${p.lat}, ${p.lng}</b> ±${p.acc} m</div>`:'<div class="mut">Konum bilgisi yok</div>');
   $('pvMap').disabled=!has;$('pvMap').onclick=()=>APP?Android.openUrl(map):window.open(map,'_blank');
   const fname=`foto-${stampDate(p.ts).replace(/[.: ]/g,'-')}.jpg`;
   $('pvDl').onclick=async()=>{if(APP){Android.saveFile(await blobToB64(await DB.get(p.id)),fname,'image/jpeg');return}const a=document.createElement('a');a.href=await photoURL(p.id);a.download=fname;a.click()};
@@ -928,7 +1226,7 @@ async function runChat(){
   chat.push({r:'model',t:'…',typing:true});renderChat();
   const btn=$('cBtn');busy(btn,true,'');
   try{
-    const ctxN=notes.slice(-60).map(n=>`• [${n.tags.join(',')}] ${n.title}: ${n.body.slice(0,400)}${n.photos?.length?` [${n.photos.length} fotoğraf: ${n.photos.map(p=>stampDate(p.ts)+(p.addr?' @ '+p.addr:'')).join('; ')}]`:''}`).join('\n');
+    const ctxN=notes.slice(-60).map(n=>`• [${n.tags.join(',')}] ${n.title}: ${n.body.slice(0,400)}${n.photos?.length?` [${n.photos.length} fotoğraf: ${n.photos.map(p=>stampDate(p.ts)+(p.tpl?' ['+p.tpl+']':'')+(p.fields&&Object.keys(p.fields).length?' '+Object.entries(p.fields).map(([k,v])=>k+': '+v).join(', '):'')+(p.addr?' @ '+p.addr:'')).join('; ')}]`:''}`).join('\n');
     const ctxT=tasks.filter(t=>!t.done||(t.doneAt&&Date.now()-t.doneAt<7*864e5)).map(t=>`• ${t.done?'[BİTTİ] ':''}${t.title}${t.due?' — '+t.due:''} (${t.priority})${t.note?' — '+t.note:''}`).join('\n');
     const sys=`Kullanıcının kişisel not ve planlama asistanısın. Türkçe, samimi ve kısa cevap ver; markdown başlık kullanma. Sesli günlük kayıtlarıyla ilgili sorularda yalnızca kayıtlara dayan, ilgili kayıtların tarih-saatini belirt; filtreleme istenirse ilgili bölümleri tarih-saatleriyle aynen alıntıla; kayıtta yoksa uydurma. ${nowCtx()}
 Kullanıcı yeni görev/hatırlatma eklemeni isterse cevabının EN SONUNA şu satırı ekle:
@@ -1010,7 +1308,9 @@ async function askAllPerms(){
 
 window.onNativePerms=async()=>{renderNStat();const all=await renderPerms();if(all&&$('mPerm').classList.contains('on')){closeM('mPerm');toastMsg('✔ Tüm izinler verildi')}};
 // Android geri tuşu: açık pencereyi kapat / ana sayfaya dön
-window.nativeBack=()=>{const m=[...document.querySelectorAll('.modal.on')].pop();if(m){if(m.id==='mNote')closeNote();else if(m.id==='mRec')recCancel();else m.classList.remove('on');return true}
+window.nativeBack=()=>{for(const id of['mTplEd','mTpls'])if($(id).classList.contains('on')){closeM(id);return true}
+  if(!$('cam').classList.contains('hidden')){closeCam();return true}
+  const m=[...document.querySelectorAll('.modal.on')].pop();if(m){if(m.id==='mNote')closeNote();else if(m.id==='mRec')recCancel();else m.classList.remove('on');return true}
   const cur=document.querySelector('main>section:not(.hidden)');if(cur&&cur.id!=='v-bugun'){show('bugun');return true}return false};
 // ================= AYARLAR =================
 function saveSettings(){cfg.key=$('sKey').value.trim();cfg.code=$('sCode').value.trim();cfg.model=$('sModel').value;cfg.sound=$('sSound').checked;LS.set('na_cfg',cfg);$('sOut').textContent='✔ Kaydedildi'}
@@ -1030,10 +1330,10 @@ async function checkServer(){
     :'ℹ️ Sunucu bulunamadı (Vercel\'de yayınlanınca otomatik bağlanır). Şimdilik aşağıya kendi anahtarını girebilirsin.';
   setDot(!!cfg.key||(srv.ok&&srv.hasKey));
 }
-async function exportData(){toastMsg('Yedek hazırlanıyor...');const photos={};for(const n of notes)for(const p of n.photos||[]){try{const b=await DB.get(p.id);if(b)photos[p.id]=await blobToB64(b,true)}catch{}}const js=JSON.stringify({notes,tasks,diary,photos,v:3});const fn='not-asistani-yedek-'+toLocal(new Date()).slice(0,10)+'.json';
+async function exportData(){toastMsg('Yedek hazırlanıyor...');const photos={};for(const n of notes)for(const p of n.photos||[]){try{const b=await DB.get(p.id);if(b)photos[p.id]=await blobToB64(b,true)}catch{}}const js=JSON.stringify({notes,tasks,diary,photos,tpls,logo:LS.get('na_logo',''),v:4});const fn='not-asistani-yedek-'+toLocal(new Date()).slice(0,10)+'.json';
   if(APP){const r=new FileReader();r.onload=()=>Android.saveFile(r.result.split(',')[1],fn,'application/json');r.readAsDataURL(new Blob([js],{type:'application/json'}));return}
   const b=new Blob([js],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='not-asistani-yedek-'+toLocal(new Date()).slice(0,10)+'.json';a.click()}
-$('impFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const d=JSON.parse(await f.text());if(confirm(`${d.notes?.length||0} not, ${d.tasks?.length||0} görev içe aktarılsın mı? (mevcutlara eklenir)`)){const ids=new Set([...notes,...tasks].map(x=>x.id));notes.push(...(d.notes||[]).filter(x=>!ids.has(x.id)));tasks.push(...(d.tasks||[]).filter(x=>!ids.has(x.id)));{const di=new Set(diary.map(x=>x.id));diary.push(...(d.diary||[]).filter(x=>!di.has(x.id)));saveDiary()}for(const[k,v]of Object.entries(d.photos||{})){try{await DB.put(k,await (await fetch(v)).blob())}catch{}}save();renderAll();toastMsg('✔ İçe aktarıldı')}}catch{toastMsg('Dosya okunamadı')}};
+$('impFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const d=JSON.parse(await f.text());if(confirm(`${d.notes?.length||0} not, ${d.tasks?.length||0} görev içe aktarılsın mı? (mevcutlara eklenir)`)){const ids=new Set([...notes,...tasks].map(x=>x.id));notes.push(...(d.notes||[]).filter(x=>!ids.has(x.id)));tasks.push(...(d.tasks||[]).filter(x=>!ids.has(x.id)));if(Array.isArray(d.tpls)){const ti=new Set(tpls.map(x=>x.id));tpls.push(...d.tpls.filter(x=>!ti.has(x.id)).map(normTpl));saveTpls()}if(d.logo&&!LS.get('na_logo','')){LS.set('na_logo',d.logo);loadLogo()}{const di=new Set(diary.map(x=>x.id));diary.push(...(d.diary||[]).filter(x=>!di.has(x.id)));saveDiary()}for(const[k,v]of Object.entries(d.photos||{})){try{await DB.put(k,await (await fetch(v)).blob())}catch{}}save();renderAll();toastMsg('✔ İçe aktarıldı')}}catch{toastMsg('Dosya okunamadı')}};
 function wipe(){if(confirm('TÜM notlar ve görevler silinsin mi?')&&confirm('Emin misin? Geri alınamaz.')){notes=[];tasks=[];chat=[];diary=[];saveDiary();DB.clear().catch(()=>{});save();renderAll()}}
 
 // ================= GENEL =================
