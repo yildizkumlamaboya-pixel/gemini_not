@@ -112,6 +112,13 @@ nav button.act b{background:linear-gradient(135deg,rgba(37,99,235,.13),rgba(6,18
 .pview{width:100%;border-radius:14px;display:block;background:#0f172a;max-height:60vh;object-fit:contain}
 .pmeta{font-size:13px;margin:10px 0;display:grid;gap:4px}
 .pmeta b{font-family:var(--mono);font-weight:600}
+.perm{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)}
+.perm:last-child{border-bottom:0}
+.perm .ic{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:linear-gradient(135deg,rgba(37,99,235,.12),rgba(6,182,212,.12));color:var(--acc);flex:none}
+.perm .ic svg{width:18px;height:18px}
+.perm b{flex:1;font-weight:600;font-size:14px}
+.pst{font:600 11px/1 var(--mono);padding:5px 8px;border-radius:8px;background:#f1f5f9;color:var(--mut)}
+.pst.ok{background:#d1fae5;color:#047857}.pst.no{background:#fee2e2;color:#b91c1c}
 .rectime{font:600 30px/1.2 var(--mono);margin-bottom:6px}
 </style>
 </head>
@@ -213,6 +220,12 @@ nav button.act b{background:linear-gradient(135deg,rgba(37,99,235,.13),rgba(6,18
     </div>
     <div id="sOut" class="mut" style="margin-top:8px"></div>
   </div>
+  <div class="card ai">
+    <h3>🔐 İzinler</h3>
+    <div id="permList"></div>
+    <button class="pri" style="width:100%;margin-top:10px" onclick="askAllPerms()">Tüm izinleri ver</button>
+    <div class="mut" style="margin-top:8px">Engellenmiş bir izin varsa: uygulama bilgisi → İzinler'den ya da Chrome → Site ayarları → yildiz-not-asistani.vercel.app'ten aç.</div>
+  </div>
   <div class="card">
     <h3>🔔 Bildirimler</h3>
     <div class="mut" id="nStat"></div>
@@ -269,6 +282,17 @@ nav button.act b{background:linear-gradient(135deg,rgba(37,99,235,.13),rgba(6,18
   <div class="row" style="margin-top:12px">
     <button class="ghost" id="nDel" style="color:var(--bad)">Sil</button>
     <button class="pri" onclick="saveNote()">Kaydet</button>
+  </div>
+</div></div>
+
+<!-- İZİNLER (ilk açılış) -->
+<div class="modal" id="mPerm"><div class="sheet">
+  <h3 style="margin:0 0 6px">🔐 Uygulama izinleri</h3>
+  <div class="mut">Sesli not, fotoğraflı not ve hatırlatmaların çalışması için bu izinler gerekli. Tek dokunuşla hepsini isteyelim.</div>
+  <div id="permList2" style="margin-top:10px"></div>
+  <div class="row" style="margin-top:12px">
+    <button onclick="LS.set('na_perm',1);closeM('mPerm')">Sonra</button>
+    <button class="pri" onclick="askAllPerms()">Tüm izinleri ver</button>
   </div>
 </div></div>
 
@@ -334,7 +358,7 @@ const $=id=>document.getElementById(id);
 const LS={get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}},set:(k,v)=>localStorage.setItem(k,JSON.stringify(v))};
 let notes=LS.get('na_notes',[]), tasks=LS.get('na_tasks',[]), chat=LS.get('na_chat',[]);
 let cfg=LS.get('na_cfg',{key:'',model:'gemini-flash-latest',sound:true});
-const save=()=>{LS.set('na_notes',notes);LS.set('na_tasks',tasks);LS.set('na_chat',chat.slice(-40))};
+const save=()=>{LS.set('na_notes',notes);LS.set('na_tasks',tasks);LS.set('na_chat',chat.filter(m=>!m.typing).slice(-40))};
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const pad=n=>String(n).padStart(2,'0');
@@ -352,18 +376,36 @@ const PRI={yuksek:'Yüksek',orta:'Orta',dusuk:'Düşük'};
 // ================= GEMINI =================
 let srv={ok:false,hasKey:false,needsCode:false};
 const API=(location.protocol.startsWith('http')?'':'https://yildiz-not-asistani.vercel.app/')+'api/gemini';
+const FALLBACK=['gemini-flash-latest','gemini-2.5-flash','gemini-flash-lite-latest','gemini-2.5-flash-lite','gemini-2.0-flash'];
+function trErr(status,msg){
+  msg=String(msg||'');
+  if(status===503||/high demand|overloaded|unavailable/i.test(msg))return 'Gemini şu an çok yoğun. Birkaç saniye sonra tekrar dene.';
+  if(status===429||/quota|rate limit|exhausted/i.test(msg))return 'Gemini kullanım kotası doldu. Biraz bekleyip tekrar dene.';
+  if(status===401||status===403||/api key/i.test(msg))return 'Gemini anahtarı geçersiz ya da yetkisiz.';
+  if(status===400&&/location|region/i.test(msg))return 'Gemini bu bölgede kullanılamıyor.';
+  return msg||('Hata '+status);
+}
 async function callGemini(payload){
-  if(cfg.key){ // kendi anahtarınla doğrudan
-    const url=payload.op==='models'?'https://generativelanguage.googleapis.com/v1beta/models?pageSize=200'
-      :`https://generativelanguage.googleapis.com/v1beta/models/${cfg.model}:generateContent`;
-    const r=await fetch(url,payload.op==='models'?{headers:{'x-goog-api-key':cfg.key}}:{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':cfg.key},body:JSON.stringify(payload.body)});
-    const d=await r.json();if(!r.ok)throw new Error(d.error?.message||('HTTP '+r.status));return d;
+  if(cfg.key){ // kendi anahtarınla doğrudan (yedek modellere geçişli)
+    const base='https://generativelanguage.googleapis.com/v1beta';
+    if(payload.op==='models'){const r=await fetch(base+'/models?pageSize=200',{headers:{'x-goog-api-key':cfg.key}});const d=await r.json();if(!r.ok)throw new Error(trErr(r.status,d.error?.message));return d}
+    let last;
+    for(const m of [cfg.model,...FALLBACK.filter(x=>x!==cfg.model)]){
+      const r=await fetch(`${base}/models/${m}:generateContent`,{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':cfg.key},body:JSON.stringify(payload.body)});
+      const d=await r.json().catch(()=>({}));if(r.ok)return d;
+      last=trErr(r.status,d.error?.message);if(![429,500,502,503,504,404].includes(r.status))break;
+    }
+    throw new Error(last);
   }
-  let r,d;
-  try{r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json','x-app-code':cfg.code||''},body:JSON.stringify({model:cfg.model,...payload})});d=await r.json()}
-  catch{throw new Error('Sunucuya ulaşılamadı. Uygulamayı Vercel\'de yayınla ya da Ayarlar\'a kendi anahtarını gir.')}
-  if(!r.ok)throw new Error(d.error?.message||d.error||('HTTP '+r.status));
-  return d;
+  for(let attempt=0;attempt<2;attempt++){
+    let r,d;
+    try{r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json','x-app-code':cfg.code||''},body:JSON.stringify({model:cfg.model,...payload})});d=await r.json().catch(()=>({}))}
+    catch{if(attempt===0){await new Promise(s=>setTimeout(s,1500));continue}throw new Error('İnternet bağlantısı yok ya da sunucuya ulaşılamadı.')}
+    if(r.ok)return d;
+    const msg=trErr(r.status,d.error?.message||d.error);
+    if(attempt===0&&[429,500,502,503,504].includes(r.status)){await new Promise(s=>setTimeout(s,2500));continue}
+    throw new Error(msg);
+  }
 }
 async function gemini(prompt,{system='',json=false,history=null,parts=null}={}){
   const contents=history||[{role:'user',parts:[...(parts||[]),{text:prompt}]}];
@@ -705,10 +747,16 @@ function renderToday(){
 }
 
 // ================= ASİSTAN =================
-function renderChat(){$('chat').innerHTML=chat.map(m=>`<div class="msg ${m.r==='user'?'u':'m'}">${esc(m.t)}</div>`).join('');}
+function renderChat(){$('chat').innerHTML=chat.map((m,i)=>`<div class="msg ${m.r==='user'?'u':'m'}">${esc(m.t)}${m.err&&i===chat.length-1?`<div style="margin-top:8px"><button class="sm pri" onclick="retryChat()">↻ Tekrar dene</button></div>`:''}</div>`).join('');}
+function retryChat(){if(chat.length&&chat[chat.length-1].err)chat.pop();runChat()}
 async function sendChat(){
   const q=$('cIn').value.trim();if(!q)return;$('cIn').value='';
-  chat.push({r:'user',t:q});renderChat();window.scrollTo(0,1e9);
+  if(chat.length&&chat[chat.length-1].err)chat.pop();
+  chat.push({r:'user',t:q});runChat();
+}
+async function runChat(){
+  renderChat();window.scrollTo(0,1e9);
+  chat.push({r:'model',t:'…',typing:true});renderChat();
   const btn=$('cBtn');busy(btn,true,'');
   try{
     const ctxN=notes.slice(-60).map(n=>`• [${n.tags.join(',')}] ${n.title}: ${n.body.slice(0,400)}${n.photos?.length?` [${n.photos.length} fotoğraf: ${n.photos.map(p=>stampDate(p.ts)+(p.addr?' @ '+p.addr:'')).join('; ')}]`:''}`).join('\n');
@@ -717,12 +765,13 @@ async function sendChat(){
 Kullanıcı yeni görev/hatırlatma eklemeni isterse cevabının EN SONUNA şu satırı ekle:
 @@EKLE {"tasks":[{"title":"","note":"","due":null,"remind":null,"priority":"orta"}],"notes":[{"title":"","body":"","tags":[]}]}
 \nNOTLAR:\n${ctxN||'(yok)'}\n\nGÖREVLER:\n${ctxT||'(yok)'}`;
-    const hist=chat.slice(-12).map(m=>({role:m.r==='user'?'user':'model',parts:[{text:m.t}]}));
+    chat=chat.filter(m=>!m.typing);
+    const hist=chat.filter(m=>!m.err).slice(-12).map(m=>({role:m.r==='user'?'user':'model',parts:[{text:m.t}]}));
     let r=await gemini('',{system:sys,history:hist});
     const m=r.match(/@@EKLE\s*(\{[\s\S]*\})\s*$/);
     if(m){r=r.slice(0,m.index).trim();try{const a=JSON.parse(m[1]);pending={tasks:a.tasks||[],notes:a.notes||[]};commitPending()}catch{}}
     chat.push({r:'model',t:r});
-  }catch(e){chat.push({r:'model',t:'⚠️ '+e.message})}
+  }catch(e){chat=chat.filter(m=>!m.typing);chat.push({r:'model',t:'⚠️ '+e.message,err:true})}
   busy(btn,false);save();renderChat();window.scrollTo(0,1e9);
 }
 $('cBtn').onclick=sendChat;$('cIn').onkeydown=e=>{if(e.key==='Enter')sendChat()};
@@ -756,6 +805,37 @@ function askNotif(){if(!('Notification' in window)){toastMsg('Bu tarayıcı bild
 function testNotif(){notify('🔔 Test','Hatırlatmalar böyle görünecek','test');beep()}
 function renderNStat(){$('nStat').textContent=!('Notification' in window)?'Desteklenmiyor':Notification.permission==='granted'?'✔ Bildirim izni verildi':Notification.permission==='denied'?'✕ Engellendi — tarayıcı ayarlarından izin ver':'Henüz izin verilmedi';}
 
+
+// ================= İZİNLER =================
+const PERMS=[
+  {k:'microphone',n:'Mikrofon',d:'Sesli not ve asistan',ic:'<rect x="9" y="2.5" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3.5"/>'},
+  {k:'camera',n:'Kamera',d:'Fotoğraflı not',ic:'<path d="M4 8a2 2 0 0 1 2-2h2l1.5-2h5L16 6h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.5"/>'},
+  {k:'geolocation',n:'Konum',d:'Fotoğrafa adres ve koordinat',ic:'<path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>'},
+  {k:'notifications',n:'Bildirim',d:'Hatırlatmalar',ic:'<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/>'},
+];
+async function permState(k){
+  try{if(k==='notifications'&&'Notification' in window){const p=Notification.permission;return p==='default'?'prompt':p==='granted'?'granted':'denied'}
+    const s=await navigator.permissions.query({name:k});return s.state}catch{return 'prompt'}
+}
+async function renderPerms(){
+  const rows=await Promise.all(PERMS.map(async p=>{const s=await permState(p.k);
+    const lbl=s==='granted'?['ok','İZİNLİ']:s==='denied'?['no','ENGELLİ']:['','SORULACAK'];
+    return `<div class="perm"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${p.ic}</svg></span><b>${p.n}<div class="mut" style="font-weight:400">${p.d}</div></b><span class="pst ${lbl[0]}">${lbl[1]}</span></div>`}));
+  const html=rows.join('');$('permList').innerHTML=html;$('permList2').innerHTML=html;
+  return (await Promise.all(PERMS.map(p=>permState(p.k)))).every(s=>s==='granted');
+}
+async function askAllPerms(){
+  try{if('Notification' in window&&Notification.permission==='default')await Notification.requestPermission()}catch{}
+  try{const s=await navigator.mediaDevices.getUserMedia({audio:true,video:true});s.getTracks().forEach(t=>t.stop())}
+  catch{try{const s=await navigator.mediaDevices.getUserMedia({audio:true});s.getTracks().forEach(t=>t.stop())}catch{}
+        try{const s=await navigator.mediaDevices.getUserMedia({video:true});s.getTracks().forEach(t=>t.stop())}catch{}}
+  await new Promise(r=>{if(!navigator.geolocation)return r();navigator.geolocation.getCurrentPosition(()=>r(),()=>r(),{timeout:15000})});
+  LS.set('na_perm',1);renderNStat();
+  const all=await renderPerms();
+  if(all){closeM('mPerm');toastMsg('✔ Tüm izinler verildi')}
+  else toastMsg('Bazı izinler engelli. Ayarlar → İzinler bölümündeki açıklamaya bak.',6000);
+}
+
 // ================= AYARLAR =================
 function saveSettings(){cfg.key=$('sKey').value.trim();cfg.code=$('sCode').value.trim();cfg.model=$('sModel').value;cfg.sound=$('sSound').checked;LS.set('na_cfg',cfg);$('sOut').textContent='✔ Kaydedildi'}
 $('sSound').onchange=()=>{cfg.sound=$('sSound').checked;LS.set('na_cfg',cfg)};
@@ -786,11 +866,12 @@ $('toast').onclick=e=>{if(e.target===$('toast'))hideToast()};
 function closeM(id){$(id).classList.remove('on')}
 document.querySelectorAll('.modal').forEach(m=>m.onclick=e=>{if(e.target===m){if(m.id==='mNote')closeNote();else m.classList.remove('on')}});
 $('nav').onclick=e=>{const b=e.target.closest('button');if(!b)return;show(b.dataset.v)};
-function show(v){document.querySelectorAll('main>section').forEach(s=>s.classList.toggle('hidden',s.id!=='v-'+v));[...$('nav').children].forEach(b=>b.classList.toggle('act',b.dataset.v===v));window.scrollTo(0,0);if(v==='asistan')renderChat()}
+function show(v){if(v==='ayarlar')renderPerms();document.querySelectorAll('main>section').forEach(s=>s.classList.toggle('hidden',s.id!=='v-'+v));[...$('nav').children].forEach(b=>b.classList.toggle('act',b.dataset.v===v));window.scrollTo(0,0);if(v==='asistan')renderChat()}
 function renderAll(){renderToday();renderNotes();renderTasks()}
 setInterval(()=>{const n=new Date();$('clock').textContent=`${GUN[n.getDay()].slice(0,3)} ${pad(n.getHours())}:${pad(n.getMinutes())}`},1000);
 $('sKey').value=cfg.key||'';$('sCode').value=cfg.code||'';$('sModel').innerHTML=`<option>${esc(cfg.model)}</option>`;$('sSound').checked=cfg.sound!==false;
 checkServer();renderNStat();renderAll();checkReminders();
+renderPerms().then(all=>{if(!all&&!LS.get('na_perm',0))setTimeout(()=>$('mPerm').classList.add('on'),900)});
 setTimeout(()=>{if(!cfg.key&&!(srv.ok&&srv.hasKey))toastMsg('👋 Gemini bağlantısı yok — <b>Ayarlar</b>\'a bak.',6000)},1500);
 const sv=new URLSearchParams(location.search).get('v');if(sv)show(sv);
 </script>
