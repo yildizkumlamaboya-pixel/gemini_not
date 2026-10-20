@@ -13,7 +13,7 @@
 <style>
 :root{--bg:#f3f6fb;--card:#fff;--card2:#f1f5fb;--line:#e2e8f0;--tx:#0f172a;--mut:#64748b;--acc:#2563eb;--acc2:#06b6d4;--grad:linear-gradient(135deg,#2563eb 0%,#06b6d4 100%);--ok:#10b981;--warn:#f59e0b;--bad:#ef4444;--sh:0 1px 2px rgba(15,23,42,.04),0 6px 18px rgba(15,23,42,.06);--glow:0 6px 20px rgba(37,99,235,.30);--mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-body{margin:0;min-height:100vh;color:var(--tx);font:15px/1.5 'Inter',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding-bottom:88px;background-color:var(--bg);background-image:linear-gradient(rgba(37,99,235,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(37,99,235,.05) 1px,transparent 1px),radial-gradient(1000px 480px at 100% -10%,rgba(6,182,212,.16),transparent 60%),radial-gradient(800px 420px at -10% 0%,rgba(37,99,235,.13),transparent 60%);background-size:28px 28px,28px 28px,auto,auto;background-attachment:fixed}
+body{margin:0;min-height:100vh;color:var(--tx);font:15px/1.5 'Inter',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding-bottom:84px;background-color:var(--bg);background-image:linear-gradient(rgba(37,99,235,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(37,99,235,.05) 1px,transparent 1px),radial-gradient(1000px 480px at 100% -10%,rgba(6,182,212,.16),transparent 60%),radial-gradient(800px 420px at -10% 0%,rgba(37,99,235,.13),transparent 60%);background-size:28px 28px,28px 28px,auto,auto;background-attachment:fixed}
 header{position:sticky;top:0;z-index:5;background:rgba(255,255,255,.78);backdrop-filter:blur(14px) saturate(1.4);-webkit-backdrop-filter:blur(14px) saturate(1.4);padding:11px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px}
 header h1{font-size:18px;margin:0;flex:1;display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:-.02em}
 .logo{width:34px;height:34px;border-radius:11px;background:var(--grad);display:grid;place-items:center;color:#fff;box-shadow:var(--glow)}
@@ -31,7 +31,7 @@ main{padding:16px;max-width:760px;margin:0 auto}
 textarea,input,select{width:100%;background:#f8fafc;color:var(--tx);border:1px solid var(--line);border-radius:12px;padding:11px 12px;font:inherit;outline:none;transition:border-color .15s,box-shadow .15s,background .15s}
 textarea:focus,input:focus,select:focus{border-color:var(--acc);background:#fff;box-shadow:0 0 0 4px rgba(37,99,235,.12)}
 input[type=checkbox]{accent-color:var(--acc);width:auto;vertical-align:-2px;margin-right:4px}
-textarea{resize:vertical;min-height:84px}
+textarea{resize:vertical;min-height:64px}
 label{display:block;font-size:12px;font-weight:600;letter-spacing:.02em;color:var(--mut);margin:10px 0 5px}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .row>*{flex:1}
@@ -137,6 +137,13 @@ nav button.act b{background:linear-gradient(135deg,rgba(37,99,235,.13),rgba(6,18
 .recbar.on{display:flex}
 .recbar i{width:9px;height:9px;border-radius:50%;background:#ef4444;animation:pul 1.4s ease-out infinite}
 .mono{font-family:var(--mono)}
+.cnt{display:inline-block;min-width:18px;padding:1px 6px;margin-left:2px;border-radius:10px;font:700 11px/16px var(--mono);background:rgba(37,99,235,.12);color:var(--acc)}
+.cnt.bad{background:#fee2e2;color:#b91c1c}
+.chips button.act .cnt{background:rgba(255,255,255,.25);color:#fff}
+details.card summary{list-style:none}
+details.card summary::after{content:'›';float:right;transform:rotate(90deg);transition:.15s;color:var(--mut)}
+details.card[open] summary::after{transform:rotate(-90deg)}
+details.card[open] summary{margin-bottom:6px}
 .rectime{font:600 30px/1.2 var(--mono);margin-bottom:6px}
 </style>
 </head>
@@ -152,31 +159,30 @@ nav button.act b{background:linear-gradient(135deg,rgba(37,99,235,.13),rgba(6,18
 <!-- BUGÜN -->
 <section id="v-bugun">
   <div class="card ai">
-    <h3>⚡ Hızlı ekle</h3>
-    <div class="mut">Aklındakini yaz ya da 🎤 ile söyle; Gemini not, görev ve hatırlatmalara ayırsın.<br>Örn: <i>"Yarın 10'da Acar Metal'i ara, cuma öğleden sonra sevkiyat kontrolü, kompresör yağı bitmek üzere"</i></div>
-    <textarea id="qText" placeholder="Yaz veya 🎤 ile söyle..."></textarea>
+    <textarea id="qText" rows="2"></textarea>
     <div class="row" style="margin-top:8px">
-      <button class="mic" id="micBtn" style="flex:0 0 52px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3.5"/></svg></button>
+      <button class="mic" id="micBtn" style="flex:0 0 52px" title="Sesle ekle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3.5"/></svg></button>
       <button id="camQuick" style="flex:0 0 52px" onclick="photoNote()" title="Fotoğraflı not"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8a2 2 0 0 1 2-2h2l1.5-2h5L16 6h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.5"/></svg></button>
-      <button class="pri" id="qBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 4.7 4.7 1.8-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2 2.2.8-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg> AI ile ayır ve ekle</button>
+      <button class="pri" id="qBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 4.7 4.7 1.8-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2 2.2.8-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg> AI ile ekle</button>
     </div>
     <div id="qPreview"></div>
   </div>
 
-  <button class="pri" style="width:100%;margin-bottom:14px;padding:13px" onclick="show('gunluk')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 10v4M6 6v12M10 3v18M14 8v8M18 5v14M22 10v4"/></svg> Sesli günlük</button>
   <div class="card">
-    <div class="stat" id="stats"></div>
-  </div>
-
-  <div class="card">
-    <div class="row"><h3 style="margin:0">📅 Bugün</h3><button class="sm ai" id="planBtn" style="flex:0 0 auto">✨ Günümü planla</button></div>
+    <div class="row" style="margin-bottom:6px">
+      <h3 style="margin:0">Görevler</h3>
+      <button class="sm ai" id="planBtn" style="flex:0 0 auto">✨ Planla</button>
+      <button class="sm pri" style="flex:0 0 auto" onclick="openTask()">＋ Görev</button>
+    </div>
+    <div class="chips" id="tFilter">
+      <button data-f="bugun" data-l="Bugün">Bugün</button>
+      <button data-f="hafta" data-l="Hafta">Hafta</button>
+      <button data-f="geciken" data-l="Geciken">Geciken</button>
+      <button data-f="acik" data-l="Tümü">Tümü</button>
+      <button data-f="biten" data-l="Biten">Biten</button>
+    </div>
     <div id="planOut"></div>
-    <div id="todayList"></div>
-  </div>
-
-  <div class="card">
-    <h3>⏰ Yaklaşan hatırlatmalar</h3>
-    <div id="upList"></div>
+    <div id="taskList"></div>
   </div>
 </section>
 
@@ -191,30 +197,18 @@ nav button.act b{background:linear-gradient(135deg,rgba(37,99,235,.13),rgba(6,18
   <div class="card" id="noteList"></div>
 </section>
 
-<!-- GÖREVLER -->
-<section id="v-gorevler" class="hidden">
-  <div class="row" style="margin-bottom:10px">
-    <div class="chips" style="margin:0" id="tFilter">
-      <button data-f="acik" class="act">Açık</button>
-      <button data-f="bugun">Bugün</button>
-      <button data-f="hafta">Bu hafta</button>
-      <button data-f="geciken">Geciken</button>
-      <button data-f="biten">Biten</button>
-    </div>
-    <button class="pri" style="flex:0 0 auto" onclick="openTask()">＋ Görev</button>
-  </div>
-  <div class="card" id="taskList"></div>
-</section>
-
 <!-- ASİSTAN -->
 <section id="v-asistan" class="hidden">
-  <div class="card ai">
-    <div class="mut">Notların ve görevlerin hakkında soru sor: <i>"Bu hafta neler var?"</i>, <i>"Acar Metal ile ilgili ne not almıştım?"</i>, <i>"Bana haftalık plan çıkar"</i></div>
+  <div class="chips" id="cSug">
+    <button onclick="askSug(this)">Bugün ne yapmalıyım?</button>
+    <button onclick="askSug(this)">Dünkü konuşmaları özetle</button>
+    <button onclick="askSug(this)">Bu hafta neler var?</button>
+    <button onclick="askSug(this)">Geciken işlerim neler?</button>
   </div>
   <div id="chat"></div>
   <div class="row" style="position:sticky;bottom:80px;background:var(--bg);padding:6px 0">
     <button style="flex:0 0 46px" onclick="voice('chat')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3.5"/></svg></button>
-    <input id="cIn" placeholder="Mesaj yaz...">
+    <input id="cIn" placeholder="Sor...">
     <button class="pri" style="flex:0 0 auto" id="cBtn">Gönder</button>
   </div>
   <button class="sm ghost" onclick="clearChat()">Sohbeti temizle</button>
@@ -226,36 +220,22 @@ nav button.act b{background:linear-gradient(135deg,rgba(37,99,235,.13),rgba(6,18
     <div class="dhero">
       <button class="dbtn" id="dBtn" onclick="diaryToggle()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3.5"/></svg></button>
       <div class="dtime" id="dTime">Sesli günlük</div>
-      <div class="mut" id="dStat">Dokun, kayıt başlasın. Tüm konuşmalar dakika dakika yazıya dökülür.</div>
+      <div class="mut" id="dStat">Kaydı başlatmak için dokun</div>
       <div class="dlevel"><i id="dLvl"></i></div>
     </div>
   </div>
 
   <div class="card">
-    <h3>✨ Konuşmalara sor</h3>
-    <div class="row">
-      <select id="dqRange" style="flex:0 0 132px"><option value="1">Bugün</option><option value="2">Dün + bugün</option><option value="7" selected>Son 7 gün</option><option value="30">Son 30 gün</option><option value="0">Tümü</option></select>
-      <input id="dqIn" placeholder="Örn: Acar Metal ile ne konuştuk?">
-    </div>
-    <div class="row" style="margin-top:8px">
-      <button style="flex:0 0 52px" onclick="voice('dq')" title="Sesle sor"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3.5"/></svg></button>
-      <button class="pri" id="dqBtn" onclick="askDiary()">Sor</button>
-    </div>
-    <div class="row" style="margin-top:8px">
-      <button class="sm ai" onclick="diaryAI('ozet')">✨ Günü özetle</button>
-      <button class="sm ai" onclick="diaryAI('gorev')">✨ Görevleri çıkar</button>
-    </div>
-    <div id="dqOut"></div>
-  </div>
-
-  <div class="card">
     <div class="row" style="margin-bottom:8px">
-      <h3 style="margin:0">📜 Kayıtlar</h3>
       <input type="date" id="dDate" style="flex:0 0 150px">
+      <input id="dSearch" placeholder="🔍 Ara">
     </div>
     <div class="row" style="margin-bottom:6px">
-      <input id="dSearch" placeholder="🔍 Kelimeyle filtrele (tüm günlerde)">
+      <button class="sm ai" onclick="diaryAI('ozet')">✨ Özetle</button>
+      <button class="sm ai" onclick="diaryAI('gorev')">✨ Görevler</button>
+      <button class="sm ai" onclick="show('asistan');$('cIn').focus()">✨ Soru sor</button>
     </div>
+    <div id="dqOut"></div>
     <div class="mut" id="dCount"></div>
     <div id="dList"></div>
   </div>
@@ -264,7 +244,25 @@ nav button.act b{background:linear-gradient(135deg,rgba(37,99,235,.13),rgba(6,18
 <!-- AYARLAR -->
 <section id="v-ayarlar" class="hidden">
   <div class="card">
-    <h3>🔑 Gemini ayarları</h3>
+    <h3>İzinler ve bildirim</h3>
+    <div id="permList"></div>
+    <div id="nStat" class="hidden"></div>
+    <button class="pri" style="width:100%;margin-top:10px" onclick="askAllPerms()">Tüm izinleri ver</button>
+    <div class="row" style="margin-top:8px">
+      <button class="sm" onclick="testNotif()">Test bildirimi</button>
+      <label style="margin:0;flex:1;display:flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" id="sSound"> Hatırlatmada ses</label>
+    </div>
+  </div>
+  <div class="card">
+    <h3>Yedek</h3>
+    <div class="row">
+      <button onclick="exportData()">Dışa aktar</button>
+      <button onclick="document.getElementById('impFile').click()">İçe aktar</button>
+    </div>
+    <input type="file" id="impFile" accept=".json,application/json" class="hidden">
+  </div>
+  <details class="card">
+    <summary style="font-weight:650;cursor:pointer">Gelişmiş</summary>
     <div id="srvStat" class="mut"></div>
     <label>Uygulama kodu (sunucuda APP_CODE tanımladıysan)</label>
     <input id="sCode" type="password" placeholder="Boş bırakılabilir">
@@ -280,40 +278,17 @@ nav button.act b{background:linear-gradient(135deg,rgba(37,99,235,.13),rgba(6,18
       <button onclick="testAI()">Bağlantıyı test et</button>
     </div>
     <div id="sOut" class="mut" style="margin-top:8px"></div>
-  </div>
-  <div class="card ai">
-    <h3>🔐 İzinler</h3>
-    <div id="permList"></div>
-    <button class="pri" style="width:100%;margin-top:10px" onclick="askAllPerms()">Tüm izinleri ver</button>
-    <div class="mut" style="margin-top:8px">Engellenmiş bir izin varsa: uygulama bilgisi → İzinler'den ya da Chrome → Site ayarları → yildiz-not-asistani.vercel.app'ten aç.</div>
-  </div>
-  <div class="card">
-    <h3>🔔 Bildirimler</h3>
-    <div class="mut" id="nStat"></div>
-    <div class="row" style="margin-top:8px">
-      <button onclick="askNotif()">Bildirim izni ver</button>
-      <button onclick="testNotif()">Test bildirimi</button>
-    </div>
-    <label><input type="checkbox" id="sSound" style="width:auto"> Hatırlatmada ses çal</label>
-  </div>
-  <div class="card">
-    <h3>💾 Yedek</h3>
-    <div class="row">
-      <button onclick="exportData()">Dışa aktar (JSON)</button>
-      <button onclick="document.getElementById('impFile').click()">İçe aktar</button>
-    </div>
-    <input type="file" id="impFile" accept=".json" class="hidden">
-    <button class="sm ghost" style="color:var(--bad);margin-top:10px" onclick="wipe()">Tüm verileri sil</button>
-  </div>
+  
+    <button class="sm ghost" style="color:var(--bad);margin-top:14px" onclick="wipe()">Tüm verileri sil</button>
+  </details>
 </section>
 </main>
 
 <nav id="nav">
-  <button data-v="bugun" class="act"><b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg></b>Bugün</button>
+  <button data-v="bugun" class="act"><b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg></b>Ana sayfa</button>
   <button data-v="notlar"><b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg></b>Notlar</button>
-  <button data-v="gorevler"><b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="m8 12 3 3 5-6"/></svg></b>Görevler</button>
-  <button data-v="asistan"><b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 4.7 4.7 1.8-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2 2.2.8-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg></b>Asistan</button>
   <button data-v="gunluk"><b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 10v4M6 6v12M10 3v18M14 8v8M18 5v14M22 10v4"/></svg></b>Günlük</button>
+  <button data-v="asistan"><b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 4.7 4.7 1.8-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2 2.2.8-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg></b>Asistan</button>
   <button data-v="ayarlar"><b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></b>Ayarlar</button>
 </nav>
 
@@ -399,7 +374,6 @@ nav button.act b{background:linear-gradient(135deg,rgba(37,99,235,.13),rgba(6,18
   </div>
 </div></div>
 
-<button class="fab" id="fab" onclick="voice('quick')" title="Sesli not/görev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3.5"/></svg></button>
 
 <div class="modal" id="mRec"><div class="sheet"><div class="recbox">
   <div id="recTitle" class="mut">Dinliyorum... konuş</div>
@@ -571,9 +545,6 @@ async function onRecStop(){
       const t=await gemini('Bu ses kaydını Türkçe yazıya dök. Noktalama ve paragrafları düzelt, anlamı değiştirme. Sadece metni ver.',{parts:[part]});
       closeRec();const b=$('nBody');b.value=(b.value.trim()?b.value.trimEnd()+'\n\n':'')+t.trim();
       if(!$('nTitle').value.trim())$('nTitle').value=t.trim().split(/[.\n]/)[0].slice(0,50);
-    }else if(rec.mode==='dq'){
-      const t=await gemini('Bu ses kaydını Türkçe yazıya dök. Sadece metni ver.',{parts:[part]});
-      closeRec();show('gunluk');$('dqIn').value=t.trim();askDiary();
     }else if(rec.mode==='chat'){
       const t=await gemini('Bu ses kaydını Türkçe yazıya dök. Sadece metni ver.',{parts:[part]});
       closeRec();show('asistan');$('cIn').value=t.trim();sendChat();
@@ -660,7 +631,7 @@ function renderNotes(){
   $('tagChips').innerHTML=tags.length?`<button class="${tagF?'':'act'}" onclick="tagF='';renderNotes()">Tümü</button>`+tags.map(t=>`<button class="${tagF===t?'act':''}" onclick="tagF='${esc(t)}';renderNotes()">#${esc(t)}</button>`).join(''):'';
   let list=notes.filter(n=>(!tagF||n.tags.includes(tagF))&&(!q||(n.title+' '+n.body+' '+n.tags.join(' ')+' '+(n.photos||[]).map(p=>p.addr).join(' ')).toLocaleLowerCase('tr').includes(q)));
   list.sort((a,b)=>(b.pinned-a.pinned)||(b.updated-a.updated));
-  $('noteList').innerHTML=list.length?list.map(n=>`<div class="item note" onclick="openNote('${n.id}')"><div class="bd"><div class="t">${n.pinned?'<span class="pin">📌</span> ':''}${esc(n.title)}</div><div class="prev">${esc(n.body)}</div>${n.photos?.length?`<div class="nthumbs">${n.photos.slice(0,4).map(p=>`<img data-pid="${p.id}" alt="">`).join('')}${n.photos.length>4?`<span class="mut" style="align-self:center">+${n.photos.length-4}</span>`:''}</div>${n.photos[0].addr?`<div class="ploc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>${esc(n.photos[0].addr)}</div>`:''}`:''}<div>${n.tags.map(t=>`<span class="tag">#${esc(t)}</span>`).join('')}<span class="mut" style="font-size:11px"> ${fmt(toLocal(new Date(n.updated)))}</span></div></div></div>`).join(''):'<div class="empty">Not yok. ＋ ile ekle veya Bugün sekmesinden hızlı ekle.</div>';
+  $('noteList').innerHTML=list.length?list.map(n=>`<div class="item note" onclick="openNote('${n.id}')"><div class="bd"><div class="t">${n.pinned?'<span class="pin">📌</span> ':''}${esc(n.title)}</div><div class="prev">${esc(n.body)}</div>${n.photos?.length?`<div class="nthumbs">${n.photos.slice(0,4).map(p=>`<img data-pid="${p.id}" alt="">`).join('')}${n.photos.length>4?`<span class="mut" style="align-self:center">+${n.photos.length-4}</span>`:''}</div>${n.photos[0].addr?`<div class="ploc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>${esc(n.photos[0].addr)}</div>`:''}`:''}<div>${n.tags.map(t=>`<span class="tag">#${esc(t)}</span>`).join('')}<span class="mut" style="font-size:11px"> ${fmt(toLocal(new Date(n.updated)))}</span></div></div></div>`).join(''):'<div class="empty">Not yok</div>';
   hydrate($('noteList'));
 }
 $('nSearch').oninput=renderNotes;
@@ -777,7 +748,6 @@ const CHUNK=45; // saniye
 let dr={on:false,stream:null,mr:null,t0:0,tick:null,timer:null,queue:[],busy:false,ac:null,an:null,wake:null,last:''};
 $('dDate').value=dayKey(Date.now());
 $('dDate').onchange=renderDiary;$('dSearch').oninput=renderDiary;
-$('dqIn').onkeydown=e=>{if(e.key==='Enter')askDiary()};
 async function diaryToggle(){dr.on?diaryStop():diaryStart()}
 async function diaryStart(){
   if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder){toastMsg('Bu cihaz ses kaydını desteklemiyor');return}
@@ -792,7 +762,7 @@ async function diaryStart(){
     if(dr.an){dr.an.getByteTimeDomainData(buf);let m=0;for(const v of buf)m=Math.max(m,Math.abs(v-128));$('dLvl').style.width=Math.min(100,m*1.6)+'%'}
   },200);
   wakeOn();$('dTime').classList.add('mono');
-  $('dBtn').classList.add('on');$('recBar').classList.add('on');$('fab').classList.add('hidden');
+  $('dBtn').classList.add('on');$('recBar').classList.add('on');
   diaryStatus();
   nextChunk();
 }
@@ -810,7 +780,7 @@ function diaryStop(){
   if(dr.mr?.state==='recording')dr.mr.stop();
   setTimeout(()=>{dr.stream?.getTracks().forEach(t=>t.stop());try{dr.ac?.close()}catch{}},300);
   wakeOff();
-  $('dBtn').classList.remove('on');$('recBar').classList.remove('on');$('fab').classList.remove('hidden');$('dLvl').style.width='0';
+  $('dBtn').classList.remove('on');$('recBar').classList.remove('on');$('dLvl').style.width='0';
   $('dTime').classList.remove('mono');$('dTime').textContent='Sesli günlük';diaryStatus();
 }
 async function wakeOn(){if(APP){try{Android.keepScreenOn(true)}catch{}dr.wake=1;return}try{dr.wake=await navigator.wakeLock?.request('screen')}catch{}}
@@ -818,8 +788,8 @@ function wakeOff(){if(APP){try{Android.keepScreenOn(false)}catch{}dr.wake=null;r
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&dr.on&&!dr.wake)wakeOn()});
 function diaryStatus(){
   const q=dr.queue.length+(dr.busy?1:0);
-  $('dStat').textContent=dr.on?`Kayıt sürüyor · her ${CHUNK} sn'de bir yazıya dökülüyor${q?` · ${q} parça işleniyor`:''}. Ekran açık kalır.`
-    :q?`${q} parça yazıya dökülüyor...`:'Dokun, kayıt başlasın. Tüm konuşmalar dakika dakika yazıya dökülür.';
+  $('dStat').textContent=dr.on?`Kaydediliyor${q?` · ${q} parça işleniyor`:''}`
+    :q?`${q} parça yazıya dökülüyor...`:'Kaydı başlatmak için dokun';
 }
 function enqueue(blob,start){dr.queue.push({blob,start});diaryStatus();processQueue()}
 async function processQueue(){
@@ -871,20 +841,6 @@ function diaryText(days){
   if(s.length>300000)s=s.slice(-300000);
   return s;
 }
-async function askDiary(){
-  const q=$('dqIn').value.trim();if(!q)return;
-  const days=+$('dqRange').value,ctx=diaryText(days);
-  if(!ctx){$('dqOut').innerHTML='<div class="out">Seçilen aralıkta kayıt yok.</div>';return}
-  const btn=$('dqBtn');busy(btn,true,'Düşünüyor...');$('dqOut').innerHTML='';
-  try{
-    const r=await gemini(`SORU / FİLTRE: ${q}\n\nKAYITLAR:\n${ctx}`,{system:`Kullanıcının sesli günlük kayıtlarının dökümü verildi (köşeli parantezde tarih-saat). ${nowCtx()}
-Soruyu YALNIZCA bu kayıtlara dayanarak Türkçe, kısa ve net cevapla; dayandığın kayıtların tarih-saatini belirt.
-Kullanıcı filtreleme/arama istiyorsa (ör. "X geçen konuşmalar", "dün öğleden sonra ne konuştuk") ilgili bölümleri tarih-saatleriyle madde madde, aynen alıntılayarak listele.
-Kayıtlarda yoksa "Kayıtlarda bulamadım" de, uydurma. Markdown başlık kullanma.`});
-    $('dqOut').innerHTML=`<div class="out">${esc(r)}</div>`;
-  }catch(e){$('dqOut').innerHTML=`<div class="out">⚠️ ${esc(e.message)} <button class="sm pri" onclick="askDiary()">↻ Tekrar dene</button></div>`}
-  busy(btn,false);
-}
 async function diaryAI(mode){
   const day=$('dDate').value,ctx=diary.filter(e=>dayKey(e.ts)===day&&e.text).sort((a,b)=>a.ts-b.ts).map(e=>`[${hm(e.ts)}] ${e.text}`).join('\n');
   if(!ctx){toastMsg('Seçili günde kayıt yok');return}
@@ -905,7 +861,7 @@ function saveDiaryNote(){const s=window._dsum;if(!s)return;notes.push({id:uid(),
 window.addEventListener('beforeunload',e=>{if(dr.on){e.preventDefault();e.returnValue=''}});
 
 // ================= GÖREVLER =================
-let curTask=null,tF='acik';
+let curTask=null,tF='bugun';
 function openTask(id){
   const t=tasks.find(x=>x.id===id);curTask=t||null;
   $('tTitle').value=t?.title||'';$('tNote').value=t?.note||'';$('tDue').value=t?.due||'';$('tRem').value=t?.remind||'';$('tPri').value=t?.priority||'orta';$('tRep').value=t?.repeat||'';
@@ -947,25 +903,20 @@ function renderTasks(){
     if(tF==='geciken')return t.due&&new Date(t.due)<n;
     return true});
   l.sort(tF==='biten'?(a,b)=>(b.doneAt||0)-(a.doneAt||0):sortT);
-  $('taskList').innerHTML=l.length?l.map(taskRow).join(''):'<div class="empty">Burada görev yok 🎉</div>';
+  $('taskList').innerHTML=l.length?l.map(taskRow).join(''):`<div class="empty">${tF==='bugun'?'Bugün için görev yok':tF==='geciken'?'Geciken iş yok 🎉':tF==='biten'?'Tamamlanan görev yok':'Görev yok'}</div>`;
 }
-$('tFilter').onclick=e=>{const b=e.target.closest('button');if(!b)return;tF=b.dataset.f;[...$('tFilter').children].forEach(x=>x.classList.toggle('act',x===b));renderTasks()};
+$('tFilter').onclick=e=>{const b=e.target.closest('button');if(!b)return;tF=b.dataset.f;renderToday();renderTasks()};
 
 // ================= BUGÜN =================
 function renderToday(){
-  const n=new Date(),end=new Date(n.getFullYear(),n.getMonth(),n.getDate(),23,59);
-  const open=tasks.filter(t=>!t.done);
-  const today=open.filter(t=>t.due&&new Date(t.due)<=end).sort(sortT);
-  const late=open.filter(t=>t.due&&new Date(t.due)<n).length;
-  const doneToday=tasks.filter(t=>t.done&&t.doneAt&&sameDay(new Date(t.doneAt),n)).length;
-  $('stats').innerHTML=`<div><b>${today.length}</b><span class="mut">Bugün</span></div><div><b class="${late?'late':''}">${late}</b><span class="mut">Geciken</span></div><div><b>${doneToday}</b><span class="mut">Bitti</span></div><div><b>${notes.length}</b><span class="mut">Not</span></div>`;
-  $('todayList').innerHTML=today.length?today.map(taskRow).join(''):'<div class="empty">Bugün için görev yok</div>';
-  const up=open.filter(t=>t.remind&&new Date(t.remind)>n).sort((a,b)=>a.remind.localeCompare(b.remind)).slice(0,5);
-  $('upList').innerHTML=up.length?up.map(t=>`<div class="item"><div class="bd" onclick="openTask('${t.id}')"><div class="t">⏰ ${fmt(t.remind)}</div><div class="mut">${esc(t.title)}</div></div></div>`).join(''):'<div class="empty">Yaklaşan hatırlatma yok</div>';
+  const n=new Date(),end=new Date(n.getFullYear(),n.getMonth(),n.getDate(),23,59),wk=new Date(+n+7*864e5),open=tasks.filter(t=>!t.done);
+  const c={acik:open.length,bugun:open.filter(t=>t.due&&new Date(t.due)<=end).length,hafta:open.filter(t=>t.due&&new Date(t.due)<=wk).length,geciken:open.filter(t=>t.due&&new Date(t.due)<n).length,biten:0};
+  [...$('tFilter').children].forEach(b=>{const k=b.dataset.f;b.innerHTML=b.dataset.l+(c[k]?` <span class="cnt${k==='geciken'?' bad':''}">${c[k]}</span>`:'');b.classList.toggle('act',k===tF)});
 }
 
 // ================= ASİSTAN =================
-function renderChat(){$('chat').innerHTML=chat.map((m,i)=>`<div class="msg ${m.r==='user'?'u':'m'}">${esc(m.t)}${m.err&&i===chat.length-1?`<div style="margin-top:8px"><button class="sm pri" onclick="retryChat()">↻ Tekrar dene</button></div>`:''}</div>`).join('');}
+function askSug(b){$('cIn').value=b.textContent;sendChat()}
+function renderChat(){$('cSug').classList.toggle('hidden',chat.length>0);$('chat').innerHTML=chat.map((m,i)=>`<div class="msg ${m.r==='user'?'u':'m'}">${esc(m.t)}${m.err&&i===chat.length-1?`<div style="margin-top:8px"><button class="sm pri" onclick="retryChat()">↻ Tekrar dene</button></div>`:''}</div>`).join('');}
 function retryChat(){if(chat.length&&chat[chat.length-1].err)chat.pop();runChat()}
 async function sendChat(){
   const q=$('cIn').value.trim();if(!q)return;$('cIn').value='';
@@ -979,10 +930,10 @@ async function runChat(){
   try{
     const ctxN=notes.slice(-60).map(n=>`• [${n.tags.join(',')}] ${n.title}: ${n.body.slice(0,400)}${n.photos?.length?` [${n.photos.length} fotoğraf: ${n.photos.map(p=>stampDate(p.ts)+(p.addr?' @ '+p.addr:'')).join('; ')}]`:''}`).join('\n');
     const ctxT=tasks.filter(t=>!t.done||(t.doneAt&&Date.now()-t.doneAt<7*864e5)).map(t=>`• ${t.done?'[BİTTİ] ':''}${t.title}${t.due?' — '+t.due:''} (${t.priority})${t.note?' — '+t.note:''}`).join('\n');
-    const sys=`Kullanıcının kişisel not ve planlama asistanısın. Türkçe, samimi ve kısa cevap ver; markdown başlık kullanma. ${nowCtx()}
+    const sys=`Kullanıcının kişisel not ve planlama asistanısın. Türkçe, samimi ve kısa cevap ver; markdown başlık kullanma. Sesli günlük kayıtlarıyla ilgili sorularda yalnızca kayıtlara dayan, ilgili kayıtların tarih-saatini belirt; filtreleme istenirse ilgili bölümleri tarih-saatleriyle aynen alıntıla; kayıtta yoksa uydurma. ${nowCtx()}
 Kullanıcı yeni görev/hatırlatma eklemeni isterse cevabının EN SONUNA şu satırı ekle:
 @@EKLE {"tasks":[{"title":"","note":"","due":null,"remind":null,"priority":"orta"}],"notes":[{"title":"","body":"","tags":[]}]}
-\nSESLİ GÜNLÜK (son 2 gün):\n${diaryText(2).slice(-6000)||'(yok)'}\n\nNOTLAR:\n${ctxN||'(yok)'}\n\nGÖREVLER:\n${ctxT||'(yok)'}`;
+\nSESLİ GÜNLÜK KAYITLARI (son 30 gün, [tarih saat] etiketli):\n${diaryText(30).slice(-150000)||'(yok)'}\n\nNOTLAR:\n${ctxN||'(yok)'}\n\nGÖREVLER:\n${ctxT||'(yok)'}`;
     chat=chat.filter(m=>!m.typing);
     const hist=chat.filter(m=>!m.err).slice(-12).map(m=>({role:m.r==='user'?'user':'model',parts:[{text:m.t}]}));
     let r=await gemini('',{system:sys,history:hist});
@@ -1093,10 +1044,11 @@ $('toast').onclick=e=>{if(e.target===$('toast'))hideToast()};
 function closeM(id){$(id).classList.remove('on')}
 document.querySelectorAll('.modal').forEach(m=>m.onclick=e=>{if(e.target===m){if(m.id==='mNote')closeNote();else m.classList.remove('on')}});
 $('nav').onclick=e=>{const b=e.target.closest('button');if(!b)return;show(b.dataset.v)};
-function show(v){if(v==='ayarlar')renderPerms();document.querySelectorAll('main>section').forEach(s=>s.classList.toggle('hidden',s.id!=='v-'+v));[...$('nav').children].forEach(b=>b.classList.toggle('act',b.dataset.v===v));window.scrollTo(0,0);if(v==='asistan')renderChat()}
+function show(v){if(!$('v-'+v))v='bugun';if(v==='ayarlar')renderPerms();document.querySelectorAll('main>section').forEach(s=>s.classList.toggle('hidden',s.id!=='v-'+v));[...$('nav').children].forEach(b=>b.classList.toggle('act',b.dataset.v===v));window.scrollTo(0,0);if(v==='asistan')renderChat()}
 function renderAll(){renderToday();renderNotes();renderTasks();renderDiary()}
 setInterval(()=>{const n=new Date();$('clock').textContent=`${GUN[n.getDay()].slice(0,3)} ${pad(n.getHours())}:${pad(n.getMinutes())}`},1000);
 $('sKey').value=cfg.key||'';$('sCode').value=cfg.code||'';$('sModel').innerHTML=`<option>${esc(cfg.model)}</option>`;$('sSound').checked=cfg.sound!==false;
+{const e=new Date(new Date().setHours(23,59,0,0));if(!tasks.some(t=>!t.done&&t.due&&new Date(t.due)<=e))tF='acik'}
 checkServer();renderNStat();renderAll();checkReminders();syncAlarms();
 renderPerms().then(all=>{if(!all&&!LS.get('na_perm',0))setTimeout(()=>$('mPerm').classList.add('on'),900)});
 setTimeout(()=>{if(!cfg.key&&!(srv.ok&&srv.hasKey))toastMsg('👋 Gemini bağlantısı yok — <b>Ayarlar</b>\'a bak.',6000)},1500);
