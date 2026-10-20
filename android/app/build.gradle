@@ -1,0 +1,43 @@
+plugins { id 'com.android.application' }
+
+def buildNo = (System.getenv('BUILD_NUMBER') ?: '1').toInteger()
+// Kalıcı imza: GitHub Secrets'ta ANDROID_KEYSTORE_BASE64 + ANDROID_KEYSTORE_PASSWORD varsa kullanılır, yoksa debug imzası.
+def ksFile = file('../release.jks')
+def ksPass = System.getenv('ANDROID_KEYSTORE_PASSWORD')
+def useRelease = ksPass && ksFile.exists()
+
+android {
+    namespace 'com.yildiz.notasistani'
+    compileSdk 34
+    defaultConfig {
+        applicationId 'com.yildiz.notasistani'
+        minSdk 24
+        targetSdk 34
+        versionCode buildNo
+        versionName "1.0.${buildNo}"
+    }
+    signingConfigs {
+        release {
+            if (useRelease) {
+                storeFile ksFile
+                storePassword ksPass
+                keyAlias 'notasistani'
+                keyPassword ksPass
+            }
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig useRelease ? signingConfigs.release : signingConfigs.debug
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.5.0'
+}

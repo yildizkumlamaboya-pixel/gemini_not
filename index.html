@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#111827">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg">
+<title>Not Asistanı</title>
+<style>
+:root{--bg:#0f172a;--card:#1e293b;--card2:#273449;--line:#334155;--tx:#e2e8f0;--mut:#94a3b8;--acc:#8b5cf6;--acc2:#6366f1;--ok:#22c55e;--warn:#f59e0b;--bad:#ef4444}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding-bottom:76px}
+header{position:sticky;top:0;z-index:5;background:rgba(15,23,42,.92);backdrop-filter:blur(8px);padding:12px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
+header h1{font-size:18px;margin:0;flex:1}
+header .dot{width:10px;height:10px;border-radius:50%;background:var(--bad)}
+header .dot.on{background:var(--ok)}
+main{padding:14px 16px;max-width:760px;margin:0 auto}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
+.card h3{margin:0 0 8px;font-size:15px}
+.mut{color:var(--mut);font-size:13px}
+textarea,input,select{width:100%;background:#0b1222;color:var(--tx);border:1px solid var(--line);border-radius:10px;padding:10px;font:inherit}
+textarea{resize:vertical;min-height:80px}
+label{display:block;font-size:13px;color:var(--mut);margin:8px 0 4px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.row>*{flex:1}
+button{background:var(--card2);color:var(--tx);border:1px solid var(--line);border-radius:10px;padding:9px 12px;font:inherit;cursor:pointer}
+button.pri{background:linear-gradient(135deg,var(--acc),var(--acc2));border:0;font-weight:600}
+button.sm{padding:5px 9px;font-size:13px}
+button.ghost{background:transparent}
+button:disabled{opacity:.5}
+.ai{background:linear-gradient(135deg,#7c3aed33,#4f46e533);border-color:#7c3aed88}
+nav{position:fixed;bottom:0;left:0;right:0;background:#0b1222;border-top:1px solid var(--line);display:flex;padding-bottom:env(safe-area-inset-bottom)}
+nav button{flex:1;background:none;border:0;border-radius:0;padding:10px 0 8px;color:var(--mut);font-size:12px}
+nav button b{display:block;font-size:20px;font-weight:400}
+nav button.act{color:var(--tx)}
+nav button.act b{filter:drop-shadow(0 0 6px var(--acc))}
+.item{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--line)}
+.item:last-child{border-bottom:0}
+.item .bd{flex:1;min-width:0}
+.item .t{font-weight:600;word-wrap:break-word}
+.item.done .t{text-decoration:line-through;color:var(--mut)}
+.chk{width:22px;height:22px;border-radius:7px;border:2px solid var(--mut);flex:none;margin-top:2px;display:grid;place-items:center;cursor:pointer}
+.chk.on{background:var(--ok);border-color:var(--ok)}
+.tag{display:inline-block;font-size:11px;padding:2px 7px;border-radius:20px;background:#334155;margin:3px 4px 0 0}
+.p-yuksek{background:#7f1d1d}.p-orta{background:#78350f}.p-dusuk{background:#14532d}
+.late{color:var(--bad)}
+.note{cursor:pointer}
+.note .prev{color:var(--mut);font-size:13px;white-space:pre-wrap;max-height:3.9em;overflow:hidden}
+.pin{color:var(--warn)}
+.chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:8px}
+.chips button{flex:none;border-radius:20px}
+.chips button.act{background:var(--acc);border-color:var(--acc)}
+.msg{padding:10px 12px;border-radius:12px;margin:8px 0;white-space:pre-wrap;max-width:88%}
+.msg.u{background:var(--acc2);margin-left:auto}
+.msg.m{background:var(--card2)}
+.out{white-space:pre-wrap;background:#0b1222;border-radius:10px;padding:10px;margin-top:10px;font-size:14px}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:flex-end;justify-content:center;z-index:20}
+.modal.on{display:flex}
+.sheet{background:var(--card);width:100%;max-width:760px;max-height:92vh;overflow:auto;border-radius:18px 18px 0 0;padding:16px;padding-bottom:calc(16px + env(safe-area-inset-bottom))}
+.toast{position:fixed;left:12px;right:12px;top:12px;z-index:30;background:#312e81;border:1px solid var(--acc);border-radius:14px;padding:12px;display:none;box-shadow:0 10px 30px #0008;max-width:520px;margin:auto}
+.toast.on{display:block}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid #fff6;border-top-color:#fff;border-radius:50%;animation:s .7s linear infinite;vertical-align:-2px}
+@keyframes s{to{transform:rotate(360deg)}}
+.hidden{display:none!important}
+.mic.rec{background:var(--bad);border-color:var(--bad)}
+.empty{text-align:center;color:var(--mut);padding:20px 0}
+.stat{display:flex;gap:8px}
+.stat div{flex:1;background:var(--card2);border-radius:10px;padding:10px;text-align:center}
+.stat b{display:block;font-size:22px}
+.fab{position:fixed;right:16px;bottom:84px;z-index:10;width:60px;height:60px;border-radius:50%;border:0;font-size:26px;background:linear-gradient(135deg,var(--acc),var(--acc2));box-shadow:0 8px 24px #0009}
+.recbox{text-align:center;padding:10px 0 4px}
+.recdot{width:110px;height:110px;border-radius:50%;margin:10px auto 14px;background:var(--bad);display:grid;place-items:center;font-size:40px;animation:pul 1.2s ease-in-out infinite}
+.recdot.wait{background:var(--acc);animation:none}
+@keyframes pul{50%{box-shadow:0 0 0 18px #ef444433}}
+.rectime{font-size:28px;font-variant-numeric:tabular-nums;margin-bottom:6px}
+</style>
+</head>
+<body>
+<header>
+  <h1>✨ Not Asistanı</h1>
+  <span class="mut" id="clock"></span>
+  <span class="dot" id="aiDot" title="Gemini bağlantısı"></span>
+</header>
+
+<main>
+<!-- BUGÜN -->
+<section id="v-bugun">
+  <div class="card ai">
+    <h3>⚡ Hızlı ekle</h3>
+    <div class="mut">Aklındakini yaz ya da 🎤 ile söyle; Gemini not, görev ve hatırlatmalara ayırsın.<br>Örn: <i>"Yarın 10'da Acar Metal'i ara, cuma öğleden sonra sevkiyat kontrolü, kompresör yağı bitmek üzere"</i></div>
+    <textarea id="qText" placeholder="Yaz veya 🎤 ile söyle..."></textarea>
+    <div class="row" style="margin-top:8px">
+      <button class="mic" id="micBtn" style="flex:0 0 52px">🎤</button>
+      <button class="pri" id="qBtn">✨ AI ile ayır ve ekle</button>
+    </div>
+    <div id="qPreview"></div>
+  </div>
+
+  <div class="card">
+    <div class="stat" id="stats"></div>
+  </div>
+
+  <div class="card">
+    <div class="row"><h3 style="margin:0">📅 Bugün</h3><button class="sm ai" id="planBtn" style="flex:0 0 auto">✨ Günümü planla</button></div>
+    <div id="planOut"></div>
+    <div id="todayList"></div>
+  </div>
+
+  <div class="card">
+    <h3>⏰ Yaklaşan hatırlatmalar</h3>
+    <div id="upList"></div>
+  </div>
+</section>
+
+<!-- NOTLAR -->
+<section id="v-notlar" class="hidden">
+  <div class="row" style="margin-bottom:10px">
+    <input id="nSearch" placeholder="🔍 Notlarda ara...">
+    <button class="pri" style="flex:0 0 auto" onclick="openNote()">＋ Not</button>
+  </div>
+  <div class="chips" id="tagChips"></div>
+  <div class="card" id="noteList"></div>
+</section>
+
+<!-- GÖREVLER -->
+<section id="v-gorevler" class="hidden">
+  <div class="row" style="margin-bottom:10px">
+    <div class="chips" style="margin:0" id="tFilter">
+      <button data-f="acik" class="act">Açık</button>
+      <button data-f="bugun">Bugün</button>
+      <button data-f="hafta">Bu hafta</button>
+      <button data-f="geciken">Geciken</button>
+      <button data-f="biten">Biten</button>
+    </div>
+    <button class="pri" style="flex:0 0 auto" onclick="openTask()">＋ Görev</button>
+  </div>
+  <div class="card" id="taskList"></div>
+</section>
+
+<!-- ASİSTAN -->
+<section id="v-asistan" class="hidden">
+  <div class="card ai">
+    <div class="mut">Notların ve görevlerin hakkında soru sor: <i>"Bu hafta neler var?"</i>, <i>"Acar Metal ile ilgili ne not almıştım?"</i>, <i>"Bana haftalık plan çıkar"</i></div>
+  </div>
+  <div id="chat"></div>
+  <div class="row" style="position:sticky;bottom:80px;background:var(--bg);padding:6px 0">
+    <button style="flex:0 0 46px" onclick="voice('chat')">🎤</button>
+    <input id="cIn" placeholder="Mesaj yaz...">
+    <button class="pri" style="flex:0 0 auto" id="cBtn">Gönder</button>
+  </div>
+  <button class="sm ghost" onclick="clearChat()">Sohbeti temizle</button>
+</section>
+
+<!-- AYARLAR -->
+<section id="v-ayarlar" class="hidden">
+  <div class="card">
+    <h3>🔑 Gemini ayarları</h3>
+    <div id="srvStat" class="mut"></div>
+    <label>Uygulama kodu (sunucuda APP_CODE tanımladıysan)</label>
+    <input id="sCode" type="password" placeholder="Boş bırakılabilir">
+    <label>Kendi API anahtarın (isteğe bağlı — boşsa sunucudaki anahtar kullanılır)</label>
+    <input id="sKey" type="password" placeholder="Boş bırak">
+    <label>Model</label>
+    <div class="row">
+      <select id="sModel"><option value="gemini-flash-latest">gemini-flash-latest</option></select>
+      <button style="flex:0 0 auto" onclick="loadModels()">Listeyi getir</button>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button class="pri" onclick="saveSettings()">Kaydet</button>
+      <button onclick="testAI()">Bağlantıyı test et</button>
+    </div>
+    <div id="sOut" class="mut" style="margin-top:8px"></div>
+  </div>
+  <div class="card">
+    <h3>🔔 Bildirimler</h3>
+    <div class="mut" id="nStat"></div>
+    <div class="row" style="margin-top:8px">
+      <button onclick="askNotif()">Bildirim izni ver</button>
+      <button onclick="testNotif()">Test bildirimi</button>
+    </div>
+    <label><input type="checkbox" id="sSound" style="width:auto"> Hatırlatmada ses çal</label>
+  </div>
+  <div class="card">
+    <h3>💾 Yedek</h3>
+    <div class="row">
+      <button onclick="exportData()">Dışa aktar (JSON)</button>
+      <button onclick="document.getElementById('impFile').click()">İçe aktar</button>
+    </div>
+    <input type="file" id="impFile" accept=".json" class="hidden">
+    <button class="sm ghost" style="color:var(--bad);margin-top:10px" onclick="wipe()">Tüm verileri sil</button>
+  </div>
+</section>
+</main>
+
+<nav id="nav">
+  <button data-v="bugun" class="act"><b>🏠</b>Bugün</button>
+  <button data-v="notlar"><b>📝</b>Notlar</button>
+  <button data-v="gorevler"><b>✅</b>Görevler</button>
+  <button data-v="asistan"><b>✨</b>Asistan</button>
+  <button data-v="ayarlar"><b>⚙️</b>Ayarlar</button>
+</nav>
+
+<!-- NOT DÜZENLE -->
+<div class="modal" id="mNote"><div class="sheet">
+  <div class="row"><h3 style="margin:0">Not</h3><button class="sm ghost" style="flex:0 0 auto" onclick="closeM('mNote')">✕</button></div>
+  <label>Başlık</label><input id="nTitle">
+  <label>İçerik</label><textarea id="nBody" style="min-height:180px"></textarea>
+  <label>Etiketler (virgülle)</label><input id="nTags" placeholder="iş, müşteri, fikir">
+  <label><input type="checkbox" id="nPin" style="width:auto"> 📌 Sabitle</label>
+  <div class="row" style="margin-top:10px">
+    <button class="sm" onclick="voice('note')">🎤 Sesle yaz</button>
+    <button class="sm ai" onclick="noteAI('ozet')">✨ Özetle</button>
+    <button class="sm ai" onclick="noteAI('duzenle')">✨ Düzenle</button>
+    <button class="sm ai" onclick="noteAI('gorev')">✨ Görev çıkar</button>
+    <button class="sm ai" onclick="noteAI('etiket')">✨ Etiket öner</button>
+  </div>
+  <div id="nAIOut"></div>
+  <div class="row" style="margin-top:12px">
+    <button class="ghost" id="nDel" style="color:var(--bad)">Sil</button>
+    <button class="pri" onclick="saveNote()">Kaydet</button>
+  </div>
+</div></div>
+
+<!-- GÖREV DÜZENLE -->
+<div class="modal" id="mTask"><div class="sheet">
+  <div class="row"><h3 style="margin:0">Görev</h3><button class="sm ghost" style="flex:0 0 auto" onclick="closeM('mTask')">✕</button></div>
+  <label>Görev</label><input id="tTitle">
+  <label>Açıklama</label><textarea id="tNote" style="min-height:60px"></textarea>
+  <div class="row">
+    <div><label>Tarih/saat</label><input type="datetime-local" id="tDue"></div>
+    <div><label>Öncelik</label><select id="tPri"><option value="yuksek">Yüksek</option><option value="orta" selected>Orta</option><option value="dusuk">Düşük</option></select></div>
+  </div>
+  <div class="row">
+    <div><label>Hatırlat</label><input type="datetime-local" id="tRem"></div>
+    <div><label>Tekrar</label><select id="tRep"><option value="">Yok</option><option value="gunluk">Her gün</option><option value="haftalik">Her hafta</option><option value="aylik">Her ay</option></select></div>
+  </div>
+  <div class="row" style="margin-top:6px">
+    <button class="sm" onclick="quickRem(0)">Saatinde</button>
+    <button class="sm" onclick="quickRem(15)">15 dk önce</button>
+    <button class="sm" onclick="quickRem(60)">1 sa önce</button>
+    <button class="sm" onclick="quickRem(1440)">1 gün önce</button>
+  </div>
+  <div class="row" style="margin-top:12px">
+    <button class="ghost" id="tDel" style="color:var(--bad)">Sil</button>
+    <button class="pri" onclick="saveTask()">Kaydet</button>
+  </div>
+</div></div>
+
+<button class="fab" id="fab" onclick="voice('quick')" title="Sesli not/görev">🎤</button>
+
+<div class="modal" id="mRec"><div class="sheet"><div class="recbox">
+  <div id="recTitle" class="mut">Dinliyorum... konuş</div>
+  <div class="recdot" id="recDot">🎤</div>
+  <div class="rectime" id="recTime">0:00</div>
+  <div class="mut" id="recHint">En fazla 90 saniye</div>
+  <div class="row" style="margin-top:14px" id="recBtns">
+    <button onclick="recCancel()">İptal</button>
+    <button class="pri" onclick="recFinish()">✔ Bitir</button>
+  </div>
+</div></div></div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ================= VERİ =================
+const $=id=>document.getElementById(id);
+const LS={get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}},set:(k,v)=>localStorage.setItem(k,JSON.stringify(v))};
+let notes=LS.get('na_notes',[]), tasks=LS.get('na_tasks',[]), chat=LS.get('na_chat',[]);
+let cfg=LS.get('na_cfg',{key:'',model:'gemini-flash-latest',sound:true});
+const save=()=>{LS.set('na_notes',notes);LS.set('na_tasks',tasks);LS.set('na_chat',chat.slice(-40))};
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pad=n=>String(n).padStart(2,'0');
+const toLocal=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const GUN=['Pazar','Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi'];
+const AY=['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
+function fmt(s){if(!s)return'';const d=new Date(s),n=new Date();const t=`${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const day=new Date(d.getFullYear(),d.getMonth(),d.getDate()),today=new Date(n.getFullYear(),n.getMonth(),n.getDate());
+  const diff=Math.round((day-today)/864e5);
+  if(diff===0)return'Bugün '+t; if(diff===1)return'Yarın '+t; if(diff===-1)return'Dün '+t;
+  if(diff>1&&diff<7)return GUN[d.getDay()]+' '+t; return `${d.getDate()} ${AY[d.getMonth()]} ${t}`}
+const sameDay=(a,b)=>a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate();
+const PRI={yuksek:'Yüksek',orta:'Orta',dusuk:'Düşük'};
+
+// ================= GEMINI =================
+let srv={ok:false,hasKey:false,needsCode:false};
+const API=(location.protocol.startsWith('http')?'':'https://yildiz-not-asistani.vercel.app/')+'api/gemini';
+async function callGemini(payload){
+  if(cfg.key){ // kendi anahtarınla doğrudan
+    const url=payload.op==='models'?'https://generativelanguage.googleapis.com/v1beta/models?pageSize=200'
+      :`https://generativelanguage.googleapis.com/v1beta/models/${cfg.model}:generateContent`;
+    const r=await fetch(url,payload.op==='models'?{headers:{'x-goog-api-key':cfg.key}}:{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':cfg.key},body:JSON.stringify(payload.body)});
+    const d=await r.json();if(!r.ok)throw new Error(d.error?.message||('HTTP '+r.status));return d;
+  }
+  let r,d;
+  try{r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json','x-app-code':cfg.code||''},body:JSON.stringify({model:cfg.model,...payload})});d=await r.json()}
+  catch{throw new Error('Sunucuya ulaşılamadı. Uygulamayı Vercel\'de yayınla ya da Ayarlar\'a kendi anahtarını gir.')}
+  if(!r.ok)throw new Error(d.error?.message||d.error||('HTTP '+r.status));
+  return d;
+}
+async function gemini(prompt,{system='',json=false,history=null,parts=null}={}){
+  const contents=history||[{role:'user',parts:[...(parts||[]),{text:prompt}]}];
+  const body={contents,generationConfig:{temperature:.4}};
+  if(system)body.systemInstruction={parts:[{text:system}]};
+  if(json)body.generationConfig.responseMimeType='application/json';
+  const d=await callGemini({body});
+  const txt=(d.candidates?.[0]?.content?.parts||[]).map(p=>p.text||'').join('');
+  setDot(true);
+  if(!txt)throw new Error('Gemini boş yanıt döndü');
+  if(!json)return txt;
+  try{return JSON.parse(txt)}catch{const m=txt.match(/[\{\[][\s\S]*[\}\]]/);if(m)return JSON.parse(m[0]);throw new Error('AI yanıtı çözümlenemedi')}
+}
+function nowCtx(){const n=new Date();return `Şu an: ${GUN[n.getDay()]}, ${toLocal(n).replace('T',' ')} (Türkiye saati). Tarihleri "YYYY-MM-DDTHH:mm" formatında yerel saatle ver.`}
+function setDot(ok){$('aiDot').classList.toggle('on',ok)}
+const busy=(btn,on,txt)=>{if(!btn)return;if(on){btn.dataset.t=btn.innerHTML;btn.innerHTML='<span class="spin"></span> '+(txt||'Düşünüyor...');btn.disabled=true}else{btn.innerHTML=btn.dataset.t;btn.disabled=false}};
+
+// ================= HIZLI EKLE =================
+let pending=null;
+function quickSys(extra=''){return `Kullanıcının serbest metnini not ve görevlere ayıran bir asistansın. ${nowCtx()}
+Kurallar: Yapılacak iş/arama/toplantı/kontrol → görev. Bilgi, fikir, gözlem → not. Saat verilmezse ama gün verilmişse 09:00 kullan. "Öğleden sonra"=14:00, "akşam"=18:00, "sabah"=09:00.
+Görevi olan ve saati belli işler için hatırlatmayı varsayılan olarak 15 dakika önceye koy; "hatırlat" denirse tam o saate koy. Tarihi yoksa due ve remind null.
+Öncelik: acil/önemli → yuksek, normal → orta, ertelenebilir → dusuk.
+Sadece JSON döndür: {"notes":[{"title":"","body":"","tags":[""]}],"tasks":[{"title":"","note":"","due":null,"remind":null,"priority":"orta","repeat":""}]}  (repeat: "", "gunluk","haftalik","aylik")`+extra}
+$('qBtn').onclick=async()=>{
+  const text=$('qText').value.trim(); if(!text)return;
+  busy($('qBtn'),true,'Ayrıştırılıyor...');
+  try{
+    pending=await gemini(text,{system:quickSys(),json:true});
+    pending.notes=pending.notes||[];pending.tasks=pending.tasks||[];
+    renderPreview();
+  }catch(e){toastMsg('⚠️ '+e.message)}
+  busy($('qBtn'),false);
+};
+function renderPreview(){
+  const p=pending;if(!p){$('qPreview').innerHTML='';return}
+  let h='<div class="out">';
+  if(!p.tasks.length&&!p.notes.length)h+='Bir şey çıkarılamadı.';
+  p.tasks.forEach((t,i)=>h+=`<div class="item"><div class="bd"><div class="t">✅ ${esc(t.title)}</div><div class="mut">${t.due?'📅 '+fmt(t.due):''} ${t.remind?' ⏰ '+fmt(t.remind):''} <span class="tag p-${t.priority}">${PRI[t.priority]||t.priority}</span>${t.repeat?' 🔁 '+t.repeat:''}</div>${t.note?`<div class="mut">${esc(t.note)}</div>`:''}</div><button class="sm ghost" onclick="pending.tasks.splice(${i},1);renderPreview()">✕</button></div>`);
+  p.notes.forEach((n,i)=>h+=`<div class="item"><div class="bd"><div class="t">📝 ${esc(n.title)}</div><div class="mut">${esc(n.body)}</div>${(n.tags||[]).map(t=>`<span class="tag">#${esc(t)}</span>`).join('')}</div><button class="sm ghost" onclick="pending.notes.splice(${i},1);renderPreview()">✕</button></div>`);
+  h+=`</div><div class="row" style="margin-top:8px"><button onclick="pending=null;renderPreview()">Vazgeç</button><button class="pri" onclick="commitPending()">Hepsini ekle</button></div>`;
+  $('qPreview').innerHTML=h;
+}
+function commitPending(){
+  const now=Date.now();
+  pending.tasks.forEach(t=>tasks.push({id:uid(),title:t.title,note:t.note||'',due:t.due||'',remind:t.remind||'',priority:t.priority||'orta',repeat:t.repeat||'',done:false,notified:false,created:now}));
+  pending.notes.forEach(n=>notes.push({id:uid(),title:n.title,body:n.body||'',tags:n.tags||[],pinned:false,created:now,updated:now}));
+  toastMsg(`✔ ${pending.tasks.length} görev, ${pending.notes.length} not eklendi`);
+  pending=null;$('qText').value='';save();renderAll();
+}
+
+// ================= SESLİ GİRİŞ (Gemini ses) =================
+$('micBtn').onclick=()=>voice('quick');
+let rec={mr:null,stream:null,chunks:[],mode:'',t0:0,tick:null,cancel:false};
+async function voice(mode){
+  if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder){toastMsg('Bu tarayıcı ses kaydını desteklemiyor');return}
+  try{rec.stream=await navigator.mediaDevices.getUserMedia({audio:true})}
+  catch{toastMsg('🎤 Mikrofon izni verilmedi');return}
+  rec.mode=mode;rec.chunks=[];rec.cancel=false;
+  rec.mr=new MediaRecorder(rec.stream);
+  rec.mr.ondataavailable=e=>{if(e.data.size)rec.chunks.push(e.data)};
+  rec.mr.onstop=onRecStop;rec.mr.start();
+  rec.t0=Date.now();
+  $('recTitle').textContent={quick:'Dinliyorum... not, görev veya hatırlatma söyle',note:'Dinliyorum... notunu söyle',chat:'Dinliyorum... asistana sor'}[mode];
+  $('recDot').className='recdot';$('recDot').textContent='🎤';$('recBtns').classList.remove('hidden');$('recHint').textContent='En fazla 90 saniye';
+  $('recTime').textContent='0:00';$('mRec').classList.add('on');
+  rec.tick=setInterval(()=>{const s=Math.floor((Date.now()-rec.t0)/1000);$('recTime').textContent=`${Math.floor(s/60)}:${pad(s%60)}`;if(s>=90)recFinish()},250);
+}
+function recFinish(){if(rec.mr?.state==='recording')rec.mr.stop()}
+function recCancel(){rec.cancel=true;recFinish();closeRec()}
+function closeRec(){clearInterval(rec.tick);rec.stream?.getTracks().forEach(t=>t.stop());$('mRec').classList.remove('on')}
+async function onRecStop(){
+  clearInterval(rec.tick);rec.stream?.getTracks().forEach(t=>t.stop());
+  if(rec.cancel||!rec.chunks.length){closeRec();return}
+  $('recDot').className='recdot wait';$('recDot').innerHTML='<span class="spin" style="width:40px;height:40px;border-width:4px"></span>';
+  $('recTitle').textContent='Gemini dinliyor ve işliyor...';$('recHint').textContent='';$('recBtns').classList.add('hidden');
+  try{
+    const audio=await toWav16k(new Blob(rec.chunks,{type:rec.mr.mimeType}));
+    const part={inlineData:{mimeType:'audio/wav',data:audio}};
+    if(rec.mode==='quick'){
+      pending=await gemini('Bu ses kaydını Türkçe yazıya dök ve kurallara göre ayrıştır.',{parts:[part],json:true,
+        system:quickSys('\nAyrıca JSON\'a "transcript" alanı ekle: kaydın düzgün noktalamalı Türkçe metni.')});
+      pending.notes=pending.notes||[];pending.tasks=pending.tasks||[];
+      closeRec();show('bugun');$('qText').value=pending.transcript||'';renderPreview();
+      $('qPreview').scrollIntoView({behavior:'smooth',block:'center'});
+    }else if(rec.mode==='note'){
+      const t=await gemini('Bu ses kaydını Türkçe yazıya dök. Noktalama ve paragrafları düzelt, anlamı değiştirme. Sadece metni ver.',{parts:[part]});
+      closeRec();const b=$('nBody');b.value=(b.value.trim()?b.value.trimEnd()+'\n\n':'')+t.trim();
+      if(!$('nTitle').value.trim())$('nTitle').value=t.trim().split(/[.\n]/)[0].slice(0,50);
+    }else if(rec.mode==='chat'){
+      const t=await gemini('Bu ses kaydını Türkçe yazıya dök. Sadece metni ver.',{parts:[part]});
+      closeRec();show('asistan');$('cIn').value=t.trim();sendChat();
+    }
+  }catch(e){closeRec();toastMsg('⚠️ '+esc(e.message),6000)}
+}
+// Her tarayıcının kaydını (webm/mp4) 16 kHz mono WAV'a çevir — Gemini hepsini sorunsuz okur, boyut küçük kalır
+async function toWav16k(blob){
+  const AC=window.AudioContext||window.webkitAudioContext;const ac=new AC();
+  const buf=await ac.decodeAudioData(await blob.arrayBuffer());ac.close();
+  const rate=16000,len=Math.max(1,Math.ceil(buf.duration*rate));
+  const oc=new OfflineAudioContext(1,len,rate);const src=oc.createBufferSource();src.buffer=buf;src.connect(oc.destination);src.start();
+  const d=(await oc.startRendering()).getChannelData(0);
+  const ab=new ArrayBuffer(44+d.length*2),v=new DataView(ab);
+  const w=(o,s)=>{for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i))};
+  w(0,'RIFF');v.setUint32(4,36+d.length*2,true);w(8,'WAVE');w(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);
+  v.setUint32(24,rate,true);v.setUint32(28,rate*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);w(36,'data');v.setUint32(40,d.length*2,true);
+  for(let i=0;i<d.length;i++){const s=Math.max(-1,Math.min(1,d[i]));v.setInt16(44+i*2,s<0?s*0x8000:s*0x7fff,true)}
+  const url=await new Promise(r=>{const f=new FileReader();f.onload=()=>r(f.result);f.readAsDataURL(new Blob([ab],{type:'audio/wav'}))});
+  return url.split(',')[1];
+}
+
+// ================= GÜNÜ PLANLA =================
+$('planBtn').onclick=async()=>{
+  const open=tasks.filter(t=>!t.done);
+  if(!open.length){toastMsg('Planlanacak açık görev yok');return}
+  busy($('planBtn'),true,'Planlıyor...');
+  try{
+    const list=open.map(t=>`- ${t.title}${t.due?' (tarih: '+t.due+')':''} [öncelik: ${t.priority}]${t.note?' — '+t.note:''}`).join('\n');
+    const r=await gemini(`Açık görevlerim:\n${list}\n\nBugün için gerçekçi, saat saat bir plan yap. Saati sabit olanları yerinde bırak, gecikmişleri öne al, mola ekle. En sonda 1-2 cümlelik kısa öneri ver. Kısa ve maddeli yaz, markdown başlık kullanma.`,{system:'Pratik bir iş planlama asistanısın. Türkçe, kısa yaz. '+nowCtx()});
+    $('planOut').innerHTML=`<div class="out">${esc(r)}</div>`;
+  }catch(e){toastMsg('⚠️ '+e.message)}
+  busy($('planBtn'),false);
+};
+
+// ================= NOTLAR =================
+let curNote=null,tagF='';
+function openNote(id){
+  const n=notes.find(x=>x.id===id);curNote=n||null;
+  $('nTitle').value=n?.title||'';$('nBody').value=n?.body||'';$('nTags').value=(n?.tags||[]).join(', ');$('nPin').checked=!!n?.pinned;
+  $('nAIOut').innerHTML='';$('nDel').classList.toggle('hidden',!n);
+  $('nDel').onclick=()=>{if(confirm('Not silinsin mi?')){notes=notes.filter(x=>x.id!==id);save();closeM('mNote');renderAll()}};
+  $('mNote').classList.add('on');
+}
+function saveNote(){
+  const title=$('nTitle').value.trim()||$('nBody').value.trim().split('\n')[0].slice(0,50)||'Başlıksız';
+  const data={title,body:$('nBody').value,tags:$('nTags').value.split(',').map(s=>s.trim()).filter(Boolean),pinned:$('nPin').checked,updated:Date.now()};
+  if(curNote)Object.assign(curNote,data);else notes.push({id:uid(),created:Date.now(),...data});
+  save();closeM('mNote');renderAll();
+}
+async function noteAI(mode){
+  const body=$('nBody').value.trim(),title=$('nTitle').value;
+  if(!body){toastMsg('Önce not içeriği yaz');return}
+  const out=$('nAIOut');out.innerHTML='<div class="out"><span class="spin"></span> Gemini çalışıyor...</div>';
+  try{
+    if(mode==='ozet'){
+      const r=await gemini(`Bu notu 2-4 maddede özetle:\n\n${body}`,{system:'Türkçe, kısa yaz.'});
+      out.innerHTML=`<div class="out">${esc(r)}</div><button class="sm" style="margin-top:6px" onclick="$('nBody').value+='\\n\\n— Özet —\\n'+this.previousElementSibling.textContent;this.remove()">Nota ekle</button>`;
+    }else if(mode==='duzenle'){
+      const r=await gemini(`Şu notu yazım hatalarını düzelterek, düzenli ve okunaklı hale getir. Bilgi ekleme veya çıkarma. Sadece düzenlenmiş metni ver:\n\n${body}`);
+      out.innerHTML=`<div class="out">${esc(r)}</div><button class="sm" style="margin-top:6px" onclick="$('nBody').value=this.previousElementSibling.textContent;$('nAIOut').innerHTML=''">Bununla değiştir</button>`;
+    }else if(mode==='etiket'){
+      const r=await gemini(`Bu not için 2-4 kısa Türkçe etiket öner. Mevcut etiketler: ${notes.flatMap(n=>n.tags).filter((v,i,a)=>a.indexOf(v)===i).join(', ')||'yok'} (uygunsa bunları tercih et). JSON: {"tags":[]}\n\nBaşlık: ${title}\n${body}`,{json:true});
+      const ex=$('nTags').value.split(',').map(s=>s.trim()).filter(Boolean);
+      $('nTags').value=[...new Set([...ex,...(r.tags||[])])].join(', ');out.innerHTML='';
+    }else if(mode==='gorev'){
+      const r=await gemini(`Bu nottaki yapılacak işleri çıkar:\n\n${body}`,{json:true,system:`${nowCtx()} Sadece JSON: {"tasks":[{"title":"","note":"","due":null,"remind":null,"priority":"orta"}]}. Tarih yoksa null.`});
+      const ts=r.tasks||[];
+      if(!ts.length){out.innerHTML='<div class="out">Görev bulunamadı.</div>';return}
+      window._nt=ts;
+      out.innerHTML=`<div class="out">${ts.map(t=>`✅ ${esc(t.title)}${t.due?' — '+fmt(t.due):''}`).join('\n')}</div><button class="sm pri" style="margin-top:6px" onclick="addNoteTasks()">Görevlere ekle (${ts.length})</button>`;
+    }
+  }catch(e){out.innerHTML=`<div class="out">⚠️ ${esc(e.message)}</div>`}
+}
+function addNoteTasks(){(window._nt||[]).forEach(t=>tasks.push({id:uid(),title:t.title,note:t.note||'',due:t.due||'',remind:t.remind||'',priority:t.priority||'orta',repeat:'',done:false,notified:false,created:Date.now()}));save();renderAll();$('nAIOut').innerHTML='<div class="out">✔ Görevlere eklendi</div>'}
+function renderNotes(){
+  const q=$('nSearch').value.toLocaleLowerCase('tr');
+  const tags=[...new Set(notes.flatMap(n=>n.tags))];
+  $('tagChips').innerHTML=tags.length?`<button class="${tagF?'':'act'}" onclick="tagF='';renderNotes()">Tümü</button>`+tags.map(t=>`<button class="${tagF===t?'act':''}" onclick="tagF='${esc(t)}';renderNotes()">#${esc(t)}</button>`).join(''):'';
+  let list=notes.filter(n=>(!tagF||n.tags.includes(tagF))&&(!q||(n.title+' '+n.body+' '+n.tags.join(' ')).toLocaleLowerCase('tr').includes(q)));
+  list.sort((a,b)=>(b.pinned-a.pinned)||(b.updated-a.updated));
+  $('noteList').innerHTML=list.length?list.map(n=>`<div class="item note" onclick="openNote('${n.id}')"><div class="bd"><div class="t">${n.pinned?'<span class="pin">📌</span> ':''}${esc(n.title)}</div><div class="prev">${esc(n.body)}</div><div>${n.tags.map(t=>`<span class="tag">#${esc(t)}</span>`).join('')}<span class="mut" style="font-size:11px"> ${fmt(toLocal(new Date(n.updated)))}</span></div></div></div>`).join(''):'<div class="empty">Not yok. ＋ ile ekle veya Bugün sekmesinden hızlı ekle.</div>';
+}
+$('nSearch').oninput=renderNotes;
+
+// ================= GÖREVLER =================
+let curTask=null,tF='acik';
+function openTask(id){
+  const t=tasks.find(x=>x.id===id);curTask=t||null;
+  $('tTitle').value=t?.title||'';$('tNote').value=t?.note||'';$('tDue').value=t?.due||'';$('tRem').value=t?.remind||'';$('tPri').value=t?.priority||'orta';$('tRep').value=t?.repeat||'';
+  $('tDel').classList.toggle('hidden',!t);
+  $('tDel').onclick=()=>{if(confirm('Görev silinsin mi?')){tasks=tasks.filter(x=>x.id!==id);save();closeM('mTask');renderAll()}};
+  $('mTask').classList.add('on');
+}
+function quickRem(min){const d=$('tDue').value;if(!d){toastMsg('Önce tarih/saat seç');return}$('tRem').value=toLocal(new Date(new Date(d)-min*6e4))}
+function saveTask(){
+  const title=$('tTitle').value.trim();if(!title){toastMsg('Görev adı gir');return}
+  const data={title,note:$('tNote').value,due:$('tDue').value,remind:$('tRem').value,priority:$('tPri').value,repeat:$('tRep').value};
+  if(curTask){if(curTask.remind!==data.remind)data.notified=false;Object.assign(curTask,data)}
+  else tasks.push({id:uid(),done:false,notified:false,created:Date.now(),...data});
+  save();closeM('mTask');renderAll();
+}
+function shift(s,rep){if(!s)return s;const d=new Date(s);if(rep==='gunluk')d.setDate(d.getDate()+1);else if(rep==='haftalik')d.setDate(d.getDate()+7);else if(rep==='aylik')d.setMonth(d.getMonth()+1);return toLocal(d)}
+function toggle(id){
+  const t=tasks.find(x=>x.id===id);if(!t)return;
+  if(!t.done&&t.repeat){ // tekrarlayan: bir sonrakini oluştur
+    tasks.push({...t,id:uid(),due:shift(t.due,t.repeat),remind:shift(t.remind,t.repeat),notified:false,done:false,created:Date.now()});
+    t.repeat='';
+  }
+  t.done=!t.done;t.doneAt=t.done?Date.now():null;save();renderAll();
+}
+function taskRow(t){
+  const late=!t.done&&t.due&&new Date(t.due)<new Date();
+  return `<div class="item ${t.done?'done':''}"><div class="chk ${t.done?'on':''}" onclick="toggle('${t.id}')">${t.done?'✓':''}</div>
+  <div class="bd" onclick="openTask('${t.id}')" style="cursor:pointer"><div class="t">${esc(t.title)}</div>
+  <div class="mut">${t.due?`<span class="${late?'late':''}">📅 ${fmt(t.due)}</span>`:''}${t.remind&&!t.done?` ⏰ ${fmt(t.remind)}`:''}${t.repeat?' 🔁':''} <span class="tag p-${t.priority}">${PRI[t.priority]}</span></div>
+  ${t.note?`<div class="mut">${esc(t.note)}</div>`:''}</div></div>`;
+}
+const sortT=(a,b)=>(a.due||'9999').localeCompare(b.due||'9999')||({yuksek:0,orta:1,dusuk:2}[a.priority]-{yuksek:0,orta:1,dusuk:2}[b.priority]);
+function renderTasks(){
+  const n=new Date(),wk=new Date(n);wk.setDate(n.getDate()+7);
+  let l=tasks.filter(t=>{
+    if(tF==='biten')return t.done; if(t.done)return false;
+    if(tF==='bugun')return t.due&&new Date(t.due)<=new Date(n.getFullYear(),n.getMonth(),n.getDate(),23,59);
+    if(tF==='hafta')return t.due&&new Date(t.due)<=wk;
+    if(tF==='geciken')return t.due&&new Date(t.due)<n;
+    return true});
+  l.sort(tF==='biten'?(a,b)=>(b.doneAt||0)-(a.doneAt||0):sortT);
+  $('taskList').innerHTML=l.length?l.map(taskRow).join(''):'<div class="empty">Burada görev yok 🎉</div>';
+}
+$('tFilter').onclick=e=>{const b=e.target.closest('button');if(!b)return;tF=b.dataset.f;[...$('tFilter').children].forEach(x=>x.classList.toggle('act',x===b));renderTasks()};
+
+// ================= BUGÜN =================
+function renderToday(){
+  const n=new Date(),end=new Date(n.getFullYear(),n.getMonth(),n.getDate(),23,59);
+  const open=tasks.filter(t=>!t.done);
+  const today=open.filter(t=>t.due&&new Date(t.due)<=end).sort(sortT);
+  const late=open.filter(t=>t.due&&new Date(t.due)<n).length;
+  const doneToday=tasks.filter(t=>t.done&&t.doneAt&&sameDay(new Date(t.doneAt),n)).length;
+  $('stats').innerHTML=`<div><b>${today.length}</b><span class="mut">Bugün</span></div><div><b class="${late?'late':''}">${late}</b><span class="mut">Geciken</span></div><div><b>${doneToday}</b><span class="mut">Bitti</span></div><div><b>${notes.length}</b><span class="mut">Not</span></div>`;
+  $('todayList').innerHTML=today.length?today.map(taskRow).join(''):'<div class="empty">Bugün için görev yok</div>';
+  const up=open.filter(t=>t.remind&&new Date(t.remind)>n).sort((a,b)=>a.remind.localeCompare(b.remind)).slice(0,5);
+  $('upList').innerHTML=up.length?up.map(t=>`<div class="item"><div class="bd" onclick="openTask('${t.id}')"><div class="t">⏰ ${fmt(t.remind)}</div><div class="mut">${esc(t.title)}</div></div></div>`).join(''):'<div class="empty">Yaklaşan hatırlatma yok</div>';
+}
+
+// ================= ASİSTAN =================
+function renderChat(){$('chat').innerHTML=chat.map(m=>`<div class="msg ${m.r==='user'?'u':'m'}">${esc(m.t)}</div>`).join('');}
+async function sendChat(){
+  const q=$('cIn').value.trim();if(!q)return;$('cIn').value='';
+  chat.push({r:'user',t:q});renderChat();window.scrollTo(0,1e9);
+  const btn=$('cBtn');busy(btn,true,'');
+  try{
+    const ctxN=notes.slice(-60).map(n=>`• [${n.tags.join(',')}] ${n.title}: ${n.body.slice(0,400)}`).join('\n');
+    const ctxT=tasks.filter(t=>!t.done||(t.doneAt&&Date.now()-t.doneAt<7*864e5)).map(t=>`• ${t.done?'[BİTTİ] ':''}${t.title}${t.due?' — '+t.due:''} (${t.priority})${t.note?' — '+t.note:''}`).join('\n');
+    const sys=`Kullanıcının kişisel not ve planlama asistanısın. Türkçe, samimi ve kısa cevap ver; markdown başlık kullanma. ${nowCtx()}
+Kullanıcı yeni görev/hatırlatma eklemeni isterse cevabının EN SONUNA şu satırı ekle:
+@@EKLE {"tasks":[{"title":"","note":"","due":null,"remind":null,"priority":"orta"}],"notes":[{"title":"","body":"","tags":[]}]}
+\nNOTLAR:\n${ctxN||'(yok)'}\n\nGÖREVLER:\n${ctxT||'(yok)'}`;
+    const hist=chat.slice(-12).map(m=>({role:m.r==='user'?'user':'model',parts:[{text:m.t}]}));
+    let r=await gemini('',{system:sys,history:hist});
+    const m=r.match(/@@EKLE\s*(\{[\s\S]*\})\s*$/);
+    if(m){r=r.slice(0,m.index).trim();try{const a=JSON.parse(m[1]);pending={tasks:a.tasks||[],notes:a.notes||[]};commitPending()}catch{}}
+    chat.push({r:'model',t:r});
+  }catch(e){chat.push({r:'model',t:'⚠️ '+e.message})}
+  busy(btn,false);save();renderChat();window.scrollTo(0,1e9);
+}
+$('cBtn').onclick=sendChat;$('cIn').onkeydown=e=>{if(e.key==='Enter')sendChat()};
+function clearChat(){chat=[];save();renderChat()}
+
+// ================= HATIRLATMALAR =================
+let swReg=null;
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').then(r=>swReg=r).catch(()=>{});
+function beep(){if(!cfg.sound)return;try{const c=new AudioContext();[0,.25,.5].forEach(t=>{const o=c.createOscillator(),g=c.createGain();o.frequency.value=880;o.connect(g);g.connect(c.destination);g.gain.setValueAtTime(.2,c.currentTime+t);g.gain.exponentialRampToValueAtTime(.001,c.currentTime+t+.2);o.start(c.currentTime+t);o.stop(c.currentTime+t+.2)})}catch{}}
+async function notify(title,body,tag){
+  if('Notification' in window&&Notification.permission==='granted'){
+    try{if(swReg){await swReg.showNotification(title,{body,tag,icon:'icon-192.png',badge:'icon-192.png',vibrate:[200,100,200],requireInteraction:true});return}}catch{}
+    try{new Notification(title,{body,tag,icon:'icon-192.png'})}catch{}
+  }
+}
+function checkReminders(){
+  const n=new Date();let ch=false;
+  tasks.forEach(t=>{
+    if(!t.done&&t.remind&&!t.notified&&new Date(t.remind)<=n){
+      t.notified=true;ch=true;
+      notify('⏰ '+t.title,(t.due?'📅 '+fmt(t.due)+'  ':'')+(t.note||''),t.id);beep();
+      toastMsg(`⏰ <b>${esc(t.title)}</b>${t.due?'<br><span class="mut">'+fmt(t.due)+'</span>':''}
+      <div class="row" style="margin-top:8px"><button class="sm" onclick="snooze('${t.id}',10)">10 dk ertele</button><button class="sm" onclick="snooze('${t.id}',60)">1 sa</button><button class="sm pri" onclick="toggle('${t.id}');hideToast()">Tamamlandı</button></div>`,0);
+    }
+  });
+  if(ch){save();renderAll()}
+}
+function snooze(id,min){const t=tasks.find(x=>x.id===id);t.remind=toLocal(new Date(Date.now()+min*6e4));t.notified=false;save();renderAll();hideToast();toastMsg('⏰ '+min+' dk sonra tekrar hatırlatılacak')}
+setInterval(checkReminders,15000);document.addEventListener('visibilitychange',()=>{if(!document.hidden){checkReminders();renderAll()}});
+function askNotif(){if(!('Notification' in window)){toastMsg('Bu tarayıcı bildirim desteklemiyor');return}Notification.requestPermission().then(renderNStat)}
+function testNotif(){notify('🔔 Test','Hatırlatmalar böyle görünecek','test');beep()}
+function renderNStat(){$('nStat').textContent=!('Notification' in window)?'Desteklenmiyor':Notification.permission==='granted'?'✔ Bildirim izni verildi':Notification.permission==='denied'?'✕ Engellendi — tarayıcı ayarlarından izin ver':'Henüz izin verilmedi';}
+
+// ================= AYARLAR =================
+function saveSettings(){cfg.key=$('sKey').value.trim();cfg.code=$('sCode').value.trim();cfg.model=$('sModel').value;cfg.sound=$('sSound').checked;LS.set('na_cfg',cfg);$('sOut').textContent='✔ Kaydedildi'}
+$('sSound').onchange=()=>{cfg.sound=$('sSound').checked;LS.set('na_cfg',cfg)};
+async function testAI(){saveSettings();$('sOut').innerHTML='<span class="spin"></span> Test ediliyor...';try{const r=await gemini('Tek kelimeyle "Hazır" de.');$('sOut').textContent='✔ Çalışıyor: '+r.trim()}catch(e){setDot(false);$('sOut').textContent='✕ '+e.message}}
+async function loadModels(){
+  saveSettings();
+  try{const d=await callGemini({op:'models'});
+    const ms=(d.models||[]).filter(m=>m.supportedGenerationMethods?.includes('generateContent')&&m.name.includes('gemini')).map(m=>m.name.replace('models/',''));
+    $('sModel').innerHTML=ms.map(m=>`<option ${m===cfg.model?'selected':''}>${m}</option>`).join('');
+    $('sOut').textContent=ms.length+' model bulundu. Hızlı ve ucuz kullanım için "flash" önerilir.';
+  }catch(e){$('sOut').textContent='✕ '+e.message}
+}
+async function checkServer(){
+  try{const r=await fetch(API);srv=await r.json()}catch{srv={ok:false}}
+  $('srvStat').innerHTML=srv.ok?(srv.hasKey?'✔ Sunucu bağlı, Gemini anahtarı tanımlı'+(srv.needsCode?' — uygulama kodu gerekli':''):'⚠️ Sunucu bağlı ama GEMINI_API_KEY tanımlı değil')
+    :'ℹ️ Sunucu bulunamadı (Vercel\'de yayınlanınca otomatik bağlanır). Şimdilik aşağıya kendi anahtarını girebilirsin.';
+  setDot(!!cfg.key||(srv.ok&&srv.hasKey));
+}
+function exportData(){const b=new Blob([JSON.stringify({notes,tasks,v:1},null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='not-asistani-yedek-'+toLocal(new Date()).slice(0,10)+'.json';a.click()}
+$('impFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const d=JSON.parse(await f.text());if(confirm(`${d.notes?.length||0} not, ${d.tasks?.length||0} görev içe aktarılsın mı? (mevcutlara eklenir)`)){const ids=new Set([...notes,...tasks].map(x=>x.id));notes.push(...(d.notes||[]).filter(x=>!ids.has(x.id)));tasks.push(...(d.tasks||[]).filter(x=>!ids.has(x.id)));save();renderAll();toastMsg('✔ İçe aktarıldı')}}catch{toastMsg('Dosya okunamadı')}};
+function wipe(){if(confirm('TÜM notlar ve görevler silinsin mi?')&&confirm('Emin misin? Geri alınamaz.')){notes=[];tasks=[];chat=[];save();renderAll()}}
+
+// ================= GENEL =================
+let toastT;
+function toastMsg(h,ms=3500){const t=$('toast');t.innerHTML=h;t.classList.add('on');clearTimeout(toastT);if(ms)toastT=setTimeout(hideToast,ms)}
+function hideToast(){$('toast').classList.remove('on')}
+$('toast').onclick=e=>{if(e.target===$('toast'))hideToast()};
+function closeM(id){$(id).classList.remove('on')}
+document.querySelectorAll('.modal').forEach(m=>m.onclick=e=>{if(e.target===m)m.classList.remove('on')});
+$('nav').onclick=e=>{const b=e.target.closest('button');if(!b)return;show(b.dataset.v)};
+function show(v){document.querySelectorAll('main>section').forEach(s=>s.classList.toggle('hidden',s.id!=='v-'+v));[...$('nav').children].forEach(b=>b.classList.toggle('act',b.dataset.v===v));window.scrollTo(0,0);if(v==='asistan')renderChat()}
+function renderAll(){renderToday();renderNotes();renderTasks()}
+setInterval(()=>{const n=new Date();$('clock').textContent=`${GUN[n.getDay()].slice(0,3)} ${pad(n.getHours())}:${pad(n.getMinutes())}`},1000);
+$('sKey').value=cfg.key||'';$('sCode').value=cfg.code||'';$('sModel').innerHTML=`<option>${esc(cfg.model)}</option>`;$('sSound').checked=cfg.sound!==false;
+checkServer();renderNStat();renderAll();checkReminders();
+setTimeout(()=>{if(!cfg.key&&!(srv.ok&&srv.hasKey))toastMsg('👋 Gemini bağlantısı yok — <b>Ayarlar</b>\'a bak.',6000)},1500);
+const sv=new URLSearchParams(location.search).get('v');if(sv)show(sv);
+</script>
+</body>
+</html>
