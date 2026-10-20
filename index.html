@@ -100,6 +100,18 @@ nav button.act b{background:linear-gradient(135deg,rgba(37,99,235,.13),rgba(6,18
 .recdot svg{width:44px;height:44px}
 .recdot.wait{background:var(--grad);animation:none;box-shadow:var(--glow)}
 @keyframes pul{0%{box-shadow:0 0 0 0 rgba(239,68,68,.45)}100%{box-shadow:0 0 0 26px rgba(239,68,68,0)}}
+.pgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.pgrid:empty{display:none}
+.ph{position:relative;aspect-ratio:1;border-radius:12px;overflow:hidden;background:#e2e8f0;cursor:pointer;border:1px solid var(--line)}
+.ph img{width:100%;height:100%;object-fit:cover;display:block}
+.ph span{position:absolute;left:0;right:0;bottom:0;padding:14px 6px 4px;font:600 10px/1.2 var(--mono);color:#fff;background:linear-gradient(transparent,rgba(0,0,0,.65))}
+.nthumbs{display:flex;gap:6px;margin-top:8px}
+.nthumbs img{width:58px;height:58px;object-fit:cover;border-radius:10px;border:1px solid var(--line);background:#e2e8f0}
+.ploc{display:flex;gap:4px;align-items:center;color:var(--mut);font-size:12px;margin-top:4px}
+.ploc svg{width:14px;height:14px;flex:none;color:var(--acc)}
+.pview{width:100%;border-radius:14px;display:block;background:#0f172a;max-height:60vh;object-fit:contain}
+.pmeta{font-size:13px;margin:10px 0;display:grid;gap:4px}
+.pmeta b{font-family:var(--mono);font-weight:600}
 .rectime{font:600 30px/1.2 var(--mono);margin-bottom:6px}
 </style>
 </head>
@@ -119,6 +131,7 @@ nav button.act b{background:linear-gradient(135deg,rgba(37,99,235,.13),rgba(6,18
     <textarea id="qText" placeholder="Yaz veya 🎤 ile söyle..."></textarea>
     <div class="row" style="margin-top:8px">
       <button class="mic" id="micBtn" style="flex:0 0 52px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3.5"/></svg></button>
+      <button id="camQuick" style="flex:0 0 52px" onclick="photoNote()" title="Fotoğraflı not"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8a2 2 0 0 1 2-2h2l1.5-2h5L16 6h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.5"/></svg></button>
       <button class="pri" id="qBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 4.7 4.7 1.8-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2 2.2.8-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg> AI ile ayır ve ekle</button>
     </div>
     <div id="qPreview"></div>
@@ -144,6 +157,7 @@ nav button.act b{background:linear-gradient(135deg,rgba(37,99,235,.13),rgba(6,18
 <section id="v-notlar" class="hidden">
   <div class="row" style="margin-bottom:10px">
     <input id="nSearch" placeholder="🔍 Notlarda ara...">
+    <button style="flex:0 0 auto" onclick="photoNote()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8a2 2 0 0 1 2-2h2l1.5-2h5L16 6h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.5"/></svg> Foto</button>
     <button class="pri" style="flex:0 0 auto" onclick="openNote()">＋ Not</button>
   </div>
   <div class="chips" id="tagChips"></div>
@@ -230,9 +244,18 @@ nav button.act b{background:linear-gradient(135deg,rgba(37,99,235,.13),rgba(6,18
 
 <!-- NOT DÜZENLE -->
 <div class="modal" id="mNote"><div class="sheet">
-  <div class="row"><h3 style="margin:0">Not</h3><button class="sm ghost" style="flex:0 0 auto" onclick="closeM('mNote')">✕</button></div>
+  <div class="row"><h3 style="margin:0">Not</h3><button class="sm ghost" style="flex:0 0 auto" onclick="closeNote()">✕</button></div>
   <label>Başlık</label><input id="nTitle">
   <label>İçerik</label><textarea id="nBody" style="min-height:180px"></textarea>
+  <label>Fotoğraflar</label>
+  <div class="pgrid" id="nPhotos"></div>
+  <div class="row" style="margin-top:8px">
+    <button class="sm" onclick="$('camIn').click()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8a2 2 0 0 1 2-2h2l1.5-2h5L16 6h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.5"/></svg> Kamera</button>
+    <button class="sm" onclick="$('galIn').click()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="m21 15-4.5-4.5L5 21"/></svg> Galeriden</button>
+  </div>
+  <div class="mut" id="phStat" style="margin-top:6px"></div>
+  <input type="file" id="camIn" accept="image/*" capture="environment" class="hidden">
+  <input type="file" id="galIn" accept="image/*" multiple class="hidden">
   <label>Etiketler (virgülle)</label><input id="nTags" placeholder="iş, müşteri, fikir">
   <label><input type="checkbox" id="nPin" style="width:auto"> 📌 Sabitle</label>
   <div class="row" style="margin-top:10px">
@@ -246,6 +269,22 @@ nav button.act b{background:linear-gradient(135deg,rgba(37,99,235,.13),rgba(6,18
   <div class="row" style="margin-top:12px">
     <button class="ghost" id="nDel" style="color:var(--bad)">Sil</button>
     <button class="pri" onclick="saveNote()">Kaydet</button>
+  </div>
+</div></div>
+
+<!-- FOTOĞRAF -->
+<div class="modal" id="mPhoto"><div class="sheet">
+  <div class="row"><h3 style="margin:0">Fotoğraf</h3><button class="sm ghost" style="flex:0 0 auto" onclick="closeM('mPhoto')">✕</button></div>
+  <img class="pview" id="pvImg" alt="">
+  <div class="pmeta" id="pvMeta"></div>
+  <div class="row">
+    <button class="sm" id="pvMap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg> Harita</button>
+    <button class="sm" id="pvShare">Paylaş</button>
+    <button class="sm" id="pvDl">İndir</button>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <button class="sm ai" id="pvAI">✨ AI açıklasın</button>
+    <button class="sm ghost" id="pvDel" style="color:var(--bad);flex:0 0 auto">Sil</button>
   </div>
 </div></div>
 
@@ -452,16 +491,19 @@ $('planBtn').onclick=async()=>{
 
 // ================= NOTLAR =================
 let curNote=null,tagF='';
+let edPhotos=[],edNew=new Set(),edDel=new Set();
 function openNote(id){
   const n=notes.find(x=>x.id===id);curNote=n||null;
+  edPhotos=[...(n?.photos||[])];edNew=new Set();edDel=new Set();renderEdPhotos();$('phStat').textContent='';
   $('nTitle').value=n?.title||'';$('nBody').value=n?.body||'';$('nTags').value=(n?.tags||[]).join(', ');$('nPin').checked=!!n?.pinned;
   $('nAIOut').innerHTML='';$('nDel').classList.toggle('hidden',!n);
-  $('nDel').onclick=()=>{if(confirm('Not silinsin mi?')){notes=notes.filter(x=>x.id!==id);save();closeM('mNote');renderAll()}};
+  $('nDel').onclick=()=>{if(confirm('Not silinsin mi?')){(n?.photos||[]).concat(edPhotos).forEach(p=>DB.del(p.id).catch(()=>{}));notes=notes.filter(x=>x.id!==id);save();closeM('mNote');renderAll()}};
   $('mNote').classList.add('on');
 }
 function saveNote(){
-  const title=$('nTitle').value.trim()||$('nBody').value.trim().split('\n')[0].slice(0,50)||'Başlıksız';
-  const data={title,body:$('nBody').value,tags:$('nTags').value.split(',').map(s=>s.trim()).filter(Boolean),pinned:$('nPin').checked,updated:Date.now()};
+  const title=$('nTitle').value.trim()||$('nBody').value.trim().split('\n')[0].slice(0,50)||(edPhotos.length?'Fotoğraflı not · '+stampDate(edPhotos[0].ts):'Başlıksız');
+  edDel.forEach(id=>DB.del(id).catch(()=>{}));edNew=new Set();edDel=new Set();
+  const data={title,body:$('nBody').value,tags:$('nTags').value.split(',').map(s=>s.trim()).filter(Boolean),pinned:$('nPin').checked,photos:edPhotos,updated:Date.now()};
   if(curNote)Object.assign(curNote,data);else notes.push({id:uid(),created:Date.now(),...data});
   save();closeM('mNote');renderAll();
 }
@@ -494,11 +536,113 @@ function renderNotes(){
   const q=$('nSearch').value.toLocaleLowerCase('tr');
   const tags=[...new Set(notes.flatMap(n=>n.tags))];
   $('tagChips').innerHTML=tags.length?`<button class="${tagF?'':'act'}" onclick="tagF='';renderNotes()">Tümü</button>`+tags.map(t=>`<button class="${tagF===t?'act':''}" onclick="tagF='${esc(t)}';renderNotes()">#${esc(t)}</button>`).join(''):'';
-  let list=notes.filter(n=>(!tagF||n.tags.includes(tagF))&&(!q||(n.title+' '+n.body+' '+n.tags.join(' ')).toLocaleLowerCase('tr').includes(q)));
+  let list=notes.filter(n=>(!tagF||n.tags.includes(tagF))&&(!q||(n.title+' '+n.body+' '+n.tags.join(' ')+' '+(n.photos||[]).map(p=>p.addr).join(' ')).toLocaleLowerCase('tr').includes(q)));
   list.sort((a,b)=>(b.pinned-a.pinned)||(b.updated-a.updated));
-  $('noteList').innerHTML=list.length?list.map(n=>`<div class="item note" onclick="openNote('${n.id}')"><div class="bd"><div class="t">${n.pinned?'<span class="pin">📌</span> ':''}${esc(n.title)}</div><div class="prev">${esc(n.body)}</div><div>${n.tags.map(t=>`<span class="tag">#${esc(t)}</span>`).join('')}<span class="mut" style="font-size:11px"> ${fmt(toLocal(new Date(n.updated)))}</span></div></div></div>`).join(''):'<div class="empty">Not yok. ＋ ile ekle veya Bugün sekmesinden hızlı ekle.</div>';
+  $('noteList').innerHTML=list.length?list.map(n=>`<div class="item note" onclick="openNote('${n.id}')"><div class="bd"><div class="t">${n.pinned?'<span class="pin">📌</span> ':''}${esc(n.title)}</div><div class="prev">${esc(n.body)}</div>${n.photos?.length?`<div class="nthumbs">${n.photos.slice(0,4).map(p=>`<img data-pid="${p.id}" alt="">`).join('')}${n.photos.length>4?`<span class="mut" style="align-self:center">+${n.photos.length-4}</span>`:''}</div>${n.photos[0].addr?`<div class="ploc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>${esc(n.photos[0].addr)}</div>`:''}`:''}<div>${n.tags.map(t=>`<span class="tag">#${esc(t)}</span>`).join('')}<span class="mut" style="font-size:11px"> ${fmt(toLocal(new Date(n.updated)))}</span></div></div></div>`).join(''):'<div class="empty">Not yok. ＋ ile ekle veya Bugün sekmesinden hızlı ekle.</div>';
+  hydrate($('noteList'));
 }
 $('nSearch').oninput=renderNotes;
+
+
+// ================= FOTOĞRAFLI NOT =================
+const DB=(()=>{let p;const open=()=>p||(p=new Promise((res,rej)=>{const r=indexedDB.open('na_db',1);r.onupgradeneeded=()=>r.result.createObjectStore('photos');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)}));
+  const tx=async(mode,fn)=>{const db=await open();return new Promise((res,rej)=>{const t=db.transaction('photos',mode);const r=fn(t.objectStore('photos'));t.oncomplete=()=>res(r?.result);t.onerror=()=>rej(t.error)})};
+  return{get:id=>tx('readonly',s=>s.get(id)),put:(id,b)=>tx('readwrite',s=>s.put(b,id)),del:id=>tx('readwrite',s=>s.delete(id)),clear:()=>tx('readwrite',s=>s.clear())}})();
+const purl={};
+async function photoURL(id){if(purl[id])return purl[id];const b=await DB.get(id);if(!b)return '';return purl[id]=URL.createObjectURL(b)}
+function hydrate(root){root.querySelectorAll('img[data-pid]').forEach(async im=>{try{im.src=await photoURL(im.dataset.pid)}catch{}})}
+const blobToB64=(b,full)=>new Promise(r=>{const f=new FileReader();f.onload=()=>r(full?f.result:f.result.split(',')[1]);f.readAsDataURL(b)});
+function stampDate(ts){const d=new Date(ts);return `${pad(d.getDate())}.${pad(d.getMonth()+1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`}
+function photoNote(){openNote();$('camIn').click()}
+function closeNote(){edNew.forEach(id=>DB.del(id).catch(()=>{}));edNew=new Set();closeM('mNote')}
+$('camIn').onchange=e=>{addPhotoFiles([...e.target.files],true);e.target.value=''};
+$('galIn').onchange=e=>{addPhotoFiles([...e.target.files],false);e.target.value=''};
+function getPos(){return new Promise(r=>{if(!navigator.geolocation)return r(null);navigator.geolocation.getCurrentPosition(p=>r(p.coords),()=>r(null),{enableHighAccuracy:true,timeout:12000,maximumAge:30000})})}
+async function revGeo(lat,lng){
+  try{const ctl=new AbortController();setTimeout(()=>ctl.abort(),7000);
+    const r=await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1&accept-language=tr`,{signal:ctl.signal});
+    const d=await r.json(),a=d.address||{};
+    const parts=[a.road&&(a.road+(a.house_number?' No:'+a.house_number:'')),a.neighbourhood||a.suburb||a.quarter||a.village,a.town||a.city_district||a.district||a.county,a.province||a.city||a.state].filter(Boolean);
+    return [...new Set(parts)].join(', ')||d.display_name||'';
+  }catch{return ''}
+}
+let locCache=null;
+async function getLoc(){
+  if(locCache&&Date.now()-locCache.t<60000)return locCache;
+  const c=await getPos();if(!c)return null;
+  const loc={lat:+c.latitude.toFixed(6),lng:+c.longitude.toFixed(6),acc:Math.round(c.accuracy),t:Date.now()};
+  loc.addr=await revGeo(loc.lat,loc.lng);return locCache=loc;
+}
+async function loadImg(file){
+  try{return await createImageBitmap(file,{imageOrientation:'from-image'})}catch{}
+  return await new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=URL.createObjectURL(file)});
+}
+async function stampPhoto(file,ts,loc){
+  const img=await loadImg(file),max=1600,sc=Math.min(1,max/Math.max(img.width,img.height));
+  const w=Math.round(img.width*sc),h=Math.round(img.height*sc);
+  const c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d');x.drawImage(img,0,0,w,h);
+  const u=Math.max(15,Math.round(Math.min(w,h)*0.034)),pd=Math.round(u*0.9),maxW=w-pd*2-u*0.6;
+  const d=new Date(ts);
+  const rows=[{t:`📅 ${stampDate(ts)} · ${GUN[d.getDay()]}`,big:1}];
+  if(loc){if(loc.addr)rows.push({t:'📍 '+loc.addr});rows.push({t:`🧭 ${loc.lat.toFixed(6)}, ${loc.lng.toFixed(6)}  ±${loc.acc} m`,mono:1})}
+  else rows.push({t:'📍 Konum alınamadı'});
+  const font=r=>r.big?`700 ${Math.round(u*1.15)}px Inter, system-ui, sans-serif`:r.mono?`600 ${Math.round(u*.85)}px "JetBrains Mono", monospace`:`500 ${u}px Inter, system-ui, sans-serif`;
+  const lines=[];
+  for(const r of rows){x.font=font(r);let cur='';for(const wd of r.t.split(' ')){const tt=cur?cur+' '+wd:wd;if(x.measureText(tt).width>maxW&&cur){lines.push({...r,t:cur});cur='   '+wd}else cur=tt}lines.push({...r,t:cur})}
+  const lh=l=>(l.big?u*1.15:l.mono?u*.85:u)*1.4;
+  const bandH=lines.reduce((s,l)=>s+lh(l),0)+pd*2;
+  const g=x.createLinearGradient(0,h-bandH-u*2,0,h);g.addColorStop(0,'rgba(15,23,42,0)');g.addColorStop(.35,'rgba(15,23,42,.55)');g.addColorStop(1,'rgba(15,23,42,.82)');
+  x.fillStyle=g;x.fillRect(0,h-bandH-u*2,w,bandH+u*2);
+  const ag=x.createLinearGradient(0,h-bandH,0,h);ag.addColorStop(0,'#2563eb');ag.addColorStop(1,'#06b6d4');
+  x.fillStyle=ag;x.fillRect(pd,h-bandH+pd,Math.max(3,u*.22),bandH-pd*2);
+  let y=h-bandH+pd;x.textBaseline='top';x.shadowColor='rgba(0,0,0,.5)';x.shadowBlur=u*.3;
+  for(const l of lines){x.font=font(l);x.fillStyle=l.mono?'#a5f3fc':'#fff';x.fillText(l.t,pd+u*.6,y+(lh(l)-(l.big?u*1.15:l.mono?u*.85:u))/2);y+=lh(l)}
+  img.close?.();
+  return await new Promise(r=>c.toBlob(r,'image/jpeg',.85));
+}
+async function addPhotoFiles(files,fromCam){
+  if(!files.length)return;
+  if(!$('mNote').classList.contains('on'))openNote();
+  $('phStat').innerHTML='<span class="spin"></span> Konum alınıyor...';
+  const loc=await getLoc();
+  try{navigator.storage?.persist?.()}catch{}
+  for(let i=0;i<files.length;i++){
+    $('phStat').innerHTML=`<span class="spin"></span> Fotoğraf işleniyor ${i+1}/${files.length}...`;
+    try{
+      const f=files[i],ts=fromCam?Date.now():(f.lastModified||Date.now());
+      const blob=await stampPhoto(f,ts,loc),id='p'+uid();
+      await DB.put(id,blob);edNew.add(id);
+      edPhotos.push({id,ts,lat:loc?.lat??null,lng:loc?.lng??null,acc:loc?.acc??null,addr:loc?.addr||''});
+    }catch(e){toastMsg('⚠️ Fotoğraf işlenemedi: '+esc(e.message||e))}
+  }
+  $('phStat').textContent=loc?'':'⚠️ Konum alınamadı — konum iznini ve GPS\'i kontrol et.';
+  if(!$('nTitle').value.trim()&&edPhotos.length)$('nTitle').value=(edPhotos[0].addr?edPhotos[0].addr.split(',')[0]+' · ':'')+stampDate(edPhotos[0].ts);
+  renderEdPhotos();
+}
+function renderEdPhotos(){
+  $('nPhotos').innerHTML=edPhotos.map((p,i)=>`<div class="ph" onclick="viewPhoto(${i})"><img data-pid="${p.id}" alt=""><span>${stampDate(p.ts)}</span></div>`).join('');
+  hydrate($('nPhotos'));
+}
+async function viewPhoto(i){
+  const p=edPhotos[i];if(!p)return;
+  $('pvImg').src=await photoURL(p.id);
+  const has=p.lat!=null,map=has?`https://www.google.com/maps?q=${p.lat},${p.lng}`:'';
+  $('pvMeta').innerHTML=`<div>📅 <b>${stampDate(p.ts)}</b> · ${GUN[new Date(p.ts).getDay()]}</div>`+(p.addr?`<div>📍 ${esc(p.addr)}</div>`:'')+(has?`<div class="mut">🧭 <b>${p.lat}, ${p.lng}</b> ±${p.acc} m</div>`:'<div class="mut">Konum bilgisi yok</div>');
+  $('pvMap').disabled=!has;$('pvMap').onclick=()=>window.open(map,'_blank');
+  const fname=`foto-${stampDate(p.ts).replace(/[.: ]/g,'-')}.jpg`;
+  $('pvDl').onclick=async()=>{const a=document.createElement('a');a.href=await photoURL(p.id);a.download=fname;a.click()};
+  $('pvShare').onclick=async()=>{try{const b=await DB.get(p.id),f=new File([b],fname,{type:'image/jpeg'});
+    const txt=`${stampDate(p.ts)}${p.addr?'\n'+p.addr:''}${has?'\n'+map:''}`;
+    if(navigator.canShare?.({files:[f]}))await navigator.share({files:[f],text:txt});else if(navigator.share)await navigator.share({text:txt});else toastMsg('Paylaşım desteklenmiyor')}catch{}};
+  $('pvDel').onclick=()=>{if(!confirm('Fotoğraf silinsin mi?'))return;edPhotos.splice(i,1);if(edNew.has(p.id)){edNew.delete(p.id);DB.del(p.id).catch(()=>{})}else edDel.add(p.id);renderEdPhotos();closeM('mPhoto')};
+  $('pvAI').onclick=async()=>{const btn=$('pvAI');busy(btn,true,'Gemini bakıyor...');
+    try{const b=await DB.get(p.id);
+      const r=await gemini(`Bu fotoğrafı kısa ve net Türkçe açıkla. Önemli detayları (ürün, parça, hasar, ölçü, yazı, plaka vb.) madde madde yaz; yapılması gereken bir iş görünüyorsa en sonda "Yapılacak:" diye belirt. Çekim: ${stampDate(p.ts)}${p.addr?', '+p.addr:''}.`,{parts:[{inlineData:{mimeType:'image/jpeg',data:await blobToB64(b)}}]});
+      const nb=$('nBody');nb.value=(nb.value.trim()?nb.value.trimEnd()+'\n\n':'')+'📷 '+stampDate(p.ts)+'\n'+r.trim();closeM('mPhoto');toastMsg('✔ Açıklama nota eklendi');
+    }catch(e){toastMsg('⚠️ '+esc(e.message))}
+    busy(btn,false)};
+  $('mPhoto').classList.add('on');
+}
 
 // ================= GÖREVLER =================
 let curTask=null,tF='acik';
@@ -567,7 +711,7 @@ async function sendChat(){
   chat.push({r:'user',t:q});renderChat();window.scrollTo(0,1e9);
   const btn=$('cBtn');busy(btn,true,'');
   try{
-    const ctxN=notes.slice(-60).map(n=>`• [${n.tags.join(',')}] ${n.title}: ${n.body.slice(0,400)}`).join('\n');
+    const ctxN=notes.slice(-60).map(n=>`• [${n.tags.join(',')}] ${n.title}: ${n.body.slice(0,400)}${n.photos?.length?` [${n.photos.length} fotoğraf: ${n.photos.map(p=>stampDate(p.ts)+(p.addr?' @ '+p.addr:'')).join('; ')}]`:''}`).join('\n');
     const ctxT=tasks.filter(t=>!t.done||(t.doneAt&&Date.now()-t.doneAt<7*864e5)).map(t=>`• ${t.done?'[BİTTİ] ':''}${t.title}${t.due?' — '+t.due:''} (${t.priority})${t.note?' — '+t.note:''}`).join('\n');
     const sys=`Kullanıcının kişisel not ve planlama asistanısın. Türkçe, samimi ve kısa cevap ver; markdown başlık kullanma. ${nowCtx()}
 Kullanıcı yeni görev/hatırlatma eklemeni isterse cevabının EN SONUNA şu satırı ekle:
@@ -630,9 +774,9 @@ async function checkServer(){
     :'ℹ️ Sunucu bulunamadı (Vercel\'de yayınlanınca otomatik bağlanır). Şimdilik aşağıya kendi anahtarını girebilirsin.';
   setDot(!!cfg.key||(srv.ok&&srv.hasKey));
 }
-function exportData(){const b=new Blob([JSON.stringify({notes,tasks,v:1},null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='not-asistani-yedek-'+toLocal(new Date()).slice(0,10)+'.json';a.click()}
-$('impFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const d=JSON.parse(await f.text());if(confirm(`${d.notes?.length||0} not, ${d.tasks?.length||0} görev içe aktarılsın mı? (mevcutlara eklenir)`)){const ids=new Set([...notes,...tasks].map(x=>x.id));notes.push(...(d.notes||[]).filter(x=>!ids.has(x.id)));tasks.push(...(d.tasks||[]).filter(x=>!ids.has(x.id)));save();renderAll();toastMsg('✔ İçe aktarıldı')}}catch{toastMsg('Dosya okunamadı')}};
-function wipe(){if(confirm('TÜM notlar ve görevler silinsin mi?')&&confirm('Emin misin? Geri alınamaz.')){notes=[];tasks=[];chat=[];save();renderAll()}}
+async function exportData(){toastMsg('Yedek hazırlanıyor...');const photos={};for(const n of notes)for(const p of n.photos||[]){try{const b=await DB.get(p.id);if(b)photos[p.id]=await blobToB64(b,true)}catch{}}const b=new Blob([JSON.stringify({notes,tasks,photos,v:2},null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='not-asistani-yedek-'+toLocal(new Date()).slice(0,10)+'.json';a.click()}
+$('impFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const d=JSON.parse(await f.text());if(confirm(`${d.notes?.length||0} not, ${d.tasks?.length||0} görev içe aktarılsın mı? (mevcutlara eklenir)`)){const ids=new Set([...notes,...tasks].map(x=>x.id));notes.push(...(d.notes||[]).filter(x=>!ids.has(x.id)));tasks.push(...(d.tasks||[]).filter(x=>!ids.has(x.id)));for(const[k,v]of Object.entries(d.photos||{})){try{await DB.put(k,await (await fetch(v)).blob())}catch{}}save();renderAll();toastMsg('✔ İçe aktarıldı')}}catch{toastMsg('Dosya okunamadı')}};
+function wipe(){if(confirm('TÜM notlar ve görevler silinsin mi?')&&confirm('Emin misin? Geri alınamaz.')){notes=[];tasks=[];chat=[];DB.clear().catch(()=>{});save();renderAll()}}
 
 // ================= GENEL =================
 let toastT;
@@ -640,7 +784,7 @@ function toastMsg(h,ms=3500){const t=$('toast');t.innerHTML=h;t.classList.add('o
 function hideToast(){$('toast').classList.remove('on')}
 $('toast').onclick=e=>{if(e.target===$('toast'))hideToast()};
 function closeM(id){$(id).classList.remove('on')}
-document.querySelectorAll('.modal').forEach(m=>m.onclick=e=>{if(e.target===m)m.classList.remove('on')});
+document.querySelectorAll('.modal').forEach(m=>m.onclick=e=>{if(e.target===m){if(m.id==='mNote')closeNote();else m.classList.remove('on')}});
 $('nav').onclick=e=>{const b=e.target.closest('button');if(!b)return;show(b.dataset.v)};
 function show(v){document.querySelectorAll('main>section').forEach(s=>s.classList.toggle('hidden',s.id!=='v-'+v));[...$('nav').children].forEach(b=>b.classList.toggle('act',b.dataset.v===v));window.scrollTo(0,0);if(v==='asistan')renderChat()}
 function renderAll(){renderToday();renderNotes();renderTasks()}

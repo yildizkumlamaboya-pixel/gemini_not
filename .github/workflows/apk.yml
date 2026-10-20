@@ -18,6 +18,11 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+      - name: Sabit imza anahtarı (önbellek)
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: notasistani-debug-keystore-v1
       - name: İmza dosyasını hazırla (varsa)
         env:
           KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
