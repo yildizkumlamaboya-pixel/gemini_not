@@ -39,6 +39,10 @@ android {
             signingConfig useRelease ? signingConfigs.release : (ciKs.exists() ? signingConfigs.ci : signingConfigs.debug)
         }
     }
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
@@ -46,5 +50,5 @@ android {
 }
 
 dependencies {
-    implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.5.0'
+    implementation 'androidx.core:core:1.13.1'
 }

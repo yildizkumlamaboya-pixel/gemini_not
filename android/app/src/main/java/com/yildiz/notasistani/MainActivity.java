@@ -1,0 +1,415 @@
+package com.yildiz.notasistani;
+
+import android.Manifest;
+import android.app.Activity;
+import android.app.NotificationManager;
+import android.content.ContentValues;
+import android.content.Context;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Bundle;
+import android.os.Environment;
+import android.provider.MediaStore;
+import android.provider.Settings;
+import android.util.Base64;
+import android.view.WindowManager;
+import android.webkit.GeolocationPermissions;
+import android.webkit.JavascriptInterface;
+import android.webkit.PermissionRequest;
+import android.webkit.ValueCallback;
+import android.webkit.WebChromeClient;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
+import android.widget.Toast;
+
+import androidx.core.content.FileProvider;
+
+import org.json.JSONObject;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.OutputStream;
+import java.util.ArrayList;
+import java.util.List;
+
+public class MainActivity extends Activity {
+    static final String URL = "https://yildiz-not-asistani.vercel.app/";
+    static final String HOST = "yildiz-not-asistani.vercel.app";
+    static final String AUTH = "com.yildiz.notasistani.files";
+    static final int RC_ALL = 1, RC_FILE = 2, RC_WEBPERM = 3, RC_GEO = 4, RC_CAMFILE = 5;
+
+    static final String MIC = Manifest.permission.RECORD_AUDIO;
+    static final String CAM = Manifest.permission.CAMERA;
+    static final String FINE = Manifest.permission.ACCESS_FINE_LOCATION;
+    static final String COARSE = Manifest.permission.ACCESS_COARSE_LOCATION;
+    static final String NOTIF = "android.permission.POST_NOTIFICATIONS";
+
+    WebView web;
+    ValueCallback<Uri[]> fileCb;
+    Uri camUri;
+    PermissionRequest pendingWebPerm;
+    GeolocationPermissions.Callback geoCb;
+    String geoOrigin;
+    SharedPreferences prefs;
+
+    @Override
+    protected void onCreate(Bundle state) {
+        super.onCreate(state);
+        prefs = getSharedPreferences("app", MODE_PRIVATE);
+        Notif.channel(this);
+
+        web = new WebView(this);
+        setContentView(web);
+        WebSettings s = web.getSettings();
+        s.setJavaScriptEnabled(true);
+        s.setDomStorageEnabled(true);
+        s.setDatabaseEnabled(true);
+        s.setMediaPlaybackRequiresUserGesture(false);
+        s.setGeolocationEnabled(true);
+        s.setAllowFileAccess(false);
+        s.setSupportMultipleWindows(false);
+        s.setJavaScriptCanOpenWindowsAutomatically(true);
+        s.setUserAgentString(s.getUserAgentString() + " NotAsistaniApp/2");
+        web.addJavascriptInterface(new Bridge(), "Android");
+
+        web.setWebViewClient(new WebViewClient() {
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest r) {
+                Uri u = r.getUrl();
+                if (HOST.equals(u.getHost())) return false;
+                openExternal(u);
+                return true;
+            }
+        });
+
+        web.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public void onPermissionRequest(final PermissionRequest req) {
+                runOnUiThread(() -> {
+                    List<String> need = new ArrayList<>();
+                    for (String r : req.getResources()) {
+                        if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(r) && !has(MIC)) need.add(MIC);
+                        if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(r) && !has(CAM)) need.add(CAM);
+                    }
+                    if (need.isEmpty()) req.grant(req.getResources());
+                    else {
+                        pendingWebPerm = req;
+                        requestPermissions(need.toArray(new String[0]), RC_WEBPERM);
+                    }
+                });
+            }
+
+            @Override
+            public void onGeolocationPermissionsShowPrompt(String origin, GeolocationPermissions.Callback cb) {
+                if (has(FINE) || has(COARSE)) cb.invoke(origin, true, true);
+                else {
+                    geoCb = cb;
+                    geoOrigin = origin;
+                    requestPermissions(new String[]{FINE, COARSE}, RC_GEO);
+                }
+            }
+
+            @Override
+            public boolean onShowFileChooser(WebView v, ValueCallback<Uri[]> cb, FileChooserParams p) {
+                if (fileCb != null) fileCb.onReceiveValue(null);
+                fileCb = cb;
+                boolean image = false;
+                String[] types = p.getAcceptTypes();
+                if (types != null) for (String a : types) if (a != null && a.startsWith("image")) image = true;
+                if (p.isCaptureEnabled() && image) {
+                    if (!has(CAM)) requestPermissions(new String[]{CAM}, RC_CAMFILE);
+                    else openCamera();
+                    return true;
+                }
+                try {
+                    camUri = null;
+                    Intent i = new Intent(Intent.ACTION_GET_CONTENT);
+                    i.addCategory(Intent.CATEGORY_OPENABLE);
+                    i.setType(image ? "image/*" : "*/*");
+                    if (p.getMode() == FileChooserParams.MODE_OPEN_MULTIPLE) i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+                    startActivityForResult(Intent.createChooser(i, "Dosya seç"), RC_FILE);
+                } catch (Exception e) {
+                    fileCb.onReceiveValue(null);
+                    fileCb = null;
+                }
+                return true;
+            }
+        });
+
+        if (state != null) web.restoreState(state);
+        else web.loadUrl(URL);
+
+        if (!prefs.getBoolean("askedAll", false)) web.postDelayed(this::askAll, 1500);
+    }
+
+    // ---------- izinler ----------
+    boolean has(String p) {
+        return checkSelfPermission(p) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    String[] wanted() {
+        List<String> l = new ArrayList<>();
+        l.add(MIC);
+        l.add(CAM);
+        l.add(FINE);
+        l.add(COARSE);
+        if (Build.VERSION.SDK_INT >= 33) l.add(NOTIF);
+        return l.toArray(new String[0]);
+    }
+
+    void askAll() {
+        List<String> need = new ArrayList<>();
+        for (String p : wanted()) if (!has(p)) need.add(p);
+        prefs.edit().putBoolean("askedAll", true).apply();
+        if (!need.isEmpty()) requestPermissions(need.toArray(new String[0]), RC_ALL);
+        else sendPerms();
+    }
+
+    String state(String p) {
+        if (has(p)) return "granted";
+        if (prefs.getBoolean("asked_" + p, false) && !shouldShowRequestPermissionRationale(p)) return "denied";
+        return "prompt";
+    }
+
+    String permJson() {
+        try {
+            JSONObject o = new JSONObject();
+            o.put("microphone", state(MIC));
+            o.put("camera", state(CAM));
+            o.put("geolocation", has(FINE) || has(COARSE) ? "granted" : state(FINE));
+            String n;
+            if (Build.VERSION.SDK_INT >= 33) n = state(NOTIF);
+            else n = getSystemService(NotificationManager.class).areNotificationsEnabled() ? "granted" : "denied";
+            o.put("notifications", n);
+            return o.toString();
+        } catch (Exception e) {
+            return "{}";
+        }
+    }
+
+    void sendPerms() {
+        final String js = "window.onNativePerms&&window.onNativePerms(" + permJson() + ")";
+        web.post(() -> web.evaluateJavascript(js, null));
+    }
+
+    void openAppSettings() {
+        try {
+            Intent i = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName()));
+            startActivity(i);
+        } catch (Exception ignored) {
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int rc, String[] perms, int[] res) {
+        SharedPreferences.Editor ed = prefs.edit();
+        for (String p : perms) ed.putBoolean("asked_" + p, true);
+        ed.apply();
+        if (rc == RC_WEBPERM && pendingWebPerm != null) {
+            List<String> ok = new ArrayList<>();
+            for (String r : pendingWebPerm.getResources()) {
+                if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(r) && has(MIC)) ok.add(r);
+                if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(r) && has(CAM)) ok.add(r);
+            }
+            if (ok.isEmpty()) pendingWebPerm.deny();
+            else pendingWebPerm.grant(ok.toArray(new String[0]));
+            pendingWebPerm = null;
+        } else if (rc == RC_GEO && geoCb != null) {
+            boolean ok = has(FINE) || has(COARSE);
+            geoCb.invoke(geoOrigin, ok, ok);
+            geoCb = null;
+        } else if (rc == RC_CAMFILE) {
+            if (has(CAM)) openCamera();
+            else if (fileCb != null) {
+                fileCb.onReceiveValue(null);
+                fileCb = null;
+            }
+        }
+        sendPerms();
+    }
+
+    // ---------- kamera / dosya ----------
+    void openCamera() {
+        try {
+            File f = new File(getCacheDir(), "cam_" + System.currentTimeMillis() + ".jpg");
+            camUri = FileProvider.getUriForFile(this, AUTH, f);
+            Intent i = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+            i.putExtra(MediaStore.EXTRA_OUTPUT, camUri);
+            i.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivityForResult(i, RC_FILE);
+        } catch (Exception e) {
+            camUri = null;
+            if (fileCb != null) {
+                fileCb.onReceiveValue(null);
+                fileCb = null;
+            }
+            Toast.makeText(this, "Kamera açılamadı", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int rc, int res, Intent data) {
+        super.onActivityResult(rc, res, data);
+        if (rc != RC_FILE || fileCb == null) return;
+        Uri[] out = null;
+        if (res == RESULT_OK) {
+            if (camUri != null) out = new Uri[]{camUri};
+            else if (data != null) {
+                if (data.getClipData() != null) {
+                    int n = data.getClipData().getItemCount();
+                    out = new Uri[n];
+                    for (int i = 0; i < n; i++) out[i] = data.getClipData().getItemAt(i).getUri();
+                } else if (data.getData() != null) out = new Uri[]{data.getData()};
+            }
+        }
+        camUri = null;
+        fileCb.onReceiveValue(out);
+        fileCb = null;
+    }
+
+    void openExternal(Uri u) {
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, u));
+        } catch (Exception ignored) {
+        }
+    }
+
+    // ---------- geri tuşu ----------
+    @Override
+    public void onBackPressed() {
+        web.evaluateJavascript("window.nativeBack?window.nativeBack():false", v -> {
+            if ("true".equals(v)) return;
+            if (web.canGoBack()) web.goBack();
+            else moveTaskToBack(true);
+        });
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle out) {
+        super.onSaveInstanceState(out);
+        web.saveState(out);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (web != null) sendPerms();
+    }
+
+    // ---------- JS köprüsü ----------
+    class Bridge {
+        @JavascriptInterface
+        public String permStatus() {
+            return permJson();
+        }
+
+        @JavascriptInterface
+        public void requestAll() {
+            runOnUiThread(() -> {
+                boolean anyDenied = false;
+                for (String p : wanted()) if (!has(p) && "denied".equals(state(p))) anyDenied = true;
+                boolean anyPrompt = false;
+                for (String p : wanted()) if (!has(p) && !"denied".equals(state(p))) anyPrompt = true;
+                if (anyPrompt) askAll();
+                else if (anyDenied) {
+                    Toast.makeText(MainActivity.this, "Kapalı izinleri buradan aç", Toast.LENGTH_LONG).show();
+                    openAppSettings();
+                } else sendPerms();
+            });
+        }
+
+        @JavascriptInterface
+        public void openSettings() {
+            runOnUiThread(MainActivity.this::openAppSettings);
+        }
+
+        @JavascriptInterface
+        public void notify(String id, String title, String body) {
+            Notif.show(MainActivity.this, id.hashCode(), title, body);
+        }
+
+        @JavascriptInterface
+        public void schedule(String id, double when, String title, String body) {
+            Alarms.set(MainActivity.this, id, (long) when, title, body);
+        }
+
+        @JavascriptInterface
+        public void cancel(String id) {
+            Alarms.cancel(MainActivity.this, id);
+        }
+
+        @JavascriptInterface
+        public void keepScreenOn(final boolean on) {
+            runOnUiThread(() -> {
+                if (on) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            });
+        }
+
+        @JavascriptInterface
+        public void openUrl(String url) {
+            runOnUiThread(() -> openExternal(Uri.parse(url)));
+        }
+
+        @JavascriptInterface
+        public boolean saveFile(String b64, String name, String mime) {
+            try {
+                byte[] bytes = Base64.decode(b64, Base64.DEFAULT);
+                boolean isImage = mime != null && mime.startsWith("image/");
+                if (Build.VERSION.SDK_INT >= 29) {
+                    ContentValues cv = new ContentValues();
+                    cv.put(MediaStore.MediaColumns.DISPLAY_NAME, name);
+                    cv.put(MediaStore.MediaColumns.MIME_TYPE, mime);
+                    cv.put(MediaStore.MediaColumns.RELATIVE_PATH, isImage ? Environment.DIRECTORY_PICTURES + "/Not Asistani" : Environment.DIRECTORY_DOWNLOADS);
+                    Uri col = isImage ? MediaStore.Images.Media.EXTERNAL_CONTENT_URI : MediaStore.Downloads.EXTERNAL_CONTENT_URI;
+                    Uri u = getContentResolver().insert(col, cv);
+                    try (OutputStream os = getContentResolver().openOutputStream(u)) {
+                        os.write(bytes);
+                    }
+                } else {
+                    File dir = getExternalFilesDir(isImage ? Environment.DIRECTORY_PICTURES : Environment.DIRECTORY_DOWNLOADS);
+                    try (FileOutputStream os = new FileOutputStream(new File(dir, name))) {
+                        os.write(bytes);
+                    }
+                }
+                final String msg = isImage ? "Galeriye kaydedildi: " + name : "İndirilenler'e kaydedildi: " + name;
+                runOnUiThread(() -> Toast.makeText(MainActivity.this, msg, Toast.LENGTH_LONG).show());
+                return true;
+            } catch (Exception e) {
+                runOnUiThread(() -> Toast.makeText(MainActivity.this, "Kaydedilemedi", Toast.LENGTH_SHORT).show());
+                return false;
+            }
+        }
+
+        @JavascriptInterface
+        public void share(String b64, String name, String mime, String text) {
+            try {
+                Intent i = new Intent(Intent.ACTION_SEND);
+                if (b64 != null && b64.length() > 0) {
+                    File f = new File(getCacheDir(), name);
+                    try (FileOutputStream os = new FileOutputStream(f)) {
+                        os.write(Base64.decode(b64, Base64.DEFAULT));
+                    }
+                    Uri u = FileProvider.getUriForFile(MainActivity.this, AUTH, f);
+                    i.setType(mime);
+                    i.putExtra(Intent.EXTRA_STREAM, u);
+                    i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                } else i.setType("text/plain");
+                if (text != null) i.putExtra(Intent.EXTRA_TEXT, text);
+                final Intent ch = Intent.createChooser(i, "Paylaş");
+                runOnUiThread(() -> startActivity(ch));
+            } catch (Exception ignored) {
+            }
+        }
+
+        @JavascriptInterface
+        public String version() {
+            return "2";
+        }
+    }
+}

@@ -420,7 +420,20 @@ const $=id=>document.getElementById(id);
 const LS={get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}},set:(k,v)=>localStorage.setItem(k,JSON.stringify(v))};
 let notes=LS.get('na_notes',[]), tasks=LS.get('na_tasks',[]), chat=LS.get('na_chat',[]);
 let cfg=LS.get('na_cfg',{key:'',model:'gemini-flash-latest',sound:true});
-const save=()=>{LS.set('na_notes',notes);LS.set('na_tasks',tasks);LS.set('na_chat',chat.filter(m=>!m.typing).slice(-40))};
+const APP=typeof window.Android!=='undefined';
+const save=()=>{LS.set('na_notes',notes);LS.set('na_tasks',tasks);LS.set('na_chat',chat.filter(m=>!m.typing).slice(-40));syncAlarms()};
+// Uygulamada: hatırlatmaları Android alarmına kur (uygulama kapalıyken de bildirim gelir)
+function syncAlarms(){
+  if(!APP)return;
+  try{
+    const want={},now=Date.now();
+    for(const t of tasks){if(!t.done&&t.remind){const w=+new Date(t.remind);if(w>now)want[t.id]={w,title:'⏰ '+t.title,body:(t.due?'📅 '+stampDate(+new Date(t.due))+'  ':'')+(t.note||'')}}}
+    const prev=LS.get('na_alarms',{});
+    for(const id in prev)if(!want[id]||prev[id]!==want[id].w)Android.cancel(id);
+    for(const id in want)if(prev[id]!==want[id].w)Android.schedule(id,want[id].w,want[id].title,want[id].body);
+    LS.set('na_alarms',Object.fromEntries(Object.entries(want).map(([k,v])=>[k,v.w])));
+  }catch(e){console.log(e)}
+}
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const pad=n=>String(n).padStart(2,'0');
@@ -737,10 +750,11 @@ async function viewPhoto(i){
   $('pvImg').src=await photoURL(p.id);
   const has=p.lat!=null,map=has?`https://www.google.com/maps?q=${p.lat},${p.lng}`:'';
   $('pvMeta').innerHTML=`<div>📅 <b>${stampDate(p.ts)}</b> · ${GUN[new Date(p.ts).getDay()]}</div>`+(p.addr?`<div>📍 ${esc(p.addr)}</div>`:'')+(has?`<div class="mut">🧭 <b>${p.lat}, ${p.lng}</b> ±${p.acc} m</div>`:'<div class="mut">Konum bilgisi yok</div>');
-  $('pvMap').disabled=!has;$('pvMap').onclick=()=>window.open(map,'_blank');
+  $('pvMap').disabled=!has;$('pvMap').onclick=()=>APP?Android.openUrl(map):window.open(map,'_blank');
   const fname=`foto-${stampDate(p.ts).replace(/[.: ]/g,'-')}.jpg`;
-  $('pvDl').onclick=async()=>{const a=document.createElement('a');a.href=await photoURL(p.id);a.download=fname;a.click()};
+  $('pvDl').onclick=async()=>{if(APP){Android.saveFile(await blobToB64(await DB.get(p.id)),fname,'image/jpeg');return}const a=document.createElement('a');a.href=await photoURL(p.id);a.download=fname;a.click()};
   $('pvShare').onclick=async()=>{try{const b=await DB.get(p.id),f=new File([b],fname,{type:'image/jpeg'});
+    if(APP){Android.share(await blobToB64(b),fname,'image/jpeg',`${stampDate(p.ts)}${p.addr?'\n'+p.addr:''}${has?'\n'+map:''}`);return}
     const txt=`${stampDate(p.ts)}${p.addr?'\n'+p.addr:''}${has?'\n'+map:''}`;
     if(navigator.canShare?.({files:[f]}))await navigator.share({files:[f],text:txt});else if(navigator.share)await navigator.share({text:txt});else toastMsg('Paylaşım desteklenmiyor')}catch{}};
   $('pvDel').onclick=()=>{if(!confirm('Fotoğraf silinsin mi?'))return;edPhotos.splice(i,1);if(edNew.has(p.id)){edNew.delete(p.id);DB.del(p.id).catch(()=>{})}else edDel.add(p.id);renderEdPhotos();closeM('mPhoto')};
@@ -799,8 +813,8 @@ function diaryStop(){
   $('dBtn').classList.remove('on');$('recBar').classList.remove('on');$('fab').classList.remove('hidden');$('dLvl').style.width='0';
   $('dTime').classList.remove('mono');$('dTime').textContent='Sesli günlük';diaryStatus();
 }
-async function wakeOn(){try{dr.wake=await navigator.wakeLock?.request('screen')}catch{}}
-function wakeOff(){try{dr.wake?.release()}catch{}dr.wake=null}
+async function wakeOn(){if(APP){try{Android.keepScreenOn(true)}catch{}dr.wake=1;return}try{dr.wake=await navigator.wakeLock?.request('screen')}catch{}}
+function wakeOff(){if(APP){try{Android.keepScreenOn(false)}catch{}dr.wake=null;return}try{dr.wake?.release()}catch{}dr.wake=null}
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&dr.on&&!dr.wake)wakeOn()});
 function diaryStatus(){
   const q=dr.queue.length+(dr.busy?1:0);
@@ -986,6 +1000,7 @@ let swReg=null;
 if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').then(r=>swReg=r).catch(()=>{});
 function beep(){if(!cfg.sound)return;try{const c=new AudioContext();[0,.25,.5].forEach(t=>{const o=c.createOscillator(),g=c.createGain();o.frequency.value=880;o.connect(g);g.connect(c.destination);g.gain.setValueAtTime(.2,c.currentTime+t);g.gain.exponentialRampToValueAtTime(.001,c.currentTime+t+.2);o.start(c.currentTime+t);o.stop(c.currentTime+t+.2)})}catch{}}
 async function notify(title,body,tag){
+  if(APP){try{Android.notify(String(tag||Date.now()),title,body||'')}catch{}return}
   if('Notification' in window&&Notification.permission==='granted'){
     try{if(swReg){await swReg.showNotification(title,{body,tag,icon:'icon-192.png',badge:'icon-192.png',vibrate:[200,100,200],requireInteraction:true});return}}catch{}
     try{new Notification(title,{body,tag,icon:'icon-192.png'})}catch{}
@@ -996,7 +1011,7 @@ function checkReminders(){
   tasks.forEach(t=>{
     if(!t.done&&t.remind&&!t.notified&&new Date(t.remind)<=n){
       t.notified=true;ch=true;
-      notify('⏰ '+t.title,(t.due?'📅 '+fmt(t.due)+'  ':'')+(t.note||''),t.id);beep();
+      if(!APP)notify('⏰ '+t.title,(t.due?'📅 '+fmt(t.due)+'  ':'')+(t.note||''),t.id);beep();
       toastMsg(`⏰ <b>${esc(t.title)}</b>${t.due?'<br><span class="mut">'+fmt(t.due)+'</span>':''}
       <div class="row" style="margin-top:8px"><button class="sm" onclick="snooze('${t.id}',10)">10 dk ertele</button><button class="sm" onclick="snooze('${t.id}',60)">1 sa</button><button class="sm pri" onclick="toggle('${t.id}');hideToast()">Tamamlandı</button></div>`,0);
     }
@@ -1007,7 +1022,7 @@ function snooze(id,min){const t=tasks.find(x=>x.id===id);t.remind=toLocal(new Da
 setInterval(checkReminders,15000);document.addEventListener('visibilitychange',()=>{if(!document.hidden){checkReminders();renderAll()}});
 function askNotif(){if(!('Notification' in window)){toastMsg('Bu tarayıcı bildirim desteklemiyor');return}Notification.requestPermission().then(renderNStat)}
 function testNotif(){notify('🔔 Test','Hatırlatmalar böyle görünecek','test');beep()}
-function renderNStat(){$('nStat').textContent=!('Notification' in window)?'Desteklenmiyor':Notification.permission==='granted'?'✔ Bildirim izni verildi':Notification.permission==='denied'?'✕ Engellendi — tarayıcı ayarlarından izin ver':'Henüz izin verilmedi';}
+function renderNStat(){if(APP){let s={};try{s=JSON.parse(Android.permStatus())}catch{}$('nStat').textContent=s.notifications==='granted'?'✔ Bildirim izni verildi — hatırlatmalar uygulama kapalıyken de gelir':s.notifications==='denied'?'✕ Kapalı — Ayarlar → İzinler → Tüm izinleri ver':'Henüz izin verilmedi';return}$('nStat').textContent=!('Notification' in window)?'Desteklenmiyor':Notification.permission==='granted'?'✔ Bildirim izni verildi':Notification.permission==='denied'?'✕ Engellendi — tarayıcı ayarlarından izin ver':'Henüz izin verilmedi';}
 
 
 // ================= İZİNLER =================
@@ -1018,6 +1033,7 @@ const PERMS=[
   {k:'notifications',n:'Bildirim',d:'Hatırlatmalar',ic:'<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/>'},
 ];
 async function permState(k){
+  if(APP){try{return JSON.parse(Android.permStatus())[k]||'prompt'}catch{return 'prompt'}}
   try{if(k==='notifications'&&'Notification' in window){const p=Notification.permission;return p==='default'?'prompt':p==='granted'?'granted':'denied'}
     const s=await navigator.permissions.query({name:k});return s.state}catch{return 'prompt'}
 }
@@ -1029,6 +1045,7 @@ async function renderPerms(){
   return (await Promise.all(PERMS.map(p=>permState(p.k)))).every(s=>s==='granted');
 }
 async function askAllPerms(){
+  if(APP){LS.set('na_perm',1);Android.requestAll();return}
   try{if('Notification' in window&&Notification.permission==='default')await Notification.requestPermission()}catch{}
   try{const s=await navigator.mediaDevices.getUserMedia({audio:true,video:true});s.getTracks().forEach(t=>t.stop())}
   catch{try{const s=await navigator.mediaDevices.getUserMedia({audio:true});s.getTracks().forEach(t=>t.stop())}catch{}
@@ -1040,6 +1057,10 @@ async function askAllPerms(){
   else toastMsg('Bazı izinler engelli. Ayarlar → İzinler bölümündeki açıklamaya bak.',6000);
 }
 
+window.onNativePerms=async()=>{renderNStat();const all=await renderPerms();if(all&&$('mPerm').classList.contains('on')){closeM('mPerm');toastMsg('✔ Tüm izinler verildi')}};
+// Android geri tuşu: açık pencereyi kapat / ana sayfaya dön
+window.nativeBack=()=>{const m=[...document.querySelectorAll('.modal.on')].pop();if(m){if(m.id==='mNote')closeNote();else if(m.id==='mRec')recCancel();else m.classList.remove('on');return true}
+  const cur=document.querySelector('main>section:not(.hidden)');if(cur&&cur.id!=='v-bugun'){show('bugun');return true}return false};
 // ================= AYARLAR =================
 function saveSettings(){cfg.key=$('sKey').value.trim();cfg.code=$('sCode').value.trim();cfg.model=$('sModel').value;cfg.sound=$('sSound').checked;LS.set('na_cfg',cfg);$('sOut').textContent='✔ Kaydedildi'}
 $('sSound').onchange=()=>{cfg.sound=$('sSound').checked;LS.set('na_cfg',cfg)};
@@ -1058,7 +1079,9 @@ async function checkServer(){
     :'ℹ️ Sunucu bulunamadı (Vercel\'de yayınlanınca otomatik bağlanır). Şimdilik aşağıya kendi anahtarını girebilirsin.';
   setDot(!!cfg.key||(srv.ok&&srv.hasKey));
 }
-async function exportData(){toastMsg('Yedek hazırlanıyor...');const photos={};for(const n of notes)for(const p of n.photos||[]){try{const b=await DB.get(p.id);if(b)photos[p.id]=await blobToB64(b,true)}catch{}}const b=new Blob([JSON.stringify({notes,tasks,diary,photos,v:3},null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='not-asistani-yedek-'+toLocal(new Date()).slice(0,10)+'.json';a.click()}
+async function exportData(){toastMsg('Yedek hazırlanıyor...');const photos={};for(const n of notes)for(const p of n.photos||[]){try{const b=await DB.get(p.id);if(b)photos[p.id]=await blobToB64(b,true)}catch{}}const js=JSON.stringify({notes,tasks,diary,photos,v:3});const fn='not-asistani-yedek-'+toLocal(new Date()).slice(0,10)+'.json';
+  if(APP){const r=new FileReader();r.onload=()=>Android.saveFile(r.result.split(',')[1],fn,'application/json');r.readAsDataURL(new Blob([js],{type:'application/json'}));return}
+  const b=new Blob([js],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='not-asistani-yedek-'+toLocal(new Date()).slice(0,10)+'.json';a.click()}
 $('impFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const d=JSON.parse(await f.text());if(confirm(`${d.notes?.length||0} not, ${d.tasks?.length||0} görev içe aktarılsın mı? (mevcutlara eklenir)`)){const ids=new Set([...notes,...tasks].map(x=>x.id));notes.push(...(d.notes||[]).filter(x=>!ids.has(x.id)));tasks.push(...(d.tasks||[]).filter(x=>!ids.has(x.id)));{const di=new Set(diary.map(x=>x.id));diary.push(...(d.diary||[]).filter(x=>!di.has(x.id)));saveDiary()}for(const[k,v]of Object.entries(d.photos||{})){try{await DB.put(k,await (await fetch(v)).blob())}catch{}}save();renderAll();toastMsg('✔ İçe aktarıldı')}}catch{toastMsg('Dosya okunamadı')}};
 function wipe(){if(confirm('TÜM notlar ve görevler silinsin mi?')&&confirm('Emin misin? Geri alınamaz.')){notes=[];tasks=[];chat=[];diary=[];saveDiary();DB.clear().catch(()=>{});save();renderAll()}}
 
@@ -1074,7 +1097,7 @@ function show(v){if(v==='ayarlar')renderPerms();document.querySelectorAll('main>
 function renderAll(){renderToday();renderNotes();renderTasks();renderDiary()}
 setInterval(()=>{const n=new Date();$('clock').textContent=`${GUN[n.getDay()].slice(0,3)} ${pad(n.getHours())}:${pad(n.getMinutes())}`},1000);
 $('sKey').value=cfg.key||'';$('sCode').value=cfg.code||'';$('sModel').innerHTML=`<option>${esc(cfg.model)}</option>`;$('sSound').checked=cfg.sound!==false;
-checkServer();renderNStat();renderAll();checkReminders();
+checkServer();renderNStat();renderAll();checkReminders();syncAlarms();
 renderPerms().then(all=>{if(!all&&!LS.get('na_perm',0))setTimeout(()=>$('mPerm').classList.add('on'),900)});
 setTimeout(()=>{if(!cfg.key&&!(srv.ok&&srv.hasKey))toastMsg('👋 Gemini bağlantısı yok — <b>Ayarlar</b>\'a bak.',6000)},1500);
 const sv=new URLSearchParams(location.search).get('v');if(sv)show(sv);
