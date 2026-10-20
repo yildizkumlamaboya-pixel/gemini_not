@@ -5,6 +5,7 @@ def buildNo = (System.getenv('BUILD_NUMBER') ?: '1').toInteger()
 def ksFile = file('../release.jks')
 def ksPass = System.getenv('ANDROID_KEYSTORE_PASSWORD')
 def useRelease = ksPass && ksFile.exists()
+def ciKs = file('../ci.keystore')
 
 android {
     namespace 'com.yildiz.notasistani'
@@ -17,6 +18,12 @@ android {
         versionName "1.1.${buildNo}"
     }
     signingConfigs {
+        ci {
+            storeFile ciKs
+            storePassword 'android'
+            keyAlias 'ci'
+            keyPassword 'android'
+        }
         release {
             if (useRelease) {
                 storeFile ksFile
@@ -29,7 +36,7 @@ android {
     buildTypes {
         release {
             minifyEnabled false
-            signingConfig useRelease ? signingConfigs.release : signingConfigs.debug
+            signingConfig useRelease ? signingConfigs.release : (ciKs.exists() ? signingConfigs.ci : signingConfigs.debug)
         }
     }
     compileOptions {

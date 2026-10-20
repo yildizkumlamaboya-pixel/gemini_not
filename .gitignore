@@ -4,3 +4,4 @@ android/app/build
 android/local.properties
 android/release.jks
 *.jks
+android/ci.keystore

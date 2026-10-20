@@ -19,10 +19,14 @@ jobs:
         with:
           gradle-version: '8.9'
       - name: Sabit imza anahtarı (önbellek)
+        id: kscache
         uses: actions/cache@v4
         with:
-          path: ~/.android/debug.keystore
-          key: notasistani-debug-keystore-v1
+          path: android/ci.keystore
+          key: notasistani-ci-keystore-v1
+      - name: İmza anahtarı yoksa oluştur
+        if: steps.kscache.outputs.cache-hit != 'true'
+        run: keytool -genkeypair -keystore android/ci.keystore -alias ci -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname "CN=Yildiz Kumlama Boya, O=Yildiz Kumlama Boya, C=TR"
       - name: İmza dosyasını hazırla (varsa)
         env:
           KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
