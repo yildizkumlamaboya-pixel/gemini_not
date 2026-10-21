@@ -581,7 +581,8 @@ let cfg=LS.get('na_cfg',{key:'',model:'gemini-flash-latest',sound:true});
 const APP=typeof window.Android!=='undefined';
 // ---- Özel isimler sözlüğü: Gemini'ye doğru yazımları öğretir + yanlış duyulanları düzeltir ----
 let vocab=LS.get('na_vocab',null);
-if(!Array.isArray(vocab)){vocab=[{w:'Omkon',from:'Hong Kong, Hongkong'},{w:'Acar Metal',from:''},{w:'Unique Raf',from:''},{w:'Delta Boya',from:''},{w:'Minimar',from:''},{w:'Yıldız Kumlama Boya',from:''}];LS.set('na_vocab',vocab);LS.set('na_vocab_fix',1)}
+if(Array.isArray(vocab)&&!vocab.some(v=>v.w==='kova')){vocab.push({w:'kova',from:'koyle, koyla'});LS.set('na_vocab',vocab);LS.set('na_fix_kova',1)}
+if(!Array.isArray(vocab)){vocab=[{w:'kova',from:'koyle, koyla'},{w:'Omkon',from:'Hong Kong, Hongkong'},{w:'Acar Metal',from:''},{w:'Unique Raf',from:''},{w:'Delta Boya',from:''},{w:'Minimar',from:''},{w:'Yıldız Kumlama Boya',from:''}];LS.set('na_vocab',vocab);LS.set('na_vocab_fix',1)}
 const escRe=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
 function vocabRules(){return vocab.flatMap(v=>String(v.from||'').split(',').map(f=>f.trim()).filter(Boolean).map(f=>[new RegExp(escRe(f),'gi'),v.w]))}
 function applyVocab(s){if(typeof s!=='string'||!s)return s;for(const[re,w]of vocabRules())s=s.replace(re,w);return s}
@@ -598,7 +599,7 @@ function knownTerms(){
 }
 function vocabHint(){
   const terms=knownTerms(),fx=vocab.filter(v=>v.from).map(v=>`"${v.from.split(',')[0].trim()}" gibi duyulan kelime aslında "${v.w}"`).join('; ');
-  return `\nBAĞLAM: Konuşan kişi Yıldız Kumlama Boya firmasının sahibi. Konuşmalarda kumlama, boya, elektrostatik toz boya, RAL kodları, astar, palet, parça, sevkiyat, irsaliye, fatura, teklif, müşteri ve tedarikçi firma adları geçer.`+
+  return `\nBAĞLAM: Konuşan kişi Yıldız Kumlama Boya firmasının sahibi. Konuşmalarda kumlama, boya, elektrostatik toz boya, RAL kodları, astar, son kat, kat, kova, teneke, galon, litre, kilo, tiner, vernik, epoksi, poliüretan, sertleştirici, macun, zımpara, kompresör, tabanca, kabin, fırın, palet, parça, sevkiyat, irsaliye, fatura, teklif, müşteri ve tedarikçi firma adları geçer. Miktarlar genelde "5 kova", "2 kat", "20 litre" gibi söylenir.`+
     (terms.length?`\nBİLİNEN ÖZEL İSİMLER (doğru yazımları): ${terms.join(', ')}. Ses bunlardan birine benziyorsa bu yazımı kullan.`:'')+(fx?`\nDİKKAT: ${fx}.`:'')+
     `\nYAZIM KURALLARI: Duyduğunu Türkçe ve doğru yazımla yaz. Emin olmadığın özel isimleri ünlü yer, ülke veya marka adlarına (ör. Hong Kong, Amazon, Apple) çevirme; iş bağlamında bunlar çoğunlukla firma veya kişi adıdır, sese en yakın Türkçe yazımı kullan. Sayıları rakamla yaz (20 parça, 450 TL, RAL 7016).`;
 }
@@ -1847,6 +1848,11 @@ function renderAll(){renderToday();renderNotes();renderTasks();renderDiary()}
 setInterval(()=>{const n=new Date();$('clock').textContent=`${GUN[n.getDay()].slice(0,3)} ${pad(n.getHours())}:${pad(n.getMinutes())}`},1000);
 $('sKey').value=cfg.key||'';$('sCode').value=cfg.code||'';$('sModel').innerHTML=`<option>${esc(cfg.model)}</option>`;$('sSound').checked=cfg.sound!==false;$('sumOn').checked=!!cfg.sumOn;$('sumTime').value=cfg.sumTime||'20:00';$('ttsVoice').value=cfg.voice||'Charon';$('ttsBtn').classList.toggle('act',!!cfg.tts);
 {const e=new Date(new Date().setHours(23,59,0,0));if(!tasks.some(t=>!t.done&&t.due&&new Date(t.due)<=e))tF='acik'}
+if(LS.get('na_fix_kova',1)){LS.set('na_fix_kova',0);const re=/\bkoyle\b/gi,f=s=>typeof s==='string'?s.replace(re,'kova'):s;let c=0;
+  for(const x of notes){const a=x.title+x.body;x.title=f(x.title);x.body=f(x.body);if(a!==x.title+x.body)c++}
+  for(const t of tasks){const a=t.title+t.note;t.title=f(t.title);t.note=f(t.note);if(a!==t.title+t.note)c++}
+  for(const e of diary){const a=e.text;e.text=f(e.text);if(a!==e.text)c++}
+  if(c){save();saveDiary();setTimeout(()=>toastMsg(`✔ ${c} kayıtta "koyle" → "kova" düzeltildi`,3000),1200)}}
 checkServer();renderNStat();renderAll();checkReminders();syncAlarms();renderBackup();importNativeSummary();pollVoice();vBusy();startCallWatch();
 if(NATIVE_DIARY){pullResults();pullChunks();let st={};try{st=JSON.parse(Android.diaryState())}catch{}if(st.on){dr.on=true;dr.native=true;diaryUI(true);nativeTick()}}
 if(APP&&cfg.sumOn&&typeof Android.setSummary==='function')sumSettings();
