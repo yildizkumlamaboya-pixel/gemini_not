@@ -137,6 +137,7 @@ nav button.act b{background:linear-gradient(135deg,rgba(37,99,235,.13),rgba(6,18
 .recbar.on{display:flex}
 .recbar i{width:9px;height:9px;border-radius:50%;background:#ef4444;animation:pul 1.4s ease-out infinite}
 .mono{font-family:var(--mono)}
+.dent.call{border-left:3px solid var(--acc2);padding-left:10px}
 .dent.live{opacity:.75}
 .livedot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--bad);margin-right:4px;animation:pul 1.4s ease-out infinite}
 .vrow{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line)}
@@ -318,6 +319,14 @@ details.card[open] summary{margin-bottom:6px}
     <div class="row" style="margin-top:8px">
       <button class="sm" onclick="testNotif()">Test bildirimi</button>
       <label style="margin:0;flex:1;display:flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" id="sSound"> Hatırlatmada ses</label>
+    </div>
+  </div>
+  <div class="card">
+    <h3>Telefon görüşmeleri</h3>
+    <div id="callStat" class="mut"></div>
+    <div class="row" style="margin-top:8px">
+      <button onclick="pickCallFolder()">📁 Kayıt klasörünü seç</button>
+      <button onclick="scanCalls(true)">Şimdi tara</button>
     </div>
   </div>
   <div class="card">
@@ -1354,7 +1363,7 @@ function renderDiary(scroll){
   list=[...list].sort((a,b)=>q?b.ts-a.ts:a.ts-b.ts);
   const mins=Math.round(list.reduce((s,e)=>s+(e.dur||0),0)/60);
   $('dCount').textContent=list.length?(q?`"${q}" geçen ${list.length} kayıt (tüm günler)`:`${list.length} kayıt · ~${mins} dk konuşma`):'';
-  $('dList').innerHTML=list.length?list.map(e=>`<div class="dent"><div class="tm">${q?stampDate(e.ts):hm(e.ts)}${e.dur?` <span class="mut" style="font-weight:500">${Math.round(e.dur)} sn</span>`:''}<span style="flex:1"></span>${e.audio?`<button class="sm" onclick="retryEntry('${e.id}')">↻ Yazıya dök</button>`:''}<button class="sm ghost" onclick="editEntry('${e.id}')" title="Düzenle">✏️</button><button class="sm ghost" onclick="delEntry('${e.id}')">✕</button></div>
+  $('dList').innerHTML=list.length?list.map(e=>`<div class="dent${e.kind==='call'?' call':''}"><div class="tm">${q?stampDate(e.ts):hm(e.ts)}${e.kind==='call'?` <span class="tag">📞 ${esc(e.who||'Telefon')}</span>`:''}${e.dur?` <span class="mut" style="font-weight:500">${Math.round(e.dur)} sn</span>`:''}<span style="flex:1"></span>${e.audio?`<button class="sm" onclick="retryEntry('${e.id}')">↻ Yazıya dök</button>`:''}<button class="sm ghost" onclick="editEntry('${e.id}')" title="Düzenle">✏️</button><button class="sm ghost" onclick="delEntry('${e.id}')">✕</button></div>
     <div class="tx">${dEdit===e.id?`<textarea rows="4">${esc(e.text)}</textarea><div class="row" style="margin-top:6px"><button class="sm" onclick="dEdit=null;renderDiary()">Vazgeç</button><button class="sm pri" onclick="saveEntry('${e.id}')">Kaydet</button></div>`:e.err?`<span class="pend">⚠️ ${esc(e.err)} — ses saklandı, tekrar dene.</span>`:e.text?hl(e.text,q):'<span class="pend"><span class="spin"></span> Yazıya dökülüyor...</span>'}</div></div>`).join('')
     :(live?'':`<div class="empty">${q?'Eşleşen kayıt yok':'Bu gün için kayıt yok'}</div>`);
   if(live){
@@ -1365,7 +1374,7 @@ function renderDiary(scroll){
 }
 function diaryText(days){
   const from=days?new Date(new Date().setHours(0,0,0,0)-(days-1)*864e5).getTime():0;
-  let s=diary.filter(e=>e.ts>=from&&e.text).sort((a,b)=>a.ts-b.ts).map(e=>`[${stampDate(e.ts)}] ${e.text}`).join('\n');
+  let s=diary.filter(e=>e.ts>=from&&e.text).sort((a,b)=>a.ts-b.ts).map(e=>`[${stampDate(e.ts)}] ${e.kind==='call'?`(📞 ${e.who||'?'} ile telefon görüşmesi) `:''}${e.text}`).join('\n');
   if(s.length>300000)s=s.slice(-300000);
   return s;
 }
@@ -1699,6 +1708,87 @@ let dEdit=null;
 function editEntry(id){dEdit=id;renderDiary();const t=$('dList').querySelector('textarea');if(t){t.focus();t.setSelectionRange(t.value.length,t.value.length)}}
 function saveEntry(id){const e=diary.find(x=>x.id===id),t=$('dList').querySelector('textarea');if(e&&t){learnFrom(e.text,t.value);e.text=t.value.trim();e.edited=true;saveDiary()}dEdit=null;renderDiary()}
 
+
+// ================= TELEFON GÖRÜŞMELERİ =================
+// Samsung'un kendi kaydettiği görüşme dosyalarını alır, bölerek yazıya döker ve günlüğe ekler
+const HAS_CALLS=()=>APP&&typeof Android.pickCallFolder==='function';
+var callBusy=false,callTimer=null;
+function pickCallFolder(){if(!HAS_CALLS()){toastMsg('Bu özellik uygulamada çalışır');return}Android.pickCallFolder()}
+window.onCallFolderPicked=()=>{
+  LS.set('na_calls_since',confirm('Son 7 günün görüşmeleri de yazıya dökülsün mü?')?Date.now()-7*864e5:Date.now());
+  renderCallStat();scanCalls(true);
+};
+function renderCallStat(){
+  if(!$('callStat'))return;
+  if(!HAS_CALLS()){$('callStat').textContent='Bu özellik uygulamada çalışır.';return}
+  const n=Android.callFolderName(),last=LS.get('na_calls_last',0);
+  $('callStat').innerHTML=n?`📁 <b>${esc(n)}</b> · yeni görüşmeler otomatik yazıya dökülüp Günlük'e eklenir${last?`<br>Son tarama: ${fmt(toLocal(new Date(last)))}`:''}`
+    :'Samsung Telefon → ⋮ → Ayarlar → <b>Aramaları kaydet</b> → otomatik kaydı aç. Sonra kayıt klasörünü (Recordings/Call) seç.';
+}
+function parseCallName(name,mod){
+  const base=name.replace(/\.[^.]+$/,'');
+  const m=base.match(/(\d{2})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})$/);
+  const ts=m?new Date(2000+ +m[1],+m[2]-1,+m[3],+m[4],+m[5],+m[6]).getTime():mod;
+  let who=base.replace(/[_ ]?\d{6}_\d{6}$/,'').replace(/^(arama kayd[ıi]|call recording|kay[ıi]t|ses kayd[ıi])[ _-]*/i,'').replace(/_/g,' ').trim();
+  return {ts:isNaN(ts)?mod:ts,who:who||'Bilinmeyen'};
+}
+async function decode16k(blob){
+  const AC=window.AudioContext||window.webkitAudioContext,ac=new AC();
+  const buf=await ac.decodeAudioData(await blob.arrayBuffer());ac.close();
+  const len=Math.max(1,Math.ceil(buf.duration*16000)),oc=new OfflineAudioContext(1,len,16000),src=oc.createBufferSource();
+  src.buffer=buf;src.connect(oc.destination);src.start();return (await oc.startRendering()).getChannelData(0);
+}
+function wavB64(d){
+  const ab=new ArrayBuffer(44+d.length*2),v=new DataView(ab),w=(o,s)=>{for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i))};
+  w(0,'RIFF');v.setUint32(4,36+d.length*2,true);w(8,'WAVE');w(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);
+  v.setUint32(24,16000,true);v.setUint32(28,32000,true);v.setUint16(32,2,true);v.setUint16(34,16,true);w(36,'data');v.setUint32(40,d.length*2,true);
+  for(let i=0;i<d.length;i++){const s=Math.max(-1,Math.min(1,d[i]));v.setInt16(44+i*2,s<0?s*0x8000:s*0x7fff,true)}
+  const u8=new Uint8Array(ab);let bin='';for(let i=0;i<u8.length;i+=32768)bin+=String.fromCharCode.apply(null,u8.subarray(i,i+32768));return btoa(bin);
+}
+async function transcribeCall(blob,who,onPart){
+  const f=await decode16k(blob),SEG=75*16000,n=Math.ceil(f.length/SEG),out=[];let prev='';
+  for(let k=0;k<n;k++){
+    const seg=f.subarray(k*SEG,Math.min(f.length,(k+1)*SEG));
+    let sq=0;for(let i=0;i<seg.length;i+=8)sq+=seg[i]*seg[i];if(Math.sqrt(sq/(seg.length/8))<0.004)continue;
+    let t=(await gemini(`Bu, bir telefon görüşmesi kaydının ${k+1}/${n}. bölümü. Kelimesi kelimesine Türkçe yazıya dök; özetleme, yorum ekleme.
+Konuşmacıları her satırda "Ben:" (telefonun sahibi) ve "${who}:" (karşı taraf) olarak ayır. Anlaşılmayan yerlere [anlaşılmıyor] yaz. Konuşma yoksa yalnızca BOŞ yaz.${vocabHint()}${prev?`\nÖnceki bölümün sonu (bağlam için, tekrar yazma): "${prev}"`:''}`,{parts:[{inlineData:{mimeType:'audio/wav',data:wavB64(seg)}}]})).trim();
+    t=t.replace(/<\s*\/?\s*(noise|silence|music|inaudible)\s*>/gi,'').trim();
+    if(t&&!/^BOŞ\.?$/i.test(t)){out.push(t);prev=t.slice(-200)}
+    onPart?.(k+1,n);
+  }
+  return {text:out.join('\n'),dur:f.length/16000};
+}
+async function scanCalls(manual){
+  if(!HAS_CALLS()||!Android.callFolderName()){if(manual)toastMsg('Önce kayıt klasörünü seç');renderCallStat();return}
+  if(callBusy)return;callBusy=true;
+  const done=LS.get('na_calls_done',{}),since=LS.get('na_calls_since',Date.now());
+  let files=[];try{files=JSON.parse(Android.listCallFiles(since-60000))}catch{}
+  files=files.filter(f=>!done[f.name+'|'+f.size]).sort((a,b)=>a.mod-b.mod);
+  LS.set('na_calls_last',Date.now());
+  if(!files.length){callBusy=false;renderCallStat();if(manual)toastMsg('Yeni görüşme yok');return}
+  const bz=$('vBusy');let i=0;
+  for(const f of files){
+    i++;const key=f.name+'|'+f.size,meta=parseCallName(f.name,f.mod);
+    bz.classList.remove('hidden');$('vBusyT').textContent=`📞 ${meta.who} görüşmesi yazıya dökülüyor (${i}/${files.length})`;
+    try{
+      const b64=Android.readUriB64(f.uri);if(!b64)throw new Error('Dosya okunamadı');
+      const bin=atob(b64),u8=new Uint8Array(bin.length);for(let j=0;j<bin.length;j++)u8[j]=bin.charCodeAt(j);
+      const r=await transcribeCall(new Blob([u8]),meta.who,(a,b)=>{$('vBusyT').textContent=`📞 ${meta.who} görüşmesi yazıya dökülüyor (${a}/${b})`});
+      if(r.text){diary.push({id:'d'+uid(),ts:meta.ts,dur:Math.round(r.dur),text:r.text,kind:'call',who:meta.who,file:f.name});saveDiary();renderDiary()}
+      done[key]=1;
+    }catch(e){
+      const fails=LS.get('na_calls_fail',{});fails[key]=(fails[key]||0)+1;LS.set('na_calls_fail',fails);
+      if(fails[key]>=2||/decode|okunamad/i.test(e.message||''))done[key]=1;
+      toastMsg(`⚠️ ${esc(meta.who)} görüşmesi işlenemedi: ${esc(e.message||e)}`,5000);
+    }
+    LS.set('na_calls_done',done);
+  }
+  callBusy=false;vBusy();renderCallStat();
+  toastMsg(`✔ ${files.length} görüşme Günlük'e eklendi`,2500);
+}
+function startCallWatch(){if(!HAS_CALLS())return;clearInterval(callTimer);callTimer=setInterval(()=>{if(!document.hidden)scanCalls(false)},180000);setTimeout(()=>scanCalls(false),4000)}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&HAS_CALLS())setTimeout(()=>scanCalls(false),1500)});
+
 // ================= AYARLAR =================
 function saveSettings(){cfg.key=$('sKey').value.trim();cfg.code=$('sCode').value.trim();cfg.model=$('sModel').value;cfg.sound=$('sSound').checked;LS.set('na_cfg',cfg);$('sOut').textContent='✔ Kaydedildi'}
 $('sSound').onchange=()=>{cfg.sound=$('sSound').checked;LS.set('na_cfg',cfg)};
@@ -1731,12 +1821,12 @@ $('toast').onclick=e=>{if(e.target===$('toast'))hideToast()};
 function closeM(id){$(id).classList.remove('on')}
 document.querySelectorAll('.modal').forEach(m=>m.onclick=e=>{if(e.target===m){if(m.id==='mNote')closeNote();else m.classList.remove('on')}});
 $('nav').onclick=e=>{const b=e.target.closest('button');if(!b)return;show(b.dataset.v)};
-function show(v){if(!$('v-'+v))v='bugun';if(v==='ayarlar'){renderBackup();renderVocab()}if(v==='ayarlar')renderPerms();document.querySelectorAll('main>section').forEach(s=>s.classList.toggle('hidden',s.id!=='v-'+v));[...$('nav').children].forEach(b=>b.classList.toggle('act',b.dataset.v===v));window.scrollTo(0,0);if(v==='asistan')renderChat()}
+function show(v){if(!$('v-'+v))v='bugun';if(v==='ayarlar'){renderBackup();renderVocab();renderCallStat()}if(v==='ayarlar')renderPerms();document.querySelectorAll('main>section').forEach(s=>s.classList.toggle('hidden',s.id!=='v-'+v));[...$('nav').children].forEach(b=>b.classList.toggle('act',b.dataset.v===v));window.scrollTo(0,0);if(v==='asistan')renderChat()}
 function renderAll(){renderToday();renderNotes();renderTasks();renderDiary()}
 setInterval(()=>{const n=new Date();$('clock').textContent=`${GUN[n.getDay()].slice(0,3)} ${pad(n.getHours())}:${pad(n.getMinutes())}`},1000);
 $('sKey').value=cfg.key||'';$('sCode').value=cfg.code||'';$('sModel').innerHTML=`<option>${esc(cfg.model)}</option>`;$('sSound').checked=cfg.sound!==false;$('sumOn').checked=!!cfg.sumOn;$('sumTime').value=cfg.sumTime||'20:00';$('ttsVoice').value=cfg.voice||'Charon';$('ttsBtn').classList.toggle('act',!!cfg.tts);
 {const e=new Date(new Date().setHours(23,59,0,0));if(!tasks.some(t=>!t.done&&t.due&&new Date(t.due)<=e))tF='acik'}
-checkServer();renderNStat();renderAll();checkReminders();syncAlarms();renderBackup();importNativeSummary();pollVoice();vBusy();
+checkServer();renderNStat();renderAll();checkReminders();syncAlarms();renderBackup();importNativeSummary();pollVoice();vBusy();startCallWatch();
 if(NATIVE_DIARY){pullChunks();let st={};try{st=JSON.parse(Android.diaryState())}catch{}if(st.on){dr.on=true;dr.native=true;diaryUI(true);nativeTick()}}
 if(APP&&cfg.sumOn&&typeof Android.setSummary==='function')sumSettings();
 renderPerms().then(all=>{if(!all&&!LS.get('na_perm',0))setTimeout(()=>$('mPerm').classList.add('on'),900)});

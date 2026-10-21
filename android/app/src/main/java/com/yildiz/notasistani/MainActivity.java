@@ -48,7 +48,7 @@ public class MainActivity extends Activity {
     static final String URL = "https://yildiz-not-asistani.vercel.app/";
     static final String HOST = "yildiz-not-asistani.vercel.app";
     static final String AUTH = "com.yildiz.notasistani.files";
-    static final int RC_ALL = 1, RC_FILE = 2, RC_WEBPERM = 3, RC_GEO = 4, RC_CAMFILE = 5, RC_TREE = 6;
+    static final int RC_ALL = 1, RC_FILE = 2, RC_WEBPERM = 3, RC_GEO = 4, RC_CAMFILE = 5, RC_TREE = 6, RC_CALLTREE = 7;
 
     static final String MIC = Manifest.permission.RECORD_AUDIO;
     static final String CAM = Manifest.permission.CAMERA;
@@ -267,6 +267,18 @@ public class MainActivity extends Activity {
     @Override
     protected void onActivityResult(int rc, int res, Intent data) {
         super.onActivityResult(rc, res, data);
+        if (rc == RC_CALLTREE) {
+            if (res == RESULT_OK && data != null && data.getData() != null) {
+                Uri u = data.getData();
+                try {
+                    getContentResolver().takePersistableUriPermission(u, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                } catch (Exception ignored) {
+                }
+                prefs.edit().putString("callTree", u.toString()).apply();
+                web.evaluateJavascript("window.onCallFolderPicked&&window.onCallFolderPicked()", null);
+            }
+            return;
+        }
         if (rc == RC_TREE) {
             if (res == RESULT_OK && data != null && data.getData() != null) {
                 Uri u = data.getData();
@@ -530,6 +542,79 @@ public class MainActivity extends Activity {
         }
 
         // --- klasöre otomatik yedek ---
+        // --- telefon görüşmesi kayıtları (Samsung'un kaydettiği dosyalar) ---
+        @JavascriptInterface
+        public void pickCallFolder() {
+            runOnUiThread(() -> {
+                try {
+                    Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+                    i.addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    if (Build.VERSION.SDK_INT >= 26) {
+                        try {
+                            i.putExtra(android.provider.DocumentsContract.EXTRA_INITIAL_URI,
+                                    android.provider.DocumentsContract.buildDocumentUri("com.android.externalstorage.documents", "primary:Recordings/Call"));
+                        } catch (Exception ignored) {
+                        }
+                    }
+                    startActivityForResult(i, RC_CALLTREE);
+                } catch (Exception e) {
+                    Toast.makeText(MainActivity.this, "Klasör seçici açılamadı", Toast.LENGTH_SHORT).show();
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public String callFolderName() {
+            String t = prefs.getString("callTree", null);
+            if (t == null) return "";
+            DocumentFile d = DocumentFile.fromTreeUri(MainActivity.this, Uri.parse(t));
+            return d == null || !d.canRead() ? "" : String.valueOf(d.getName());
+        }
+
+        @JavascriptInterface
+        public String listCallFiles(double since) {
+            org.json.JSONArray a = new org.json.JSONArray();
+            try {
+                String t = prefs.getString("callTree", null);
+                if (t == null) return "[]";
+                DocumentFile root = DocumentFile.fromTreeUri(MainActivity.this, Uri.parse(t));
+                if (root == null) return "[]";
+                java.util.List<DocumentFile> all = new ArrayList<>();
+                for (DocumentFile f : root.listFiles()) {
+                    if (f.isDirectory()) java.util.Collections.addAll(all, f.listFiles());
+                    else all.add(f);
+                }
+                for (DocumentFile f : all) {
+                    String n = String.valueOf(f.getName());
+                    if (f.isFile() && n.toLowerCase().matches(".*\\.(m4a|aac|mp3|wav|ogg|opus|3gp|amr|webm)$") && f.lastModified() > since)
+                        a.put(new JSONObject().put("name", n).put("uri", f.getUri().toString()).put("mod", f.lastModified()).put("size", f.length()));
+                }
+            } catch (Exception ignored) {
+            }
+            return a.toString();
+        }
+
+        @JavascriptInterface
+        public String readUriB64(String uri) {
+            try {
+                if (uri == null || !uri.startsWith("content://")) return null;
+                try (InputStream is = getContentResolver().openInputStream(Uri.parse(uri))) {
+                    ByteArrayOutputStream bo = new ByteArrayOutputStream();
+                    byte[] b = new byte[65536];
+                    int n;
+                    long tot = 0;
+                    while ((n = is.read(b)) > 0) {
+                        bo.write(b, 0, n);
+                        tot += n;
+                        if (tot > 60L * 1024 * 1024) return null;
+                    }
+                    return Base64.encodeToString(bo.toByteArray(), Base64.NO_WRAP);
+                }
+            } catch (Exception e) {
+                return null;
+            }
+        }
+
         @JavascriptInterface
         public void pickFolder() {
             runOnUiThread(() -> {
