@@ -1,0 +1,12 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="horizontal" android:gravity="center"
+    android:background="@drawable/bg_widget" android:padding="8dp">
+    <ImageView android:id="@+id/wMic" android:layout_width="56dp" android:layout_height="56dp"
+        android:background="@drawable/bg_mic" android:src="@drawable/ic_mic" android:padding="14dp"
+        android:contentDescription="Sesli not" />
+    <View android:layout_width="14dp" android:layout_height="1dp" />
+    <ImageView android:id="@+id/wCam" android:layout_width="56dp" android:layout_height="56dp"
+        android:background="@drawable/bg_cam" android:src="@drawable/ic_cam" android:padding="14dp"
+        android:contentDescription="Fotoğraflı not" />
+</LinearLayout>

@@ -82,6 +82,8 @@ public class MainActivity extends Activity {
         super.onCreate(state);
         prefs = getSharedPreferences("app", MODE_PRIVATE);
         Notif.channel(this);
+        pendingAct = getIntent() == null ? null : getIntent().getStringExtra("act");
+        if (prefs.getBoolean("bubble", false)) BubbleService.start(this);
 
         web = new WebView(this);
         setContentView(web);
@@ -415,9 +417,24 @@ public class MainActivity extends Activity {
         web.saveState(out);
     }
 
+    // Widget / kayan düğmeden gelen kısayol: "voice" (sesli not) veya "camera" (fotoğraflı not)
+    volatile String pendingAct;
+
+    @Override
+    protected void onNewIntent(Intent i) {
+        super.onNewIntent(i);
+        setIntent(i);
+        String a = i == null ? null : i.getStringExtra("act");
+        if (a != null && web != null) {
+            pendingAct = a;
+            web.evaluateJavascript("window.nativeAct&&window.nativeAct()", null);
+        }
+    }
+
     @Override
     protected void onPause() {
         visible = false;
+        BubbleService.appVisible(false);
         super.onPause();
     }
 
@@ -425,6 +442,12 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         visible = true;
+        BubbleService.appVisible(true);
+        if (prefs.getBoolean("bubbleWant", false) && BubbleService.canDraw(this)) { // izin ekranından dönüldü
+            prefs.edit().putBoolean("bubbleWant", false).putBoolean("bubble", true).apply();
+            BubbleService.start(this);
+            if (web != null) web.evaluateJavascript("window.onBubble&&window.onBubble()", null);
+        }
         if (web != null) sendPerms();
     }
 
@@ -639,6 +662,58 @@ public class MainActivity extends Activity {
 
     // ---------- JS köprüsü ----------
     class Bridge {
+        @JavascriptInterface
+        public String takeAct() {
+            String a = pendingAct;
+            pendingAct = null;
+            return a;
+        }
+
+        @JavascriptInterface
+        public String bubbleState() {
+            try {
+                return new JSONObject().put("on", prefs.getBoolean("bubble", false)).put("perm", BubbleService.canDraw(MainActivity.this)).toString();
+            } catch (Exception e) {
+                return "{}";
+            }
+        }
+
+        @JavascriptInterface
+        public void bubbleSet(boolean on) {
+            if (!on) {
+                prefs.edit().putBoolean("bubble", false).putBoolean("bubbleWant", false).apply();
+                BubbleService.stop(MainActivity.this);
+                return;
+            }
+            if (BubbleService.canDraw(MainActivity.this)) {
+                prefs.edit().putBoolean("bubble", true).apply();
+                BubbleService.start(MainActivity.this);
+                return;
+            }
+            prefs.edit().putBoolean("bubbleWant", true).apply();
+            runOnUiThread(() -> {
+                Toast.makeText(MainActivity.this, "Listede Not Asistanı'nı bulup \"Diğer uygulamaların üzerinde göster\" iznini aç", Toast.LENGTH_LONG).show();
+                try {
+                    startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName())));
+                } catch (Exception e) {
+                    openAppSettings();
+                }
+            });
+        }
+
+        /** Ana ekrana widget eklemeyi ister (Android 8+, başlatıcı destekliyorsa). */
+        @JavascriptInterface
+        public boolean widgetPin() {
+            if (Build.VERSION.SDK_INT < 26) return false;
+            try {
+                android.appwidget.AppWidgetManager m = getSystemService(android.appwidget.AppWidgetManager.class);
+                if (m == null || !m.isRequestPinAppWidgetSupported()) return false;
+                return m.requestPinAppWidget(new android.content.ComponentName(MainActivity.this, QuickWidget.class), null, null);
+            } catch (Exception e) {
+                return false;
+            }
+        }
+
         @JavascriptInterface
         public void drivePick() {
             runOnUiThread(() -> {

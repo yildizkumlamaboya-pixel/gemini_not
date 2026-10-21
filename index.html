@@ -349,6 +349,12 @@ details.card[open] summary{margin-bottom:6px}
       <label style="margin:0;flex:1;display:flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" id="sSound"> Hatırlatmada ses</label>
     </div>
   </div>
+  <div class="card hidden" id="scCard">
+    <h3>Ekran kısayolları</h3>
+    <label style="display:flex;align-items:center;gap:8px;font-weight:600"><input type="checkbox" id="bubOn" onchange="Android.bubbleSet(this.checked);setTimeout(renderShortcuts,600)"> Kayan mikrofon ve kamera düğmeleri</label>
+    <div class="mut" id="bubStat" style="margin-top:4px">Uygulama kapalıyken de her ekranda durur. Sürükleyip istediğin kenara koy; uzun basınca kapanır.</div>
+    <div class="row" style="margin-top:10px"><button onclick="pinWidget()">➕ Ana ekrana widget ekle</button></div>
+  </div>
   <div class="card">
     <h3>Telefon görüşmeleri</h3>
     <div id="callStat" class="mut"></div>
@@ -1899,7 +1905,20 @@ window.onDriveRestore=async ok=>{
   saveTpls();saveDiary();save();renderAll();renderDrive();toastMsg(`✔ Drive'dan yüklendi${n?` · ${n} fotoğraf`:''}`);
 };
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&drvDirty&&Date.now()-LS.get('na_drv_last',0)>2*60e3){clearTimeout(drvTimer);drvTimer=null;driveBackup(false)}});
+// ---- Kısayollar: widget ve kayan düğmelerden gelen "sesli not" / "kamera" ----
+window.nativeAct=()=>{let a=null;try{a=Android.takeAct()}catch{}if(!a)return;
+  document.querySelectorAll('.modal.on').forEach(m=>{if(m.id!=='mRec')m.classList.remove('on')});
+  if(a==='voice'){show('bugun');setTimeout(()=>voice('quick'),250)}else if(a==='camera'){setTimeout(photoNote,250)}};
+function renderShortcuts(){
+  if(!APP||typeof Android.bubbleState!=='function')return;$('scCard').classList.remove('hidden');
+  let st={};try{st=JSON.parse(Android.bubbleState())}catch{}
+  $('bubOn').checked=!!st.on;
+  $('bubStat').innerHTML=st.on?'✅ Açık · her ekranda duruyor. Sürükleyip kenara koy; uzun basınca kapanır.':'Uygulama kapalıyken de her ekranda durur. Açınca "Diğer uygulamaların üzerinde göster" izni istenir.';
+}
+window.onBubble=()=>{renderShortcuts();toastMsg('✅ Kayan düğmeler açıldı')};
+function pinWidget(){if(!Android.widgetPin())toastMsg('Ana ekranda boş bir yere basılı tut → Widget\'lar → Not Asistanı',5000)}
 function renderBackup(){
+  renderShortcuts();
   renderDrive();
   const app=HAS_FOLDER(),name=app?Android.folderName():'',last=LS.get('na_bk_last',0);
   $('bkStat').innerHTML=!app?'Klasöre otomatik yedek uygulamada çalışır.':name?`📁 <b>${esc(name)}</b> · her değişiklikte otomatik yedeklenir${last?`<br>Son yedek: ${fmt(toLocal(new Date(last)))}`:''}`:'Klasör seçersen her not, görev ve kayıttan sonra oraya otomatik yedek alınır.';
@@ -2135,7 +2154,7 @@ if(LS.get('na_fix_kova',1)){LS.set('na_fix_kova',0);const re=/\bkoyle\b/gi,f=s=>
   for(const t of tasks){const a=t.title+t.note;t.title=f(t.title);t.note=f(t.note);if(a!==t.title+t.note)c++}
   for(const e of diary){const a=e.text;e.text=f(e.text);if(a!==e.text)c++}
   if(c){save();saveDiary();setTimeout(()=>toastMsg(`✔ ${c} kayıtta "koyle" → "kova" düzeltildi`,3000),1200)}}
-checkServer();renderNStat();renderAll();checkReminders();syncAlarms();renderBackup();importNativeSummary();pollVoice();vBusy();startCallWatch();setTimeout(()=>retryAll(false),6000);setTimeout(processAIQueue,3000);renderSugg();setTimeout(()=>suggScan(false),8000);
+checkServer();renderNStat();renderAll();checkReminders();syncAlarms();renderBackup();importNativeSummary();pollVoice();vBusy();startCallWatch();setTimeout(()=>retryAll(false),6000);setTimeout(processAIQueue,3000);renderSugg();if(APP)setTimeout(window.nativeAct,700);setTimeout(()=>suggScan(false),8000);
 if(NATIVE_DIARY){pullResults();pullChunks();let st={};try{st=JSON.parse(Android.diaryState())}catch{}if(st.on){dr.on=true;dr.native=true;diaryUI(true);nativeTick()}}
 if(APP&&cfg.sumOn&&typeof Android.setSummary==='function')sumSettings();
 renderPerms().then(all=>{if(!all&&!LS.get('na_perm',0))setTimeout(()=>$('mPerm').classList.add('on'),900)});
