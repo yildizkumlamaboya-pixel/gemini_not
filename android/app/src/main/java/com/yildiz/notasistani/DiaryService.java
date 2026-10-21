@@ -20,7 +20,11 @@ import java.io.File;
 public class DiaryService extends Service {
     static final String STOP = "com.yildiz.notasistani.DIARY_STOP";
     static final String CH = "gunluk";
-    static final long CHUNK = 45000;
+    // Konuşmadaki duraklamada kes: en az 4 sn, en çok 25 sn; 1 sn sessizlik = cümle sonu
+    static final long MIN_CHUNK = 4000, MAX_CHUNK = 25000, SILENCE = 1000;
+    static final int VOICE_AMP = 1500;
+    long lastVoice = 0;
+    boolean hadVoice = false;
     static volatile boolean running = false;
     static volatile long since = 0;
     static volatile int level = 0;
@@ -32,24 +36,28 @@ public class DiaryService extends Service {
     Handler h;
     PowerManager.WakeLock wl;
 
-    final Runnable rotate = new Runnable() {
-        @Override
-        public void run() {
-            finishChunk();
-            if (running) {
-                startChunk();
-                h.postDelayed(this, CHUNK);
-            }
-        }
-    };
     final Runnable poll = new Runnable() {
         @Override
         public void run() {
             try {
-                if (rec != null) level = Math.min(100, rec.getMaxAmplitude() / 200);
+                if (rec != null) {
+                    int amp = rec.getMaxAmplitude();
+                    level = Math.min(100, amp / 200);
+                    long now = System.currentTimeMillis(), len = now - curStart;
+                    if (amp > VOICE_AMP) {
+                        lastVoice = now;
+                        hadVoice = true;
+                    }
+                    boolean pause = hadVoice && len >= MIN_CHUNK && now - lastVoice >= SILENCE;
+                    if (pause || len >= MAX_CHUNK) {
+                        finishChunk(hadVoice); // hiç konuşma yoksa parçayı atla
+                        hadVoice = false;
+                        if (running && !startChunk()) running = false;
+                    }
+                }
             } catch (Exception ignored) {
             }
-            if (running) h.postDelayed(this, 200);
+            if (running) h.postDelayed(this, 100);
         }
     };
 
@@ -83,7 +91,6 @@ public class DiaryService extends Service {
                 stopSelf();
                 return START_NOT_STICKY;
             }
-            h.postDelayed(rotate, CHUNK);
             h.post(poll);
         }
         return START_NOT_STICKY;
@@ -113,6 +120,8 @@ public class DiaryService extends Service {
     boolean startChunk() {
         try {
             curStart = System.currentTimeMillis();
+            lastVoice = 0;
+            hadVoice = false;
             cur = new File(dir(this), "c_" + curStart + ".part");
             rec = new MediaRecorder();
             rec.setAudioSource(MediaRecorder.AudioSource.MIC);
@@ -137,6 +146,10 @@ public class DiaryService extends Service {
     }
 
     void finishChunk() {
+        finishChunk(true);
+    }
+
+    void finishChunk(boolean keep) {
         if (rec == null) return;
         boolean ok = true;
         try {
@@ -151,7 +164,7 @@ public class DiaryService extends Service {
         rec = null;
         if (cur != null) {
             long dur = System.currentTimeMillis() - curStart;
-            if (ok && cur.length() > 0) cur.renameTo(new File(cur.getParentFile(), "c_" + curStart + "_" + dur + ".m4a"));
+            if (keep && ok && cur.length() > 0) cur.renameTo(new File(cur.getParentFile(), "c_" + curStart + "_" + dur + ".m4a"));
             else cur.delete();
             cur = null;
         }

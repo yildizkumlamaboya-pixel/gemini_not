@@ -137,6 +137,8 @@ nav button.act b{background:linear-gradient(135deg,rgba(37,99,235,.13),rgba(6,18
 .recbar.on{display:flex}
 .recbar i{width:9px;height:9px;border-radius:50%;background:#ef4444;animation:pul 1.4s ease-out infinite}
 .mono{font-family:var(--mono)}
+.dent.live{opacity:.75}
+.livedot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--bad);margin-right:4px;animation:pul 1.4s ease-out infinite}
 .vrow{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line)}
 .vrow:last-child{border-bottom:0}
 .vrow .mut{font-size:12px}
@@ -1235,7 +1237,7 @@ let diary=LS.get('na_diary',[]); // [{id,ts,dur,text,audio?,err?}]
 const saveDiary=()=>{LS.set('na_diary',diary);afterChange()};
 const dayKey=ts=>{const d=new Date(ts);return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`};
 const hm=ts=>{const d=new Date(ts);return `${pad(d.getHours())}:${pad(d.getMinutes())}`};
-const CHUNK=45; // saniye
+const CHUNK=20; // saniye (tarayıcıda; uygulamada sessizlikte kesilir)
 let dr={on:false,stream:null,mr:null,t0:0,tick:null,timer:null,queue:[],busy:false,ac:null,an:null,wake:null,last:''};
 $('dDate').value=dayKey(Date.now());
 $('dDate').onchange=renderDiary;$('dSearch').oninput=renderDiary;
@@ -1271,7 +1273,7 @@ function nativeTick(){
     let st={};try{st=JSON.parse(Android.diaryState())}catch{}
     if(!st.on){clearInterval(dr.tick);if(dr.on){dr.on=false;diaryUI(false);if(st.error)toastMsg('⚠️ '+st.error)}pullChunks();return}
     dr.on=true;const t=fmtDur(Math.floor((Date.now()-st.since)/1000));$('dTime').textContent=t;$('rbTime').textContent=t;$('dLvl').style.width=(st.level||0)+'%';
-    if(++n%25===0)pullChunks();
+    if(++n%5===0)pullChunks();
   },200);
 }
 function pullChunks(){
@@ -1280,12 +1282,13 @@ function pullChunks(){
   dr.seen=dr.seen||new Set();
   for(const name of list){
     if(dr.seen.has(name))continue;dr.seen.add(name);
+    if(diary.some(e=>e.chunk===name)){Android.deleteChunk(name);continue} // zaten yazıya dökülmüş
     const m=name.match(/^c_(\d+)_(\d+)\.m4a$/);if(!m)continue;
     const b64=Android.readChunk(name);if(!b64){Android.deleteChunk(name);continue}
     const bin=atob(b64),u8=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u8[i]=bin.charCodeAt(i);
     dr.queue.push({blob:new Blob([u8],{type:'audio/mp4'}),start:+m[1],native:name});
   }
-  diaryStatus();processQueue();
+  diaryStatus();processQueue();renderDiary();
 }
 function nextChunk(){
   if(!dr.on)return;
@@ -1307,35 +1310,32 @@ async function wakeOn(){if(APP){try{Android.keepScreenOn(true)}catch{}dr.wake=1;
 function wakeOff(){if(APP){try{Android.keepScreenOn(false)}catch{}dr.wake=null;return}try{dr.wake?.release()}catch{}dr.wake=null}
 document.addEventListener('visibilitychange',()=>{if(document.hidden)return;if(dr.on&&!dr.native&&!dr.wake)wakeOn();if(NATIVE_DIARY){pullChunks();let st={};try{st=JSON.parse(Android.diaryState())}catch{}if(st.on&&!dr.on){dr.on=true;dr.native=true;diaryUI(true);nativeTick()}}});
 function diaryStatus(){
-  const q=dr.queue.length+(dr.busy?1:0);
+  const q=dr.queue.length+(dr.inflight?.length||0);
   $('dStat').textContent=dr.on?`Kaydediliyor${dr.native?' · ekran kapansa da sürer':''}${q?` · ${q} parça işleniyor`:''}`
     :q?`${q} parça yazıya dökülüyor...`:'Kaydı başlatmak için dokun';
 }
 function enqueue(blob,start){dr.queue.push({blob,start});diaryStatus();processQueue()}
+dr.inflight=[];
 async function processQueue(){
-  if(dr.busy)return;dr.busy=true;
-  while(dr.queue.length){
-    const {blob,start,native}=dr.queue.shift();diaryStatus();
-    const done=()=>{if(native)try{Android.deleteChunk(native)}catch{}};
-    let w;try{w=await toWav16k(blob,true)}catch{done();continue}
-    if(w.rms<0.006){done();continue} // sessiz parça
-    const e={id:'d'+uid(),ts:start,dur:Math.round(w.dur),text:''};
-    try{e.text=await transcribe(w.data)}
-    catch(err){
-      const aid='a'+uid();try{await DB.put(aid,blob);e.audio=aid}catch{}
-      e.err=err.message;e.text='';
-    }
-    if(e.text||e.err){diary.push(e);saveDiary();renderDiary()}
-    done();
-  }
-  dr.busy=false;diaryStatus();
+  while(dr.queue.length&&dr.inflight.length<2){const job=dr.queue.shift();dr.inflight.push(job);diaryStatus();renderDiary();processOne(job).finally(()=>{dr.inflight=dr.inflight.filter(j=>j!==job);diaryStatus();renderDiary();processQueue()})}
+}
+async function processOne({blob,start,native}){
+  const done=()=>{if(native)try{Android.deleteChunk(native)}catch{}};
+  let w;try{w=await toWav16k(blob,true)}catch{done();return}
+  if(w.rms<0.006){done();return} // sessiz parça
+  const e={id:'d'+uid(),ts:start,dur:Math.round(w.dur),text:'',chunk:native||''};
+  try{e.text=await transcribe(w.data)}
+  catch(err){const aid='a'+uid();try{await DB.put(aid,blob);e.audio=aid}catch{}e.err=err.message;e.text=''}
+  if(e.text||e.err){if(!(native&&diary.some(x=>x.chunk===native))){diary.push(e);saveDiary();renderDiary(true)}}
+  done();
 }
 async function transcribe(b64){
   const prev=dr.last?`\nBir önceki parçanın sonu (bağlam için, tekrar yazma): "${dr.last}"`:'';
   let t=(await gemini(`Bu ses kaydını Türkçe olarak KELİMESİ KELİMESİNE yazıya dök. Özetleme, yorum ekleme, düzeltme yapma.
 Birden fazla kişi konuşuyorsa her konuşmayı yeni satırda "Konuşmacı 1:", "Konuşmacı 2:" diye ayır; konuşmada isim geçiyorsa o ismi kullan.
-Anlaşılmayan yerlere [anlaşılmıyor] yaz. Hiç konuşma yoksa (sadece gürültü/sessizlik) yalnızca BOŞ yaz.${vocabHint()}${prev}`,{parts:[{inlineData:{mimeType:'audio/wav',data:b64}}]})).trim();
-  if(/^BOŞ\.?$/i.test(t)||!t)return '';
+Anlaşılmayan yerlere [anlaşılmıyor] yaz. Hiç konuşma yoksa (sadece gürültü, makine sesi, sessizlik) yalnızca BOŞ yaz; <noise> gibi etiketler kullanma.${vocabHint()}${prev}`,{parts:[{inlineData:{mimeType:'audio/wav',data:b64}}]})).trim();
+  t=t.replace(/<\s*\/?\s*(noise|silence|music|inaudible)\s*>/gi,'').replace(/\[(gürültü|sessizlik|müzik|noise)\]/gi,'').trim();
+  if(/^BOŞ\.?$/i.test(t)||!t||/^[\s.…,-]*$/.test(t))return '';
   dr.last=t.slice(-200);return t;
 }
 async function retryEntry(id){
@@ -1347,15 +1347,21 @@ async function retryEntry(id){
 }
 function delEntry(id){if(!confirm('Bu kayıt silinsin mi?'))return;const e=diary.find(x=>x.id===id);if(e?.audio)DB.del(e.audio).catch(()=>{});diary=diary.filter(x=>x.id!==id);saveDiary();renderDiary()}
 function hl(text,q){const s=esc(text);if(!q)return s;const re=new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi');return s.replace(re,m=>`<mark>${m}</mark>`)}
-function renderDiary(){
+function renderDiary(scroll){
   const q=$('dSearch').value.trim(),ql=q.toLocaleLowerCase('tr'),day=$('dDate').value;
+  const live=!q&&day===dayKey(Date.now())&&(dr.on||dr.inflight?.length||dr.queue?.length);
   let list=q?diary.filter(e=>e.text.toLocaleLowerCase('tr').includes(ql)):diary.filter(e=>dayKey(e.ts)===day);
   list=[...list].sort((a,b)=>q?b.ts-a.ts:a.ts-b.ts);
   const mins=Math.round(list.reduce((s,e)=>s+(e.dur||0),0)/60);
   $('dCount').textContent=list.length?(q?`"${q}" geçen ${list.length} kayıt (tüm günler)`:`${list.length} kayıt · ~${mins} dk konuşma`):'';
   $('dList').innerHTML=list.length?list.map(e=>`<div class="dent"><div class="tm">${q?stampDate(e.ts):hm(e.ts)}${e.dur?` <span class="mut" style="font-weight:500">${Math.round(e.dur)} sn</span>`:''}<span style="flex:1"></span>${e.audio?`<button class="sm" onclick="retryEntry('${e.id}')">↻ Yazıya dök</button>`:''}<button class="sm ghost" onclick="editEntry('${e.id}')" title="Düzenle">✏️</button><button class="sm ghost" onclick="delEntry('${e.id}')">✕</button></div>
     <div class="tx">${dEdit===e.id?`<textarea rows="4">${esc(e.text)}</textarea><div class="row" style="margin-top:6px"><button class="sm" onclick="dEdit=null;renderDiary()">Vazgeç</button><button class="sm pri" onclick="saveEntry('${e.id}')">Kaydet</button></div>`:e.err?`<span class="pend">⚠️ ${esc(e.err)} — ses saklandı, tekrar dene.</span>`:e.text?hl(e.text,q):'<span class="pend"><span class="spin"></span> Yazıya dökülüyor...</span>'}</div></div>`).join('')
-    :`<div class="empty">${q?'Eşleşen kayıt yok':'Bu gün için kayıt yok'}</div>`;
+    :(live?'':`<div class="empty">${q?'Eşleşen kayıt yok':'Bu gün için kayıt yok'}</div>`);
+  if(live){
+    const pend=[...(dr.inflight||[]),...(dr.queue||[])].sort((a,b)=>a.start-b.start).map(j=>`<div class="dent live"><div class="tm">${hm(j.start)}</div><div class="tx"><span class="pend"><span class="spin"></span> Yazıya dökülüyor...</span></div></div>`).join('');
+    $('dList').insertAdjacentHTML('beforeend',pend+(dr.on?`<div class="dent live"><div class="tm">şimdi</div><div class="tx"><span class="pend"><span class="livedot"></span> Dinleniyor...</span></div></div>`:''));
+  }
+  if(scroll&&$('v-gunluk')&&!$('v-gunluk').classList.contains('hidden')){const last=$('dList').lastElementChild;if(last&&window.innerHeight+window.scrollY>=document.body.scrollHeight-260)last.scrollIntoView({block:'end',behavior:'smooth'})}
 }
 function diaryText(days){
   const from=days?new Date(new Date().setHours(0,0,0,0)-(days-1)*864e5).getTime():0;
