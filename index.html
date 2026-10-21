@@ -1486,7 +1486,7 @@ function diaryStop(){
 }
 async function wakeOn(){if(APP){try{Android.keepScreenOn(true)}catch{}dr.wake=1;return}try{dr.wake=await navigator.wakeLock?.request('screen')}catch{}}
 function wakeOff(){if(APP){try{Android.keepScreenOn(false)}catch{}dr.wake=null;return}try{dr.wake?.release()}catch{}dr.wake=null}
-document.addEventListener('visibilitychange',()=>{if(document.hidden)return;setTimeout(()=>retryAll(false),3000);setTimeout(processAIQueue,1500);if(dr.on&&!dr.native&&!dr.wake)wakeOn();if(NATIVE_DIARY){pullResults();pullChunks();let st={};try{st=JSON.parse(Android.diaryState())}catch{}if(st.on&&!dr.on){dr.on=true;dr.native=true;diaryUI(true);nativeTick()}}});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)return;importBubble();setTimeout(()=>retryAll(false),3000);setTimeout(processAIQueue,1500);if(dr.on&&!dr.native&&!dr.wake)wakeOn();if(NATIVE_DIARY){pullResults();pullChunks();let st={};try{st=JSON.parse(Android.diaryState())}catch{}if(st.on&&!dr.on){dr.on=true;dr.native=true;diaryUI(true);nativeTick()}}});
 function diaryStatus(){
   const q=dr.queue.length+(dr.inflight?.length||0)+(dr.npending||0),w=dr.pauseUntil>Date.now()?' · kota için kısa bekleme':'';
   $('dStat').textContent=dr.on?`Kaydediliyor${dr.native?' · ekran kapansa da sürer':''}${dr.sttMode?' · Google tanıma':''}${q?` · ${q} parça işleniyor`:''}${dr.nrefine?' · ✓ iyileştiriliyor':''}${w}`
@@ -1909,11 +1909,30 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden&&drvDirty&&
 window.nativeAct=()=>{let a=null;try{a=Android.takeAct()}catch{}if(!a)return;
   document.querySelectorAll('.modal.on').forEach(m=>{if(m.id!=='mRec')m.classList.remove('on')});
   if(a==='voice'){show('bugun');setTimeout(()=>voice('quick'),250)}else if(a==='camera'){setTimeout(photoNote,250)}};
+// Kayan mikrofonla (uygulama açılmadan) alınan notları listelere ekle
+function importBubble(){
+  if(!APP||typeof Android.bubbleResults!=='function')return;
+  try{Android.setQuickPrompt(quickSys().replace(nowCtx(),'{{NOW}}'),cfg.code||'',cfg.model||'gemini-flash-latest')}catch{}
+  let res=[];try{res=JSON.parse(Android.bubbleResults())}catch{}
+  if(!res.length)return;let nt=0,nn=0;
+  for(const r of res.sort((a,b)=>a.ts-b.ts)){
+    if(!notes.some(n=>n.bub===r.ts)&&!tasks.some(t=>t.bub===r.ts)){
+      if(r.pending||(!r.tasks?.length&&!r.notes?.length)){notes.push({id:uid(),title:(r.transcript||'').split(/[.\n]/)[0].slice(0,50)||'Sesli not',body:r.transcript||'',tags:[],pinned:false,created:r.ts,updated:r.ts,src:'manual',via:'voice',aiPending:!!r.pending,bub:r.ts});nn++}
+      else{
+        (r.tasks||[]).forEach(t=>{tasks.push({id:t.id||uid(),title:t.title,note:t.note||'',due:t.due||'',remind:t.remind||'',priority:t.priority||'orta',repeat:t.repeat||'',done:false,notified:false,created:r.ts,src:'ai',via:'voice',bub:r.ts});nt++});
+        (r.notes||[]).forEach(n=>{notes.push({id:uid(),title:n.title,body:n.body||'',tags:n.tags||[],pinned:false,created:r.ts,updated:r.ts,src:'ai',via:'voice',bub:r.ts});nn++});
+      }
+    }
+    try{Android.bubbleAck(r.name)}catch{}
+  }
+  save();renderAll();if(nt||nn)toastMsg(`🎤 Kayan mikrofondan: ${nt} görev, ${nn} not eklendi`);
+  setTimeout(processAIQueue,1500);
+}
 function renderShortcuts(){
   if(!APP||typeof Android.bubbleState!=='function')return;$('scCard').classList.remove('hidden');
   let st={};try{st=JSON.parse(Android.bubbleState())}catch{}
   $('bubOn').checked=!!st.on;
-  $('bubStat').innerHTML=st.on?'✅ Açık · her ekranda duruyor. Sürükleyip kenara koy; uzun basınca kapanır.':'Uygulama kapalıyken de her ekranda durur. Açınca "Diğer uygulamaların üzerinde göster" izni istenir.';
+  $('bubStat').innerHTML=st.on?'✅ Açık · her ekranda duruyor. 🎤\'ye dokun, konuş, ■ ile bitir: uygulama açılmadan not/görev olarak kaydedilir. Sürükleyip kenara koy; uzun basınca kapanır.':'Uygulama kapalıyken de her ekranda durur. Açınca "Diğer uygulamaların üzerinde göster" izni istenir.';
 }
 window.onBubble=()=>{renderShortcuts();toastMsg('✅ Kayan düğmeler açıldı')};
 function pinWidget(){if(!Android.widgetPin())toastMsg('Ana ekranda boş bir yere basılı tut → Widget\'lar → Not Asistanı',5000)}
@@ -2154,7 +2173,7 @@ if(LS.get('na_fix_kova',1)){LS.set('na_fix_kova',0);const re=/\bkoyle\b/gi,f=s=>
   for(const t of tasks){const a=t.title+t.note;t.title=f(t.title);t.note=f(t.note);if(a!==t.title+t.note)c++}
   for(const e of diary){const a=e.text;e.text=f(e.text);if(a!==e.text)c++}
   if(c){save();saveDiary();setTimeout(()=>toastMsg(`✔ ${c} kayıtta "koyle" → "kova" düzeltildi`,3000),1200)}}
-checkServer();renderNStat();renderAll();checkReminders();syncAlarms();renderBackup();importNativeSummary();pollVoice();vBusy();startCallWatch();setTimeout(()=>retryAll(false),6000);setTimeout(processAIQueue,3000);renderSugg();if(APP)setTimeout(window.nativeAct,700);setTimeout(()=>suggScan(false),8000);
+checkServer();renderNStat();renderAll();checkReminders();syncAlarms();renderBackup();importNativeSummary();pollVoice();vBusy();startCallWatch();setTimeout(()=>retryAll(false),6000);setTimeout(processAIQueue,3000);renderSugg();if(APP){setTimeout(window.nativeAct,700);setTimeout(importBubble,400)}setTimeout(()=>suggScan(false),8000);
 if(NATIVE_DIARY){pullResults();pullChunks();let st={};try{st=JSON.parse(Android.diaryState())}catch{}if(st.on){dr.on=true;dr.native=true;diaryUI(true);nativeTick()}}
 if(APP&&cfg.sumOn&&typeof Android.setSummary==='function')sumSettings();
 renderPerms().then(all=>{if(!all&&!LS.get('na_perm',0))setTimeout(()=>$('mPerm').classList.add('on'),900)});

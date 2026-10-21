@@ -40,6 +40,7 @@ import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.File;
@@ -443,6 +444,7 @@ public class MainActivity extends Activity {
         super.onResume();
         visible = true;
         BubbleService.appVisible(true);
+        BubbleService.upgrade(this);
         if (prefs.getBoolean("bubbleWant", false) && BubbleService.canDraw(this)) { // izin ekranından dönüldü
             prefs.edit().putBoolean("bubbleWant", false).putBoolean("bubble", true).apply();
             BubbleService.start(this);
@@ -667,6 +669,35 @@ public class MainActivity extends Activity {
             String a = pendingAct;
             pendingAct = null;
             return a;
+        }
+
+        /** Kayan mikrofonun uygulamayı açmadan notu ayırabilmesi için AI talimatı ({{NOW}} = şu anki zaman). */
+        @JavascriptInterface
+        public void setQuickPrompt(String prompt, String code, String model) {
+            prefs.edit().putString("qPrompt", prompt).putString("qCode", code).putString("qModel", model).apply();
+        }
+
+        @JavascriptInterface
+        public String bubbleResults() {
+            JSONArray a = new JSONArray();
+            File[] fs = new File(getFilesDir(), "bubble").listFiles();
+            if (fs != null) for (File f : fs) {
+                if (!f.getName().matches("\\d+\\.json")) continue;
+                try (InputStream is = new java.io.FileInputStream(f)) {
+                    ByteArrayOutputStream bo = new ByteArrayOutputStream();
+                    byte[] b = new byte[8192];
+                    int n;
+                    while ((n = is.read(b)) > 0) bo.write(b, 0, n);
+                    a.put(new JSONObject(bo.toString("UTF-8")).put("name", f.getName()));
+                } catch (Exception ignored) {
+                }
+            }
+            return a.toString();
+        }
+
+        @JavascriptInterface
+        public void bubbleAck(String name) {
+            if (name != null && name.matches("\\d+\\.json")) new File(new File(getFilesDir(), "bubble"), name).delete();
         }
 
         @JavascriptInterface
