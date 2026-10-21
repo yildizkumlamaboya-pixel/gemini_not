@@ -1260,7 +1260,7 @@ function diaryUI(on){
 }
 async function diaryStart(){
   if(NATIVE_DIARY){
-    if(!Android.diaryStart()){toastMsg('🎤 Mikrofon izni gerekli');return}
+    if(!Android.diaryStart(diaryPrompt(),cfg.code||'',cfg.model||'gemini-flash-latest')){toastMsg('🎤 Mikrofon izni gerekli');return}
     dr.on=true;dr.native=true;dr.t0=Date.now();diaryUI(true);nativeTick();return;
   }
   if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder){toastMsg('Bu cihaz ses kaydını desteklemiyor');return}
@@ -1280,10 +1280,27 @@ function nativeTick(){
   clearInterval(dr.tick);let n=0;
   dr.tick=setInterval(()=>{
     let st={};try{st=JSON.parse(Android.diaryState())}catch{}
-    if(!st.on){clearInterval(dr.tick);if(dr.on){dr.on=false;diaryUI(false);if(st.error)toastMsg('⚠️ '+st.error)}pullChunks();return}
+    if(!st.on){if(dr.on){dr.on=false;diaryUI(false);if(st.error)toastMsg('⚠️ '+st.error)}pullResults(st);pullChunks();if(!st.pending)clearInterval(dr.tick);return}
     dr.on=true;const t=fmtDur(Math.floor((Date.now()-st.since)/1000));$('dTime').textContent=t;$('rbTime').textContent=t;$('dLvl').style.width=(st.level||0)+'%';
-    if(++n%5===0)pullChunks();
+    if(++n%5===0){pullResults(st);pullChunks()}
   },200);
+}
+// Servisin arka planda yazıya döktüğü parçaları günlüğe ekle
+function pullResults(st){
+  if(!NATIVE_DIARY||typeof Android.diaryResults!=='function')return;
+  let rs=[];try{rs=JSON.parse(Android.diaryResults())}catch{}
+  let added=0;
+  for(const r of rs){
+    const key='r_'+r.ts;
+    if(!diary.some(e=>e.chunk===key)){
+      if(r.text){diary.push({id:'d'+uid(),ts:r.ts,dur:Math.round((r.dur||0)/1000),text:r.text,chunk:key});added++}
+      else if(r.err){diary.push({id:'d'+uid(),ts:r.ts,dur:Math.round((r.dur||0)/1000),text:'',err:r.err,nfile:r.file,chunk:key});added++}
+    }
+    Android.diaryAck(r.name);
+  }
+  if(st)dr.npending=st.pending||0;else{try{dr.npending=JSON.parse(Android.diaryState()).pending||0}catch{}}
+  if(added)saveDiary();
+  if(added||dr.npending!==dr.lastNP){dr.lastNP=dr.npending;renderDiary(added>0);diaryStatus()}
 }
 function pullChunks(){
   if(!NATIVE_DIARY)return;
@@ -1309,7 +1326,7 @@ function nextChunk(){
 }
 function diaryStop(){
   if(!dr.on)return;
-  if(dr.native){Android.diaryStop();dr.on=false;clearInterval(dr.tick);diaryUI(false);setTimeout(pullChunks,1200);return}
+  if(dr.native){Android.diaryStop();dr.on=false;diaryUI(false);nativeTick();return}
   dr.on=false;clearTimeout(dr.timer);clearInterval(dr.tick);
   if(dr.mr?.state==='recording')dr.mr.stop();
   setTimeout(()=>{dr.stream?.getTracks().forEach(t=>t.stop());try{dr.ac?.close()}catch{}},300);
@@ -1317,9 +1334,9 @@ function diaryStop(){
 }
 async function wakeOn(){if(APP){try{Android.keepScreenOn(true)}catch{}dr.wake=1;return}try{dr.wake=await navigator.wakeLock?.request('screen')}catch{}}
 function wakeOff(){if(APP){try{Android.keepScreenOn(false)}catch{}dr.wake=null;return}try{dr.wake?.release()}catch{}dr.wake=null}
-document.addEventListener('visibilitychange',()=>{if(document.hidden)return;if(dr.on&&!dr.native&&!dr.wake)wakeOn();if(NATIVE_DIARY){pullChunks();let st={};try{st=JSON.parse(Android.diaryState())}catch{}if(st.on&&!dr.on){dr.on=true;dr.native=true;diaryUI(true);nativeTick()}}});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)return;if(dr.on&&!dr.native&&!dr.wake)wakeOn();if(NATIVE_DIARY){pullResults();pullChunks();let st={};try{st=JSON.parse(Android.diaryState())}catch{}if(st.on&&!dr.on){dr.on=true;dr.native=true;diaryUI(true);nativeTick()}}});
 function diaryStatus(){
-  const q=dr.queue.length+(dr.inflight?.length||0);
+  const q=dr.queue.length+(dr.inflight?.length||0)+(dr.npending||0);
   $('dStat').textContent=dr.on?`Kaydediliyor${dr.native?' · ekran kapansa da sürer':''}${q?` · ${q} parça işleniyor`:''}`
     :q?`${q} parça yazıya dökülüyor...`:'Kaydı başlatmak için dokun';
 }
@@ -1338,36 +1355,40 @@ async function processOne({blob,start,native}){
   if(e.text||e.err){if(!(native&&diary.some(x=>x.chunk===native))){diary.push(e);saveDiary();renderDiary(true)}}
   done();
 }
-async function transcribe(b64){
-  const prev=dr.last?`\nBir önceki parçanın sonu (bağlam için, tekrar yazma): "${dr.last}"`:'';
-  let t=(await gemini(`Bu ses kaydını Türkçe olarak KELİMESİ KELİMESİNE yazıya dök. Özetleme, yorum ekleme, düzeltme yapma.
+function diaryPrompt(){return `Bu ses kaydını Türkçe olarak KELİMESİ KELİMESİNE yazıya dök. Özetleme, yorum ekleme, düzeltme yapma.
 Birden fazla kişi konuşuyorsa her konuşmayı yeni satırda "Konuşmacı 1:", "Konuşmacı 2:" diye ayır; konuşmada isim geçiyorsa o ismi kullan.
-Anlaşılmayan yerlere [anlaşılmıyor] yaz. Hiç konuşma yoksa (sadece gürültü, makine sesi, sessizlik) yalnızca BOŞ yaz; <noise> gibi etiketler kullanma.${vocabHint()}${prev}`,{parts:[{inlineData:{mimeType:'audio/wav',data:b64}}]})).trim();
+Anlaşılmayan yerlere [anlaşılmıyor] yaz. Hiç konuşma yoksa (sadece gürültü, makine sesi, sessizlik) yalnızca BOŞ yaz; <noise> gibi etiketler kullanma.${vocabHint()}`}
+async function transcribe(b64,mime='audio/wav'){
+  const prev=dr.last?`\nBir önceki parçanın sonu (bağlam için, tekrar yazma): "${dr.last}"`:'';
+  let t=(await gemini(diaryPrompt()+prev,{parts:[{inlineData:{mimeType:mime,data:b64}}]})).trim();
   t=t.replace(/<\s*\/?\s*(noise|silence|music|inaudible)\s*>/gi,'').replace(/\[(gürültü|sessizlik|müzik|noise)\]/gi,'').trim();
   if(/^BOŞ\.?$/i.test(t)||!t||/^[\s.…,-]*$/.test(t))return '';
   dr.last=t.slice(-200);return t;
 }
 async function retryEntry(id){
-  const e=diary.find(x=>x.id===id);if(!e?.audio)return;
-  e.err='';e.text='';renderDiary();
-  try{const b=await DB.get(e.audio);const w=await toWav16k(b,true);e.text=await transcribe(w.data)||'(konuşma yok)';DB.del(e.audio).catch(()=>{});delete e.audio;delete e.err}
-  catch(err){e.err=err.message}
-  saveDiary();renderDiary();
+  const e=diary.find(x=>x.id===id);if(!e||!(e.audio||e.nfile))return;
+  dr.retrying=dr.retrying||new Set();dr.retrying.add(id);renderDiary();
+  try{
+    if(e.nfile){const b64=Android.readChunk(e.nfile);if(!b64)throw new Error('Ses dosyası bulunamadı');e.text=await transcribe(b64,'audio/aac')||'(konuşma yok)';Android.deleteChunk(e.nfile);delete e.nfile}
+    else{const b=await DB.get(e.audio);const w=await toWav16k(b,true);e.text=await transcribe(w.data)||'(konuşma yok)';DB.del(e.audio).catch(()=>{});delete e.audio}
+    delete e.err;
+  }catch(err){e.err=err.message}
+  dr.retrying.delete(id);saveDiary();renderDiary();
 }
 function delEntry(id){if(!confirm('Bu kayıt silinsin mi?'))return;const e=diary.find(x=>x.id===id);if(e?.audio)DB.del(e.audio).catch(()=>{});diary=diary.filter(x=>x.id!==id);saveDiary();renderDiary()}
 function hl(text,q){const s=esc(text);if(!q)return s;const re=new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi');return s.replace(re,m=>`<mark>${m}</mark>`)}
 function renderDiary(scroll){
   const q=$('dSearch').value.trim(),ql=q.toLocaleLowerCase('tr'),day=$('dDate').value;
-  const live=!q&&day===dayKey(Date.now())&&(dr.on||dr.inflight?.length||dr.queue?.length);
+  const live=!q&&day===dayKey(Date.now())&&(dr.on||dr.inflight?.length||dr.queue?.length||dr.npending);
   let list=q?diary.filter(e=>e.text.toLocaleLowerCase('tr').includes(ql)):diary.filter(e=>dayKey(e.ts)===day);
   list=[...list].sort((a,b)=>q?b.ts-a.ts:a.ts-b.ts);
   const mins=Math.round(list.reduce((s,e)=>s+(e.dur||0),0)/60);
   $('dCount').textContent=list.length?(q?`"${q}" geçen ${list.length} kayıt (tüm günler)`:`${list.length} kayıt · ~${mins} dk konuşma`):'';
-  $('dList').innerHTML=list.length?list.map(e=>`<div class="dent${e.kind==='call'?' call':''}"><div class="tm">${q?stampDate(e.ts):hm(e.ts)}${e.kind==='call'?` <span class="tag">📞 ${esc(e.who||'Telefon')}</span>`:''}${e.dur?` <span class="mut" style="font-weight:500">${Math.round(e.dur)} sn</span>`:''}<span style="flex:1"></span>${e.audio?`<button class="sm" onclick="retryEntry('${e.id}')">↻ Yazıya dök</button>`:''}<button class="sm ghost" onclick="editEntry('${e.id}')" title="Düzenle">✏️</button><button class="sm ghost" onclick="delEntry('${e.id}')">✕</button></div>
-    <div class="tx">${dEdit===e.id?`<textarea rows="4">${esc(e.text)}</textarea><div class="row" style="margin-top:6px"><button class="sm" onclick="dEdit=null;renderDiary()">Vazgeç</button><button class="sm pri" onclick="saveEntry('${e.id}')">Kaydet</button></div>`:e.err?`<span class="pend">⚠️ ${esc(e.err)} — ses saklandı, tekrar dene.</span>`:e.text?hl(e.text,q):'<span class="pend"><span class="spin"></span> Yazıya dökülüyor...</span>'}</div></div>`).join('')
+  $('dList').innerHTML=list.length?list.map(e=>`<div class="dent${e.kind==='call'?' call':''}"><div class="tm">${q?stampDate(e.ts):hm(e.ts)}${e.kind==='call'?` <span class="tag">📞 ${esc(e.who||'Telefon')}</span>`:''}${e.dur?` <span class="mut" style="font-weight:500">${Math.round(e.dur)} sn</span>`:''}<span style="flex:1"></span>${(e.audio||e.nfile)&&!dr.retrying?.has(e.id)?`<button class="sm" onclick="retryEntry('${e.id}')">↻ Yazıya dök</button>`:''}<button class="sm ghost" onclick="editEntry('${e.id}')" title="Düzenle">✏️</button><button class="sm ghost" onclick="delEntry('${e.id}')">✕</button></div>
+    <div class="tx">${dEdit===e.id?`<textarea rows="4">${esc(e.text)}</textarea><div class="row" style="margin-top:6px"><button class="sm" onclick="dEdit=null;renderDiary()">Vazgeç</button><button class="sm pri" onclick="saveEntry('${e.id}')">Kaydet</button></div>`:dr.retrying?.has(e.id)?'<span class="pend"><span class="spin"></span> Yazıya dökülüyor...</span>':e.text?hl(e.text,q):`<span class="pend">⚠️ ${esc(e.err||'Yazıya dökülemedi')} — ses saklandı, ↻ ile tekrar dene.</span>`}</div></div>`).join('')
     :(live?'':`<div class="empty">${q?'Eşleşen kayıt yok':'Bu gün için kayıt yok'}</div>`);
   if(live){
-    const pend=[...(dr.inflight||[]),...(dr.queue||[])].sort((a,b)=>a.start-b.start).map(j=>`<div class="dent live"><div class="tm">${hm(j.start)}</div><div class="tx"><span class="pend"><span class="spin"></span> Yazıya dökülüyor...</span></div></div>`).join('');
+    const pend=[...(dr.inflight||[]),...(dr.queue||[])].sort((a,b)=>a.start-b.start).map(j=>`<div class="dent live"><div class="tm">${hm(j.start)}</div><div class="tx"><span class="pend"><span class="spin"></span> Yazıya dökülüyor...</span></div></div>`).join('')+(dr.npending?`<div class="dent live"><div class="tm">az önce</div><div class="tx"><span class="pend"><span class="spin"></span> ${dr.npending>1?dr.npending+' parça ':''}yazıya dökülüyor...</span></div></div>`:'');
     $('dList').insertAdjacentHTML('beforeend',pend+(dr.on?`<div class="dent live"><div class="tm">şimdi</div><div class="tx"><span class="pend"><span class="livedot"></span> Dinleniyor...</span></div></div>`:''));
   }
   if(scroll&&$('v-gunluk')&&!$('v-gunluk').classList.contains('hidden')){const last=$('dList').lastElementChild;if(last&&window.innerHeight+window.scrollY>=document.body.scrollHeight-260)last.scrollIntoView({block:'end',behavior:'smooth'})}
@@ -1827,7 +1848,7 @@ setInterval(()=>{const n=new Date();$('clock').textContent=`${GUN[n.getDay()].sl
 $('sKey').value=cfg.key||'';$('sCode').value=cfg.code||'';$('sModel').innerHTML=`<option>${esc(cfg.model)}</option>`;$('sSound').checked=cfg.sound!==false;$('sumOn').checked=!!cfg.sumOn;$('sumTime').value=cfg.sumTime||'20:00';$('ttsVoice').value=cfg.voice||'Charon';$('ttsBtn').classList.toggle('act',!!cfg.tts);
 {const e=new Date(new Date().setHours(23,59,0,0));if(!tasks.some(t=>!t.done&&t.due&&new Date(t.due)<=e))tF='acik'}
 checkServer();renderNStat();renderAll();checkReminders();syncAlarms();renderBackup();importNativeSummary();pollVoice();vBusy();startCallWatch();
-if(NATIVE_DIARY){pullChunks();let st={};try{st=JSON.parse(Android.diaryState())}catch{}if(st.on){dr.on=true;dr.native=true;diaryUI(true);nativeTick()}}
+if(NATIVE_DIARY){pullResults();pullChunks();let st={};try{st=JSON.parse(Android.diaryState())}catch{}if(st.on){dr.on=true;dr.native=true;diaryUI(true);nativeTick()}}
 if(APP&&cfg.sumOn&&typeof Android.setSummary==='function')sumSettings();
 renderPerms().then(all=>{if(!all&&!LS.get('na_perm',0))setTimeout(()=>$('mPerm').classList.add('on'),900)});
 setTimeout(()=>{if(!cfg.key&&!(srv.ok&&srv.hasKey))toastMsg('👋 Gemini bağlantısı yok — <b>Ayarlar</b>\'a bak.',6000)},1500);

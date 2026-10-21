@@ -667,11 +667,17 @@ public class MainActivity extends Activity {
         // --- arka planda sesli günlük ---
         @JavascriptInterface
         public boolean diaryStart() {
+            return diaryStart(null, null, null);
+        }
+
+        @JavascriptInterface
+        public boolean diaryStart(String prompt, String code, String model) {
             if (!has(MIC)) {
                 runOnUiThread(() -> requestPermissions(new String[]{MIC}, RC_ALL));
                 return false;
             }
             Intent i = new Intent(MainActivity.this, DiaryService.class);
+            if (prompt != null) i.putExtra("prompt", prompt).putExtra("code", code).putExtra("model", model);
             if (Build.VERSION.SDK_INT >= 26) startForegroundService(i);
             else startService(i);
             return true;
@@ -685,7 +691,7 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public String diaryState() {
             try {
-                return new JSONObject().put("on", DiaryService.running).put("since", DiaryService.since).put("level", DiaryService.level).put("error", DiaryService.error).toString();
+                return new JSONObject().put("on", DiaryService.running).put("since", DiaryService.since).put("level", DiaryService.level).put("error", DiaryService.error).put("pending", DiaryService.pending.get()).toString();
             } catch (Exception e) {
                 return "{}";
             }
@@ -703,8 +709,30 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
+        public String diaryResults() {
+            org.json.JSONArray a = new org.json.JSONArray();
+            File[] fs = DiaryService.dir(MainActivity.this).listFiles();
+            if (fs != null) {
+                java.util.Arrays.sort(fs);
+                for (File f : fs)
+                    if (f.getName().matches("r_\\d+\\.json")) {
+                        try {
+                            a.put(new JSONObject(Summary.read(f)).put("name", f.getName()));
+                        } catch (Exception ignored) {
+                        }
+                    }
+            }
+            return a.toString();
+        }
+
+        @JavascriptInterface
+        public void diaryAck(String name) {
+            if (name != null && name.matches("r_\\d+\\.json")) new File(DiaryService.dir(MainActivity.this), name).delete();
+        }
+
+        @JavascriptInterface
         public String readChunk(String name) {
-            if (!name.matches("c_\\d+_\\d+\\.m4a")) return null;
+            if (!name.matches("[cf]_\\d+_\\d+\\.(m4a|aac)")) return null;
             try (InputStream is = new java.io.FileInputStream(new File(DiaryService.dir(MainActivity.this), name))) {
                 ByteArrayOutputStream bo = new ByteArrayOutputStream();
                 byte[] b = new byte[16384];
@@ -718,7 +746,7 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public void deleteChunk(String name) {
-            if (name.matches("c_\\d+_\\d+\\.m4a")) new File(DiaryService.dir(MainActivity.this), name).delete();
+            if (name.matches("[cf]_\\d+_\\d+\\.(m4a|aac)")) new File(DiaryService.dir(MainActivity.this), name).delete();
         }
 
         // --- sesli not (arka planda kayıt + Gemini) ---

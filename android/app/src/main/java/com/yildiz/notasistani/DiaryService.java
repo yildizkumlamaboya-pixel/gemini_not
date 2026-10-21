@@ -15,13 +15,26 @@ import android.os.Looper;
 import android.os.PowerManager;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.InputStream;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import android.util.Base64;
 
 /** Ekran kapalıyken de süren sesli günlük kaydı: 45 sn'lik AAC parçaları dosyaya yazar, uygulama bunları yazıya döker. */
 public class DiaryService extends Service {
     static final String STOP = "com.yildiz.notasistani.DIARY_STOP";
     static final String CH = "gunluk";
     // Konuşmadaki duraklamada kes: en az 4 sn, en çok 25 sn; 1 sn sessizlik = cümle sonu
-    static final long MIN_CHUNK = 4000, MAX_CHUNK = 25000, SILENCE = 1000;
+    static final long MIN_CHUNK = 5000, MAX_CHUNK = 25000, SILENCE = 1000;
+    static final AtomicInteger pending = new AtomicInteger(0);
+    ExecutorService pool;
+    String prompt, code, model;
+    volatile String lastText = "";
     static final int VOICE_AMP = 1500;
     long lastVoice = 0;
     boolean hadVoice = false;
@@ -71,11 +84,18 @@ public class DiaryService extends Service {
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (h == null) h = new Handler(Looper.getMainLooper());
         if (intent != null && STOP.equals(intent.getAction())) {
-            stopAll();
-            stopSelf();
+            if (running) stopAll();
+            else if (pool == null || pool.isTerminated()) stopSelf();
             return START_NOT_STICKY;
         }
+        if (intent != null && intent.hasExtra("prompt")) {
+            prompt = intent.getStringExtra("prompt");
+            code = intent.getStringExtra("code");
+            model = intent.getStringExtra("model");
+        }
         if (!running) {
+            if (pool == null || pool.isShutdown()) pool = Executors.newFixedThreadPool(2);
+            lastText = "";
             startFg();
             running = true;
             since = System.currentTimeMillis();
@@ -125,7 +145,7 @@ public class DiaryService extends Service {
             cur = new File(dir(this), "c_" + curStart + ".part");
             rec = new MediaRecorder();
             rec.setAudioSource(MediaRecorder.AudioSource.MIC);
-            rec.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
+            rec.setOutputFormat(prompt != null ? MediaRecorder.OutputFormat.AAC_ADTS : MediaRecorder.OutputFormat.MPEG_4);
             rec.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
             rec.setAudioSamplingRate(32000);
             rec.setAudioChannels(1);
@@ -164,8 +184,16 @@ public class DiaryService extends Service {
         rec = null;
         if (cur != null) {
             long dur = System.currentTimeMillis() - curStart;
-            if (keep && ok && cur.length() > 0) cur.renameTo(new File(cur.getParentFile(), "c_" + curStart + "_" + dur + ".m4a"));
-            else cur.delete();
+            if (keep && ok && cur.length() > 0) {
+                if (prompt != null) {
+                    // Parçayı hemen arka planda yazıya dök (ekran kapalıyken de)
+                    File f = new File(cur.getParentFile(), "w_" + curStart + "_" + dur + ".aac");
+                    cur.renameTo(f);
+                    final long st = curStart, du = dur;
+                    pending.incrementAndGet();
+                    pool.submit(() -> transcribe(f, st, du));
+                } else cur.renameTo(new File(cur.getParentFile(), "c_" + curStart + "_" + dur + ".m4a"));
+            } else cur.delete();
             cur = null;
         }
     }
@@ -175,11 +203,73 @@ public class DiaryService extends Service {
         level = 0;
         if (h != null) h.removeCallbacksAndMessages(null);
         finishChunk();
+        // Kalan parçalar bitene kadar servisi açık tut (en fazla 5 dk)
+        final ExecutorService p = pool;
+        new Thread(() -> {
+            try {
+                if (p != null) {
+                    p.shutdown();
+                    p.awaitTermination(5, TimeUnit.MINUTES);
+                }
+            } catch (Exception ignored) {
+            }
+            try {
+                if (wl != null && wl.isHeld()) wl.release();
+            } catch (Exception ignored) {
+            }
+            if (!running && h != null) h.post(() -> {
+                stopForeground(true);
+                stopSelf();
+            });
+        }).start();
+    }
+
+    void transcribe(File f, long start, long dur) {
+        String text = null, err = null;
         try {
-            if (wl != null && wl.isHeld()) wl.release();
+            byte[] audio;
+            try (InputStream is = new FileInputStream(f)) {
+                java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream();
+                byte[] b = new byte[16384];
+                int n;
+                while ((n = is.read(b)) > 0) bo.write(b, 0, n);
+                audio = bo.toByteArray();
+            }
+            String prev = lastText;
+            String pr = prompt + (prev.isEmpty() ? "" : "\nBir önceki parçanın sonu (bağlam için, tekrar yazma): \"" + prev + "\"");
+            JSONObject body = new JSONObject()
+                    .put("contents", new JSONArray().put(new JSONObject().put("role", "user").put("parts", new JSONArray()
+                            .put(new JSONObject().put("inlineData", new JSONObject().put("mimeType", "audio/aac").put("data", Base64.encodeToString(audio, Base64.NO_WRAP))))
+                            .put(new JSONObject().put("text", pr)))))
+                    .put("generationConfig", new JSONObject().put("temperature", 0).put("thinkingConfig", new JSONObject().put("thinkingBudget", 0)));
+            JSONObject payload = new JSONObject().put("model", model == null || model.isEmpty() ? "gemini-flash-latest" : model).put("body", body);
+            for (int a = 0; a < 3 && text == null; a++) {
+                try {
+                    text = Summary.post(this, payload, code);
+                } catch (Exception e) {
+                    err = e.getMessage();
+                    Thread.sleep(2500L * (a + 1));
+                }
+            }
+        } catch (Exception e) {
+            err = e.getMessage();
+        }
+        try {
+            if (text != null) {
+                text = text.replaceAll("(?i)<\\s*/?\\s*(noise|silence|music|inaudible)\\s*>", "").trim();
+                if (text.matches("(?i)^BOŞ\\.?$") || text.matches("^[\\s.…,-]*$")) text = "";
+                if (!text.isEmpty()) lastText = text.length() > 200 ? text.substring(text.length() - 200) : text;
+                f.delete();
+                if (!text.isEmpty())
+                    Summary.write(new File(dir(this), "r_" + start + ".json"), new JSONObject().put("ts", start).put("dur", dur).put("text", text).toString());
+            } else {
+                File keep = new File(dir(this), "f_" + start + "_" + dur + ".aac");
+                f.renameTo(keep);
+                Summary.write(new File(dir(this), "r_" + start + ".json"), new JSONObject().put("ts", start).put("dur", dur).put("text", "").put("err", err == null ? "Yazıya dökülemedi" : err).put("file", keep.getName()).toString());
+            }
         } catch (Exception ignored) {
         }
-        stopForeground(true);
+        pending.decrementAndGet();
     }
 
     @Override
