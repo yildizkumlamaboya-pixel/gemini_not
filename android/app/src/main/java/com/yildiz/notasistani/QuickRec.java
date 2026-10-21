@@ -378,6 +378,4 @@ class QuickRec {
         }
         l.done(summary, true);
     }
-    }
-
 }
