@@ -38,6 +38,9 @@ public class DiaryService extends Service {
     // İyileştirme tamponu: taslağı çıkan parçalar ~100 sn birikince güçlü modelle birlikte yeniden yazıya dökülür
     static final long REFINE_MS = 100000;
     final java.util.List<long[]> qbuf = new java.util.ArrayList<>();
+    // Yazıya dökülmeyi bekleyen parçalar: ağ yavaşsa/kota dolarsa biriken parçalar tek istekte birleştirilir
+    static final long BATCH_MS = 90000;
+    final java.util.ArrayDeque<long[]> wq = new java.util.ArrayDeque<>();
     final java.util.Map<Long, String> qtext = new java.util.HashMap<>();
     volatile String lastRefined = "";
     volatile String lastText = "";
@@ -205,7 +208,10 @@ public class DiaryService extends Service {
                     cur.renameTo(f);
                     final long st = curStart, du = dur;
                     pending.incrementAndGet();
-                    pool.submit(() -> transcribe(f, st, du));
+                    synchronized (wq) {
+                        wq.add(new long[]{st, du});
+                    }
+                    pool.submit(this::drain);
                 } else cur.renameTo(new File(cur.getParentFile(), "c_" + curStart + "_" + dur + ".m4a"));
             } else cur.delete();
             cur = null;
@@ -314,6 +320,44 @@ public class DiaryService extends Service {
         }
     }
 
+    /** Kuyruktaki ardışık parçaları (en çok ~90 sn) tek dosyada birleştirip tek istekle yazıya döker. */
+    void drain() {
+        java.util.List<long[]> batch = new java.util.ArrayList<>();
+        long tot = 0;
+        synchronized (wq) {
+            while (!wq.isEmpty() && (batch.isEmpty() || tot + wq.peek()[1] <= BATCH_MS)) {
+                long[] q = wq.poll();
+                batch.add(q);
+                tot += q[1];
+            }
+        }
+        if (batch.isEmpty()) return;
+        long start = batch.get(0)[0];
+        File first = new File(dir(this), "w_" + start + "_" + batch.get(0)[1] + ".aac");
+        if (batch.size() == 1) {
+            transcribe(first, start, tot);
+            return;
+        }
+        File merged = new File(dir(this), "w_" + start + "_" + tot + ".aac.tmp");
+        try (java.io.FileOutputStream os = new java.io.FileOutputStream(merged)) {
+            for (long[] q : batch) { // ADTS çerçeveleri art arda eklenebilir
+                File f = new File(dir(this), "w_" + q[0] + "_" + q[1] + ".aac");
+                try (InputStream is = new FileInputStream(f)) {
+                    byte[] b = new byte[16384];
+                    int n;
+                    while ((n = is.read(b)) > 0) os.write(b, 0, n);
+                } catch (Exception ignored) {
+                }
+                f.delete();
+            }
+        } catch (Exception ignored) {
+        }
+        File out = new File(dir(this), "w_" + start + "_" + tot + ".aac");
+        merged.renameTo(out);
+        pending.addAndGet(-(batch.size() - 1));
+        transcribe(out, start, tot);
+    }
+
     void transcribe(File f, long start, long dur) {
         String text = null, err = null;
         try {
@@ -338,7 +382,8 @@ public class DiaryService extends Service {
                     text = Summary.post(this, payload, code);
                 } catch (Exception e) {
                     err = e.getMessage();
-                    Thread.sleep(2500L * (a + 1));
+                    boolean quota = err != null && err.matches("(?is).*(kota|yoğun|429|quota).*");
+                    Thread.sleep(quota ? 15000L * (a + 1) : 2500L * (a + 1));
                 }
             }
         } catch (Exception e) {

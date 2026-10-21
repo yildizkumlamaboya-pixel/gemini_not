@@ -1322,11 +1322,11 @@ function pullChunks(){
   dr.seen=dr.seen||new Set();
   for(const name of list){
     if(dr.seen.has(name))continue;dr.seen.add(name);
-    if(diary.some(e=>e.chunk===name)){Android.deleteChunk(name);continue} // zaten yazıya dökülmüş
+    if(diary.some(e=>e.chunk===name||e.parts?.includes(name))){Android.deleteChunk(name);continue} // zaten yazıya dökülmüş
     const m=name.match(/^c_(\d+)_(\d+)\.m4a$/);if(!m)continue;
     const b64=Android.readChunk(name);if(!b64){Android.deleteChunk(name);continue}
     const bin=atob(b64),u8=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u8[i]=bin.charCodeAt(i);
-    dr.queue.push({blob:new Blob([u8],{type:'audio/mp4'}),start:+m[1],native:name});
+    dr.queue.push({blob:new Blob([u8],{type:'audio/mp4'}),start:+m[1],dur:(+m[2])/1000,native:name});
   }
   diaryStatus();processQueue();renderDiary();
 }
@@ -1350,24 +1350,50 @@ async function wakeOn(){if(APP){try{Android.keepScreenOn(true)}catch{}dr.wake=1;
 function wakeOff(){if(APP){try{Android.keepScreenOn(false)}catch{}dr.wake=null;return}try{dr.wake?.release()}catch{}dr.wake=null}
 document.addEventListener('visibilitychange',()=>{if(document.hidden)return;if(dr.on&&!dr.native&&!dr.wake)wakeOn();if(NATIVE_DIARY){pullResults();pullChunks();let st={};try{st=JSON.parse(Android.diaryState())}catch{}if(st.on&&!dr.on){dr.on=true;dr.native=true;diaryUI(true);nativeTick()}}});
 function diaryStatus(){
-  const q=dr.queue.length+(dr.inflight?.length||0)+(dr.npending||0);
-  $('dStat').textContent=dr.on?`Kaydediliyor${dr.native?' · ekran kapansa da sürer':''}${q?` · ${q} parça işleniyor`:''}${dr.nrefine?' · ✓ iyileştiriliyor':''}`
-    :q?`${q} parça yazıya dökülüyor...`:'Kaydı başlatmak için dokun';
+  const q=dr.queue.length+(dr.inflight?.length||0)+(dr.npending||0),w=dr.pauseUntil>Date.now()?' · kota için kısa bekleme':'';
+  $('dStat').textContent=dr.on?`Kaydediliyor${dr.native?' · ekran kapansa da sürer':''}${q?` · ${q} parça işleniyor`:''}${dr.nrefine?' · ✓ iyileştiriliyor':''}${w}`
+    :q?`${q} parça yazıya dökülüyor${w}...`:'Kaydı başlatmak için dokun';
 }
-function enqueue(blob,start){dr.queue.push({blob,start});diaryStatus();processQueue()}
-dr.inflight=[];
-async function processQueue(){
-  while(dr.queue.length&&dr.inflight.length<2){const job=dr.queue.shift();dr.inflight.push(job);diaryStatus();renderDiary();processOne(job).finally(()=>{dr.inflight=dr.inflight.filter(j=>j!==job);diaryStatus();renderDiary();processQueue()})}
+function enqueue(blob,start){dr.queue.push({blob,start,dur:CHUNK});diaryStatus();processQueue()}
+dr.inflight=[];dr.workers=0;
+// Biriken parçalar tek tek değil, ~90 sn'lik paketler halinde tek istekle yazıya dökülür (çok daha hızlı, kotaya takılmaz)
+const BATCH_S=90;
+function processQueue(){
+  if(dr.pauseUntil>Date.now()){if(!dr.pauseT)dr.pauseT=setTimeout(()=>{dr.pauseT=null;processQueue()},dr.pauseUntil-Date.now()+100);return}
+  while(dr.queue.length&&dr.workers<2){
+    dr.queue.sort((a,b)=>a.start-b.start);
+    const batch=[];let tot=0;
+    while(dr.queue.length&&(!batch.length||tot+(dr.queue[0].dur||CHUNK)<=BATCH_S)){const j=dr.queue.shift();tot+=j.dur||CHUNK;batch.push(j)}
+    dr.workers++;dr.inflight.push(...batch);diaryStatus();renderDiary();
+    processBatch(batch).catch(()=>{}).finally(()=>{dr.workers--;dr.inflight=dr.inflight.filter(j=>!batch.includes(j));diaryStatus();renderDiary();processQueue()});
+  }
 }
-async function processOne({blob,start,native}){
-  const done=()=>{if(native)try{Android.deleteChunk(native)}catch{}};
-  let w;try{w=await toWav16k(blob,true)}catch{done();return}
-  if(w.rms<0.006){done();return} // sessiz parça
-  const e={id:'d'+uid(),ts:start,dur:Math.round(w.dur),text:'',chunk:native||''};
-  try{e.text=await transcribe(w.data)}
-  catch(err){const aid='a'+uid();try{await DB.put(aid,blob);e.audio=aid}catch{}e.err=err.message;e.text=''}
-  if(e.text||e.err){if(!(native&&diary.some(x=>x.chunk===native))){diary.push(e);saveDiary();renderDiary(true)}}
-  done();
+async function processBatch(batch){
+  const del=js=>js.forEach(j=>{if(j.native)try{Android.deleteChunk(j.native)}catch{}});
+  const segs=[],used=[];
+  for(const j of batch){
+    let d;try{d=await decode16k(j.blob)}catch{del([j]);continue}
+    let sq=0;for(let i=0;i<d.length;i+=4)sq+=d[i]*d[i];
+    if(Math.sqrt(sq/Math.max(1,d.length/4))<0.006){del([j]);continue} // sessiz parça
+    segs.push(d);used.push(j);
+  }
+  if(!used.length)return;
+  const names=used.map(j=>j.native).filter(Boolean);
+  if(names.length&&names.every(x=>diary.some(e=>e.chunk===x||e.parts?.includes(x)))){del(used);return}
+  const n=segs.reduce((a,d)=>a+d.length,0),all=new Float32Array(n);let o=0;for(const d of segs){all.set(d,o);o+=d.length}
+  const wav=wavB64(all);
+  const e={id:'d'+uid(),ts:used[0].start,dur:Math.round(n/16000),text:'',chunk:names[0]||''};
+  if(names.length>1)e.parts=names;
+  try{e.text=await transcribe(wav)}
+  catch(err){
+    if(/kota|yoğun|429|quota/i.test(err.message)&&(used[0].tries||0)<6){ // kota/yoğunluk: bekle, sonra aynı paketi tekrar dene
+      used.forEach(j=>j.tries=(j.tries||0)+1);dr.pauseUntil=Date.now()+20000*used[0].tries;dr.queue.unshift(...used);return}
+    const aid='a'+uid();try{await DB.put(aid,await (await fetch('data:audio/wav;base64,'+wav)).blob());e.audio=aid}catch{}
+    e.err=err.message;e.text='';
+  }
+  dr.pauseUntil=0;
+  if(e.text||e.err){diary.push(e);saveDiary();renderDiary(true)}
+  del(used);
 }
 function refinePrompt(){return `Bu, sesli günlük kaydının yaklaşık 1,5-2 dakikalık bir bölümü. Görevin: sesi baştan sona dikkatle dinleyip KELİMESİ KELİMESİNE en doğru Türkçe dökümü çıkarmak.
 - Her kelimeyi cümlenin ve konuşmanın bağlamına göre değerlendir; anlamsız ya da bağlama uymayan bir kelime duyarsan sesi tekrar değerlendir ve sese en yakın, anlamlı Türkçe kelimeyi seç.
@@ -1408,7 +1434,8 @@ function renderDiary(scroll){
     <div class="tx">${dEdit===e.id?`<textarea rows="4">${esc(e.text)}</textarea><div class="row" style="margin-top:6px"><button class="sm" onclick="dEdit=null;renderDiary()">Vazgeç</button><button class="sm pri" onclick="saveEntry('${e.id}')">Kaydet</button></div>`:dr.retrying?.has(e.id)?'<span class="pend"><span class="spin"></span> Yazıya dökülüyor...</span>':e.text?hl(e.text,q):`<span class="pend">⚠️ ${esc(e.err||'Yazıya dökülemedi')} — ses saklandı, ↻ ile tekrar dene.</span>`}</div></div>`).join('')
     :(live?'':`<div class="empty">${q?'Eşleşen kayıt yok':'Bu gün için kayıt yok'}</div>`);
   if(live){
-    const pend=[...(dr.inflight||[]),...(dr.queue||[])].sort((a,b)=>a.start-b.start).map(j=>`<div class="dent live"><div class="tm">${hm(j.start)}</div><div class="tx"><span class="pend"><span class="spin"></span> Yazıya dökülüyor...</span></div></div>`).join('')+(dr.npending?`<div class="dent live"><div class="tm">az önce</div><div class="tx"><span class="pend"><span class="spin"></span> ${dr.npending>1?dr.npending+' parça ':''}yazıya dökülüyor...</span></div></div>`:'');
+    const js=[...(dr.inflight||[]),...(dr.queue||[])].sort((a,b)=>a.start-b.start),sec=js.reduce((a,j)=>a+(j.dur||CHUNK),0);
+    const pend=(js.length?`<div class="dent live"><div class="tm">${hm(js[0].start)}${js.length>1?'–'+hm(js[js.length-1].start):''}</div><div class="tx"><span class="pend"><span class="spin"></span> ${js.length>1?js.length+' parça (~'+Math.max(1,Math.round(sec/60))+' dk ses) paketlenerek ':''}yazıya dökülüyor${dr.pauseUntil>Date.now()?' · kota için kısa bekleme':''}...</span></div></div>`:'')+(dr.npending?`<div class="dent live"><div class="tm">az önce</div><div class="tx"><span class="pend"><span class="spin"></span> ${dr.npending>1?dr.npending+' parça ':''}yazıya dökülüyor...</span></div></div>`:'');
     $('dList').insertAdjacentHTML('beforeend',pend+(dr.on?`<div class="dent live"><div class="tm">şimdi</div><div class="tx"><span class="pend"><span class="livedot"></span> Dinleniyor...</span></div></div>`:''));
   }
   if(scroll&&$('v-gunluk')&&!$('v-gunluk').classList.contains('hidden')){const last=$('dList').lastElementChild;if(last&&window.innerHeight+window.scrollY>=document.body.scrollHeight-260)last.scrollIntoView({block:'end',behavior:'smooth'})}
