@@ -232,7 +232,7 @@ public class BubbleService extends Service {
         }
 
         public void text(String t) {
-            showPanel(rec.isOn() ? t + "\n■ kaydet · ✕ iptal" : t);
+            showPanel(t);
         }
 
         public void after(String summary) {
@@ -290,7 +290,7 @@ public class BubbleService extends Service {
 
     static void recText(String t) {
         BubbleService s = inst;
-        if (s != null && s.box != null) s.showPanel(QuickRecService.recording ? t + "\n■ kaydet · ✕ iptal" : t);
+        if (s != null && s.box != null) s.showPanel(t);
     }
 
     static void recDone(String summary, boolean ok) {
@@ -302,25 +302,112 @@ public class BubbleService extends Service {
     }
 
     // ---------------- Uygulamayı açmadan sesli not ----------------
+    // Telefon ekranının üstünde duran şık durum kartı: dinliyor (kırmızı, nabız) · kaydediliyor (mavi, dönen) · kaydedildi (yeşil ✓)
+    LinearLayout panelBox;
+    ImageView pIcon;
+    android.widget.ProgressBar pSpin;
+    TextView pTitle, pBody;
+    android.animation.ObjectAnimator pulse;
+
     void showPanel(String t) {
         h.post(() -> {
             try {
                 if (panel == null) {
-                    panel = new TextView(this);
-                    panel.setBackgroundResource(R.drawable.bg_panel);
-                    panel.setTextColor(0xFFFFFFFF);
-                    panel.setTextSize(15);
-                    panel.setPadding(dp(16), dp(12), dp(16), dp(12));
-                    panel.setMaxLines(6);
-                    panel.setEllipsize(android.text.TextUtils.TruncateAt.START);
-                    WindowManager.LayoutParams p = new WindowManager.LayoutParams(getResources().getDisplayMetrics().widthPixels - dp(32), WindowManager.LayoutParams.WRAP_CONTENT,
+                    panelBox = new LinearLayout(this);
+                    panelBox.setOrientation(LinearLayout.HORIZONTAL);
+                    panelBox.setGravity(Gravity.CENTER_VERTICAL);
+                    panelBox.setBackgroundResource(R.drawable.bg_panel2);
+                    panelBox.setPadding(dp(14), dp(12), dp(16), dp(12));
+                    panelBox.setElevation(dp(10));
+                    android.widget.FrameLayout ic = new android.widget.FrameLayout(this);
+                    pIcon = new ImageView(this);
+                    int p = dp(9);
+                    pIcon.setPadding(p, p, p, p);
+                    ic.addView(pIcon, new android.widget.FrameLayout.LayoutParams(dp(40), dp(40)));
+                    pSpin = new android.widget.ProgressBar(this);
+                    pSpin.setIndeterminateTintList(android.content.res.ColorStateList.valueOf(0xFFFFFFFF));
+                    android.widget.FrameLayout.LayoutParams sp = new android.widget.FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER);
+                    ic.addView(pSpin, sp);
+                    panelBox.addView(ic, new LinearLayout.LayoutParams(dp(40), dp(40)));
+                    LinearLayout col = new LinearLayout(this);
+                    col.setOrientation(LinearLayout.VERTICAL);
+                    LinearLayout.LayoutParams cl = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+                    cl.leftMargin = dp(12);
+                    pTitle = new TextView(this);
+                    pTitle.setTextColor(0xFFFFFFFF);
+                    pTitle.setTextSize(15);
+                    pTitle.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+                    pBody = new TextView(this);
+                    pBody.setTextColor(0xFFCBD5E1);
+                    pBody.setTextSize(14);
+                    pBody.setMaxLines(4);
+                    pBody.setEllipsize(android.text.TextUtils.TruncateAt.START);
+                    pBody.setLineSpacing(0, 1.1f);
+                    col.addView(pTitle);
+                    col.addView(pBody);
+                    panelBox.addView(col, cl);
+                    panel = new TextView(this); // yalnızca "açık mı" işareti
+                    WindowManager.LayoutParams lp2 = new WindowManager.LayoutParams(getResources().getDisplayMetrics().widthPixels - dp(24), WindowManager.LayoutParams.WRAP_CONTENT,
                             Build.VERSION.SDK_INT >= 26 ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY : WindowManager.LayoutParams.TYPE_PHONE,
                             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE, PixelFormat.TRANSLUCENT);
-                    p.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
-                    p.y = dp(48);
-                    wm.addView(panel, p);
+                    lp2.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
+                    lp2.y = dp(44);
+                    lp2.windowAnimations = android.R.style.Animation_Toast;
+                    wm.addView(panelBox, lp2);
                 }
-                panel.setText(t);
+                // durumu metnin başından anla
+                String title, body = t;
+                int bg, icon;
+                boolean spin = false, live = false;
+                if (t.startsWith("🎤")) {
+                    title = "Dinliyorum";
+                    body = t.substring(2).trim();
+                    if (body.startsWith("Dinliyorum…")) body = "Konuş… susunca kendiliğinden kaydedilir" + body.substring(11);
+                    bg = R.drawable.bg_rec;
+                    icon = R.drawable.ic_mic;
+                    live = true;
+                } else if (t.startsWith("⏳")) {
+                    title = "Kaydediliyor";
+                    body = t.substring(1).trim();
+                    bg = R.drawable.bg_wait;
+                    icon = 0;
+                    spin = true;
+                } else if (t.startsWith("✔")) {
+                    title = "Kaydedildi";
+                    body = t.replaceFirst("^✔\\s*(Kaydedildi|Not kaydedildi)?\\s*", "").trim();
+                    bg = R.drawable.bg_ok;
+                    icon = R.drawable.ic_check;
+                } else {
+                    title = t.startsWith("✕") ? "İptal edildi" : "Bilgi";
+                    body = t.replaceFirst("^(✕|⚠️|🤫)\\s*", "").replaceFirst("^İptal edildi", "").trim();
+                    bg = R.drawable.bg_gray;
+                    icon = R.drawable.ic_info;
+                }
+                body = body.replace("\n■ kaydet · ✕ iptal", "");
+                if (live && QuickRecService.recording || live && rec.isOn()) body = body + "\n■ kaydet   ✕ iptal";
+                pTitle.setText(title);
+                pBody.setText(body);
+                pBody.setVisibility(body.isEmpty() ? View.GONE : View.VISIBLE);
+                pIcon.setBackgroundResource(bg);
+                if (icon != 0) pIcon.setImageResource(icon);
+                else pIcon.setImageDrawable(null);
+                pSpin.setVisibility(spin ? View.VISIBLE : View.GONE);
+                if (live) {
+                    if (pulse == null) {
+                        pulse = android.animation.ObjectAnimator.ofPropertyValuesHolder(pIcon,
+                                android.animation.PropertyValuesHolder.ofFloat("scaleX", 1f, 1.14f),
+                                android.animation.PropertyValuesHolder.ofFloat("scaleY", 1f, 1.14f));
+                        pulse.setDuration(650);
+                        pulse.setRepeatCount(android.animation.ValueAnimator.INFINITE);
+                        pulse.setRepeatMode(android.animation.ValueAnimator.REVERSE);
+                        pulse.start();
+                    }
+                } else if (pulse != null) {
+                    pulse.cancel();
+                    pulse = null;
+                    pIcon.setScaleX(1f);
+                    pIcon.setScaleY(1f);
+                }
             } catch (Exception ignored) {
             }
         });
@@ -330,17 +417,38 @@ public class BubbleService extends Service {
         h.postDelayed(() -> {
             if (rec.isOn() || QuickRecService.recording) return;
             try {
-                if (panel != null) wm.removeView(panel);
+                if (pulse != null) pulse.cancel();
+                pulse = null;
+                if (panelBox != null) wm.removeView(panelBox);
             } catch (Exception ignored) {
             }
             panel = null;
+            panelBox = null;
         }, delay);
     }
+
+    android.animation.ObjectAnimator micPulse;
 
     void recUI(boolean on) {
         h.post(() -> {
             if (micV == null) return;
             micV.setBackgroundResource(on ? R.drawable.bg_rec : R.drawable.bg_mic);
+            if (on) {
+                if (micPulse == null) {
+                    micPulse = android.animation.ObjectAnimator.ofPropertyValuesHolder(micV,
+                            android.animation.PropertyValuesHolder.ofFloat("scaleX", 1f, 1.12f),
+                            android.animation.PropertyValuesHolder.ofFloat("scaleY", 1f, 1.12f));
+                    micPulse.setDuration(600);
+                    micPulse.setRepeatCount(android.animation.ValueAnimator.INFINITE);
+                    micPulse.setRepeatMode(android.animation.ValueAnimator.REVERSE);
+                    micPulse.start();
+                }
+            } else if (micPulse != null) {
+                micPulse.cancel();
+                micPulse = null;
+                micV.setScaleX(1f);
+                micV.setScaleY(1f);
+            }
             micV.setImageResource(on ? R.drawable.ic_stop : R.drawable.ic_mic);
             camV.setBackgroundResource(on ? R.drawable.bg_gray : R.drawable.bg_cam);
             camV.setImageResource(on ? R.drawable.ic_close : R.drawable.ic_cam);
@@ -365,7 +473,7 @@ public class BubbleService extends Service {
         inst = null;
         if (rec.isOn()) rec.finish(true);
         try {
-            if (panel != null) wm.removeView(panel);
+            if (panelBox != null) wm.removeView(panelBox);
         } catch (Exception ignored) {
         }
         try {

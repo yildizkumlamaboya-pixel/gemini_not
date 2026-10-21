@@ -47,7 +47,7 @@ class QuickRec {
     }
 
     static final int RATE = 16000;
-    static final long MAX_MS = 180000, SILENCE_MS = 2500, NOVOICE_MS = 9000;
+    static final long MAX_MS = 180000, SILENCE_MS = 3000, NOVOICE_MS = 10000;
     final Service svc;
     final L l;
     final Handler h = new Handler(Looper.getMainLooper());
@@ -75,7 +75,9 @@ class QuickRec {
 
     // Yöntem A: Google tanıma mikrofonu kendisi dinler (Gemini/Google uygulamasıyla aynı kalite).
     // Çalışmazsa yöntem B: sesi kendimiz kaydedip Google tanımaya / Gemini'ye veririz.
-    volatile boolean modeA = false;
+    volatile boolean modeA = false, stopReq = false;
+    volatile long lastSpeech = 0;
+    static final long END_SILENCE = 4500; // konuşma bitti saymak için gereken sessizlik
     String engine = "";
     final Runnable tick = new Runnable() {
         public void run() {
@@ -83,7 +85,9 @@ class QuickRec {
             long s = (System.currentTimeMillis() - recStart) / 1000;
             String t = (said + " " + partial).trim();
             l.text((t.isEmpty() ? "🎤 Dinliyorum… " : "🎤 " + t + "  ") + String.format(java.util.Locale.ROOT, "%d:%02d", s / 60, s % 60));
-            if (System.currentTimeMillis() - recStart > MAX_MS) finish(false);
+            long now = System.currentTimeMillis();
+            if (now - recStart > MAX_MS) finish(false);
+            else if (said.length() > 0 && partial.trim().isEmpty() && now - lastSpeech > END_SILENCE + 1500) finish(false); // uzun sessizlik: kaydet
             else h.postDelayed(this, 400);
         }
     };
@@ -96,6 +100,8 @@ class QuickRec {
             canceled = false;
             heard = false;
             modeA = true;
+            stopReq = false;
+            lastSpeech = System.currentTimeMillis();
             engine = "google";
             recOn = true;
             recStart = System.currentTimeMillis();
@@ -125,7 +131,10 @@ class QuickRec {
             sr = hasG ? SpeechRecognizer.createSpeechRecognizer(svc, MainActivity.GOOGLE_STT) : SpeechRecognizer.createSpeechRecognizer(svc);
             sr.setRecognitionListener(new RecognitionListener() {
                 public void onReadyForSpeech(Bundle b) {}
-                public void onBeginningOfSpeech() { heard = true; }
+                public void onBeginningOfSpeech() {
+                    heard = true;
+                    lastSpeech = System.currentTimeMillis();
+                }
                 public void onRmsChanged(float v) {}
                 public void onBufferReceived(byte[] b) {}
                 public void onEndOfSpeech() {}
@@ -133,21 +142,37 @@ class QuickRec {
 
                 public void onPartialResults(Bundle b) {
                     ArrayList<String> r = b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
-                    if (r != null && !r.isEmpty() && r.get(0) != null) partial = r.get(0);
+                    if (r != null && !r.isEmpty() && r.get(0) != null) {
+                        if (!r.get(0).equals(partial)) lastSpeech = System.currentTimeMillis();
+                        partial = r.get(0);
+                    }
                 }
 
                 public void onResults(Bundle b) {
                     ArrayList<String> r = b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
-                    if (r != null && !r.isEmpty() && r.get(0) != null && !r.get(0).trim().isEmpty()) said.append(said.length() > 0 ? " " : "").append(r.get(0).trim());
+                    if (r != null && !r.isEmpty() && r.get(0) != null && !r.get(0).trim().isEmpty()) {
+                        said.append(said.length() > 0 ? " " : "").append(r.get(0).trim());
+                        lastSpeech = System.currentTimeMillis();
+                    }
                     partial = "";
-                    finishA(false); // susunca Google oturumu bitirir: kaydet
+                    // Google kısa duraklamada oturumu bitirir: konuşma bitmemiş olabilir, dinlemeye devam et
+                    if (stopReq) finishA(false);
+                    else h.post(QuickRec.this::listenA);
                 }
 
                 public void onError(int e) {
                     if (!recOn) return;
                     boolean nothing = said.length() == 0 && partial.trim().isEmpty();
                     if (e == SpeechRecognizer.ERROR_NO_MATCH || e == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
-                        finishA(false); // konuşma yoksa process "duyulmadı" der
+                        long now = System.currentTimeMillis();
+                        if (stopReq) finishA(false);
+                        else if (nothing && now - recStart < NOVOICE_MS) h.postDelayed(QuickRec.this::listenA, 150); // henüz konuşmadı
+                        else if (!nothing && now - lastSpeech < END_SILENCE) h.postDelayed(QuickRec.this::listenA, 150); // kısa ara
+                        else finishA(false); // uzun sessizlik: konuşma bitti
+                        return;
+                    }
+                    if (e == SpeechRecognizer.ERROR_RECOGNIZER_BUSY && !stopReq) {
+                        h.postDelayed(QuickRec.this::listenA, 300);
                         return;
                     }
                     if (nothing && !heard) { // Google tanıma arka planda dinleyemedi: kendi kaydımıza geç
@@ -390,6 +415,7 @@ class QuickRec {
                 }
                 finishA(true);
             } else {
+                stopReq = true;
                 try { // son sözleri de alsın: Google'a "bitti" de, sonuç gelince kaydedilir
                     if (sr != null) sr.stopListening();
                 } catch (Exception ignored) {

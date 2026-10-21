@@ -108,6 +108,21 @@ nav button.act b{background:linear-gradient(135deg,rgba(37,99,235,.13),rgba(6,18
 .vphotos{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:10px}.vphotos:empty{display:none}
 .vphotos img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px;cursor:pointer}
 .item.lp{transform:scale(.98);background:rgba(37,99,235,.06)}
+.sv{min-width:240px}.svh{display:flex;align-items:center;gap:8px;margin-bottom:4px}.svh b{flex:1;font-size:15px}
+.svok{display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,#10b981,#06b6d4);color:#fff;font-weight:800;font-size:13px}
+.svund{flex:0 0 auto;padding:6px 12px;border-radius:999px;border:0;background:rgba(37,99,235,.1);color:var(--acc);font-weight:700;font-size:13px;box-shadow:none}
+.svi{font-size:14px;padding:3px 0 3px 32px;line-height:1.35}.svi .tmut{color:var(--mut);font-size:12px;white-space:nowrap}
+.actsheet{padding-top:22px}.acthead{display:flex;gap:12px;align-items:center;margin-bottom:16px}
+.actic{flex:0 0 44px;height:44px;border-radius:14px;display:grid;place-items:center;font-size:22px;background:linear-gradient(135deg,rgba(37,99,235,.12),rgba(6,182,212,.14))}
+.acttitle{font-weight:700;font-size:17px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.actgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.acttile{flex-direction:column;align-items:flex-start;gap:4px;padding:16px;border-radius:18px;text-align:left;border:1px solid var(--line);background:#fff;box-shadow:0 6px 18px rgba(15,23,42,.06)}
+.acttile .tic{width:42px;height:42px;border-radius:13px;display:grid;place-items:center;color:#fff;margin-bottom:8px}
+.acttile .tic svg{width:22px;height:22px}.acttile b{font-size:16px}.acttile small{color:var(--mut);font-weight:500;font-size:12px}
+.acttile.edit .tic{background:linear-gradient(135deg,#2563eb,#06b6d4);box-shadow:0 6px 16px rgba(37,99,235,.35)}
+.acttile.del .tic{background:linear-gradient(135deg,#f43f5e,#ef4444);box-shadow:0 6px 16px rgba(239,68,68,.35)}
+.acttile.del b{color:#dc2626}.acttile:active{transform:scale(.97)}
+.actcancel{width:100%;margin-top:12px;font-weight:700}
 .mic.rec{background:var(--bad);border-color:var(--bad);color:#fff}
 .empty{text-align:center;color:var(--mut);padding:22px 0;font-size:14px}
 .stat{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
@@ -465,11 +480,13 @@ details.card[open] summary{margin-bottom:6px}
   <div class="row" id="vAct" style="margin-top:14px"></div>
   <div class="mut" style="font-size:12px;margin-top:10px;text-align:center">Düzenlemek veya silmek için listede üzerine basılı tut</div>
 </div></div>
-<div class="modal" id="mAct"><div class="sheet">
-  <div id="aTitle" style="font-weight:700;margin-bottom:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
-  <button id="aEdit" style="width:100%;margin-bottom:8px">✏️ Düzenle</button>
-  <button id="aDel" style="width:100%;margin-bottom:8px;color:var(--bad);border-color:var(--bad)">🗑 Sil</button>
-  <button class="ghost" style="width:100%" onclick="closeM('mAct')">Vazgeç</button>
+<div class="modal" id="mAct"><div class="sheet actsheet">
+  <div class="acthead"><span class="actic" id="aIcon"></span><div style="min-width:0;flex:1"><div class="mut" id="aKind" style="font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase"></div><div id="aTitle" class="acttitle"></div></div></div>
+  <div class="actgrid">
+    <button id="aEdit" class="acttile edit"><span class="tic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></span><b>Düzenle</b><small>Başlık, metin, tarih</small></button>
+    <button id="aDel" class="acttile del"><span class="tic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg></span><b>Sil</b><small>Geri alınabilir</small></button>
+  </div>
+  <button class="ghost actcancel" onclick="closeM('mAct')">Vazgeç</button>
 </div></div>
 <div class="modal" id="mNote"><div class="sheet">
   <div class="row"><h3 style="margin:0">Not</h3><button class="sm ghost" style="flex:0 0 auto" onclick="closeNote()">✕</button></div>
@@ -764,8 +781,8 @@ $('qBtn').onclick=async()=>{
   try{
     pending=await gemini(text,{system:quickSys(),json:true});
     pending.notes=pending.notes||[];pending.tasks=pending.tasks||[];pending.src=text;
-    $('qText').value='';$('qText').style.height=''; // yazı önizlemeye geçti, alan temizlenir
-    renderPreview();
+    if(!pending.notes.length&&!pending.tasks.length)pending.notes=[{title:text.split(/[.\n]/)[0].slice(0,50)||'Not',body:text,tags:[]}];
+    commitPending(); // onay beklemeden doğrudan kaydet (Geri al ile geri alınabilir)
   }catch(e){if(OFFLINE_ERR.test(e.message))queueAI(text);else toastMsg('⚠️ '+e.message)}
   busy($('qBtn'),false);
 };
@@ -903,11 +920,23 @@ async function aiFix(text){
 }
 function pvCancel(){const t=pending?.src||'';pending=null;renderPreview();if(t&&!$('qText').value.trim()){$('qText').value=t;$('qText').dispatchEvent(new Event('input'))}}
 function commitPending(){
-  const now=Date.now();
-  pending.tasks.forEach(t=>tasks.push({id:uid(),title:t.title,note:t.note||'',due:t.due||'',remind:t.remind||'',priority:t.priority||'orta',repeat:t.repeat||'',done:false,notified:false,created:now}));
-  const via=pending.transcript?'voice':'';pending.notes.forEach(n=>notes.push({id:uid(),title:n.title,body:n.body||'',tags:n.tags||[],pinned:false,created:now,updated:now,src:'ai',via}));
-  toastMsg(`✔ ${pending.tasks.length} görev, ${pending.notes.length} not eklendi`);
-  pending=null;$('qText').value='';$('qText').style.height='';save();renderAll();
+  const now=Date.now(),ids=[],src=pending.src||'';
+  pending.tasks.forEach(t=>{const id=uid();ids.push(id);tasks.push({id,title:t.title,note:t.note||'',due:t.due||'',remind:t.remind||'',priority:t.priority||'orta',repeat:t.repeat||'',done:false,notified:false,created:now})});
+  const via=pending.transcript?'voice':'';pending.notes.forEach(n=>{const id=uid();ids.push(id);notes.push({id,title:n.title,body:n.body||'',tags:n.tags||[],pinned:false,created:now,updated:now,src:'ai',via})});
+  const list=[...pending.tasks.map(t=>'✅ '+esc(t.title)+(t.remind?' <span class="tmut">⏰ '+fmt(t.remind)+'</span>':t.due?' <span class="tmut">📅 '+fmt(t.due)+'</span>':'')),...pending.notes.map(n=>'📝 '+esc(n.title))];
+  pending=null;$('qText').value='';$('qText').style.height='';save();renderAll();renderPreview();
+  savedToast(list,ids,src);
+}
+// Kaydedildi bildirimi: ne eklendiğini gösterir, "Geri al" ile tek dokunuşta geri alınır
+function savedToast(list,ids,src){
+  window._undo={ids,src};
+  toastMsg(`<div class="sv"><div class="svh"><span class="svok">✓</span><b>Kaydedildi</b><button class="svund" onclick="undoSave()">Geri al</button></div>${list.slice(0,4).map(x=>`<div class="svi">${x}</div>`).join('')}</div>`,6000);
+}
+function undoSave(){
+  const u=window._undo;if(!u)return;const ids=new Set(u.ids);
+  tasks=tasks.filter(t=>!ids.has(t.id));notes=notes.filter(n=>!ids.has(n.id));save();renderAll();window._undo=null;
+  if(u.src){$('qText').value=u.src;$('qText').dispatchEvent(new Event('input'))}
+  toastMsg('↶ Geri alındı',2000);
 }
 
 // ================= SESLİ GİRİŞ (Gemini ses) =================
@@ -933,7 +962,7 @@ function sttVoice(mode){
   $('micBtn').classList.add('rec');rec.lastP=Date.now();
   rec.tick=setInterval(()=>{const s=Math.floor((Date.now()-rec.t0)/1000);$('recTime').textContent=`${Math.floor(s/60)}:${pad(s%60)}`;
     // susunca kendiliğinden kaydet; hiç konuşulmazsa kapat
-    if(rec.stt&&rec.sttText&&Date.now()-rec.lastP>3000)recFinish();
+    if(rec.stt&&rec.sttText&&Date.now()-rec.lastP>4500)recFinish();
     else if(rec.stt&&!rec.sttText&&Date.now()-rec.t0>10000){recCancel();toastMsg('🤫 Ses duyulmadı')}},250);
 }
 window.onStt=(type,text)=>{
@@ -993,7 +1022,9 @@ function applyVoice(mode,text){
     let r;try{r=JSON.parse(text)}catch{const m=String(text).match(/\{[\s\S]*\}/);r=m?JSON.parse(m[0]):null}
     if(!r)throw new Error('AI yanıtı çözümlenemedi');
     pending={notes:r.notes||[],tasks:r.tasks||[],transcript:r.transcript||''};
-    show('bugun');pending.src=pending.transcript;renderPreview();$('qPreview').scrollIntoView({behavior:'smooth',block:'center'});beep();
+    show('bugun');pending.src=pending.transcript;
+    if(!pending.notes.length&&!pending.tasks.length&&pending.transcript)pending.notes=[{title:pending.transcript.split(/[.\n]/)[0].slice(0,50),body:pending.transcript,tags:[]}];
+    commitPending();beep();
   }else if(mode==='note'){
     const t=String(text).trim();
     if($('mNote').classList.contains('on')){const b=$('nBody');b.value=(b.value.trim()?b.value.trimEnd()+'\n\n':'')+t;if(!$('nTitle').value.trim())$('nTitle').value=t.split(/[.\n]/)[0].slice(0,50)}
@@ -2239,11 +2270,13 @@ function shareItem(k,id){
 function itemMenu(k,id){
   const x=(k==='n'?notes:tasks).find(y=>y.id===id);if(!x)return;
   try{navigator.vibrate?.(25)}catch{}
-  $('aTitle').textContent=x.title||'';
+  $('aTitle').textContent=x.title||'';$('aKind').textContent=k==='n'?'Not':'Görev';$('aIcon').textContent=k==='n'?(x.photos?.length?'📷':'📝'):(x.done?'✔️':'✅');
   $('aEdit').onclick=()=>{closeM('mAct');k==='n'?openNote(id):openTask(id)};
-  $('aDel').onclick=()=>{closeM('mAct');if(!confirm((k==='n'?'Not':'Görev')+' silinsin mi?'))return;
-    if(k==='n'){(x.photos||[]).forEach(p=>DB.del(p.id).catch(()=>{}));notes=notes.filter(y=>y.id!==id)}else tasks=tasks.filter(y=>y.id!==id);
-    save();renderAll();toastMsg('🗑 Silindi')};
+  $('aDel').onclick=()=>{closeM('mAct'); // sil: 6 sn içinde geri alınabilir, fotoğraflar sonra silinir
+    const arr=k==='n'?notes:tasks,idx=arr.findIndex(y=>y.id===id);if(idx<0)return;const [it]=arr.splice(idx,1);save();renderAll();
+    let undone=false;window.undoDel=()=>{undone=true;(k==='n'?notes:tasks).splice(idx,0,it);save();renderAll();toastMsg('↶ Geri alındı',2000)};
+    toastMsg(`<div class="sv"><div class="svh"><span class="svok" style="background:linear-gradient(135deg,#f43f5e,#ef4444)">✕</span><b>Silindi</b><button class="svund" onclick="undoDel()">Geri al</button></div><div class="svi">${esc(it.title||'')}</div></div>`,6000);
+    setTimeout(()=>{if(!undone&&k==='n')(it.photos||[]).forEach(p=>DB.del(p.id).catch(()=>{}))},7000)};
   $('mAct').classList.add('on');
 }
 // Listelerde: kısa dokunuş = görüntüle, basılı tutma = menü
