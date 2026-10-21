@@ -672,12 +672,18 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public boolean diaryStart(String prompt, String code, String model) {
+            return diaryStart(prompt, code, model, null, null);
+        }
+
+        @JavascriptInterface
+        public boolean diaryStart(String prompt, String code, String model, String refinePrompt, String refineModel) {
             if (!has(MIC)) {
                 runOnUiThread(() -> requestPermissions(new String[]{MIC}, RC_ALL));
                 return false;
             }
             Intent i = new Intent(MainActivity.this, DiaryService.class);
-            if (prompt != null) i.putExtra("prompt", prompt).putExtra("code", code).putExtra("model", model);
+            if (prompt != null) i.putExtra("prompt", prompt).putExtra("code", code).putExtra("model", model)
+                    .putExtra("refinePrompt", refinePrompt).putExtra("refineModel", refineModel);
             if (Build.VERSION.SDK_INT >= 26) startForegroundService(i);
             else startService(i);
             return true;
@@ -691,7 +697,7 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public String diaryState() {
             try {
-                return new JSONObject().put("on", DiaryService.running).put("since", DiaryService.since).put("level", DiaryService.level).put("error", DiaryService.error).put("pending", DiaryService.pending.get()).toString();
+                return new JSONObject().put("on", DiaryService.running).put("since", DiaryService.since).put("level", DiaryService.level).put("error", DiaryService.error).put("pending", DiaryService.pending.get()).put("refining", DiaryService.refining.get()).toString();
             } catch (Exception e) {
                 return "{}";
             }
@@ -715,7 +721,7 @@ public class MainActivity extends Activity {
             if (fs != null) {
                 java.util.Arrays.sort(fs);
                 for (File f : fs)
-                    if (f.getName().matches("r_\\d+\\.json")) {
+                    if (f.getName().matches("rf?_\\d+\\.json")) {
                         try {
                             a.put(new JSONObject(Summary.read(f)).put("name", f.getName()));
                         } catch (Exception ignored) {
@@ -727,7 +733,7 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public void diaryAck(String name) {
-            if (name != null && name.matches("r_\\d+\\.json")) new File(DiaryService.dir(MainActivity.this), name).delete();
+            if (name != null && name.matches("rf?_\\d+\\.json")) new File(DiaryService.dir(MainActivity.this), name).delete();
         }
 
         @JavascriptInterface

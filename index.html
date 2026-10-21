@@ -137,6 +137,8 @@ nav button.act b{background:linear-gradient(135deg,rgba(37,99,235,.13),rgba(6,18
 .recbar.on{display:flex}
 .recbar i{width:9px;height:9px;border-radius:50%;background:#ef4444;animation:pul 1.4s ease-out infinite}
 .mono{font-family:var(--mono)}
+.dent.draft .tx{color:#475569}
+.ok-tag{background:#d1fae5;color:#047857}
 .dent.call{border-left:3px solid var(--acc2);padding-left:10px}
 .dent.live{opacity:.75}
 .livedot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--bad);margin-right:4px;animation:pul 1.4s ease-out infinite}
@@ -670,12 +672,12 @@ async function callGemini(payload){
     throw new Error(msg);
   }
 }
-async function gemini(prompt,{system='',json=false,history=null,parts=null,temp}={}){
+async function gemini(prompt,{system='',json=false,history=null,parts=null,temp,model}={}){
   const contents=history||[{role:'user',parts:[...(parts||[]),{text:prompt}]}];
   const body={contents,generationConfig:{temperature:temp??(parts?.some(p=>p.inlineData?.mimeType?.startsWith('audio'))?0:.4),thinkingConfig:{thinkingBudget:0}}};
   if(system)body.systemInstruction={parts:[{text:system}]};
   if(json)body.generationConfig.responseMimeType='application/json';
-  const d=await callGemini({body});
+  const d=await callGemini(model?{body,model}:{body});
   const txt=(d.candidates?.[0]?.content?.parts||[]).map(p=>p.text||'').join('');
   setDot(true);
   if(!txt)throw new Error('Gemini boş yanıt döndü');
@@ -1261,7 +1263,7 @@ function diaryUI(on){
 }
 async function diaryStart(){
   if(NATIVE_DIARY){
-    if(!Android.diaryStart(diaryPrompt(),cfg.code||'',cfg.model||'gemini-flash-latest')){toastMsg('🎤 Mikrofon izni gerekli');return}
+    if(!Android.diaryStart(diaryPrompt(),cfg.code||'',cfg.model||'gemini-flash-latest',refinePrompt(),'gemini-pro-latest')){toastMsg('🎤 Mikrofon izni gerekli');return}
     dr.on=true;dr.native=true;dr.t0=Date.now();diaryUI(true);nativeTick();return;
   }
   if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder){toastMsg('Bu cihaz ses kaydını desteklemiyor');return}
@@ -1278,10 +1280,11 @@ async function diaryStart(){
 }
 // Uygulamada kayıt Android servisinde sürer (ekran kapalıyken de); burada sadece durum gösterilir ve parçalar yazıya dökülür
 function nativeTick(){
-  clearInterval(dr.tick);let n=0;
+  clearInterval(dr.tick);let n=0;dr.idle=0;
   dr.tick=setInterval(()=>{
     let st={};try{st=JSON.parse(Android.diaryState())}catch{}
-    if(!st.on){if(dr.on){dr.on=false;diaryUI(false);if(st.error)toastMsg('⚠️ '+st.error)}pullResults(st);pullChunks();if(!st.pending)clearInterval(dr.tick);return}
+    if(!st.on){if(dr.on){dr.on=false;diaryUI(false);if(st.error)toastMsg('⚠️ '+st.error)}pullResults(st);pullChunks();if(!st.pending&&!st.refining&&++dr.idle>3)clearInterval(dr.tick);return}
+    dr.idle=0;
     dr.on=true;const t=fmtDur(Math.floor((Date.now()-st.since)/1000));$('dTime').textContent=t;$('rbTime').textContent=t;$('dLvl').style.width=(st.level||0)+'%';
     if(++n%5===0){pullResults(st);pullChunks()}
   },200);
@@ -1292,16 +1295,25 @@ function pullResults(st){
   let rs=[];try{rs=JSON.parse(Android.diaryResults())}catch{}
   let added=0;
   for(const r of rs){
+    if(Array.isArray(r.replaces)){ // iyileştirilmiş bölüm: taslak parçaların yerine geçer
+      const keys=new Set(r.replaces.map(t=>'r_'+t)),old=diary.filter(e=>keys.has(e.chunk));
+      if(r.text&&!old.some(e=>e.edited)&&!diary.some(e=>e.chunk==='rf_'+r.ts)){
+        diary=diary.filter(e=>!keys.has(e.chunk));
+        diary.push({id:'d'+uid(),ts:r.ts,dur:Math.round((r.dur||0)/1000),text:r.text,chunk:'rf_'+r.ts,refined:true,parts:[...keys]});added++;
+      }
+      Android.diaryAck(r.name);continue;
+    }
     const key='r_'+r.ts;
+    if(diary.some(e=>e.parts?.includes(key))){Android.diaryAck(r.name);continue} // zaten iyileştirilmiş
     if(!diary.some(e=>e.chunk===key)){
       if(r.text){diary.push({id:'d'+uid(),ts:r.ts,dur:Math.round((r.dur||0)/1000),text:r.text,chunk:key});added++}
       else if(r.err){diary.push({id:'d'+uid(),ts:r.ts,dur:Math.round((r.dur||0)/1000),text:'',err:r.err,nfile:r.file,chunk:key});added++}
     }
     Android.diaryAck(r.name);
   }
-  if(st)dr.npending=st.pending||0;else{try{dr.npending=JSON.parse(Android.diaryState()).pending||0}catch{}}
+  if(st){dr.npending=st.pending||0;dr.nrefine=st.refining||0}else{try{const s=JSON.parse(Android.diaryState());dr.npending=s.pending||0;dr.nrefine=s.refining||0}catch{}}
   if(added)saveDiary();
-  if(added||dr.npending!==dr.lastNP){dr.lastNP=dr.npending;renderDiary(added>0);diaryStatus()}
+  if(added||dr.npending!==dr.lastNP||dr.nrefine!==dr.lastNR){dr.lastNP=dr.npending;dr.lastNR=dr.nrefine;renderDiary(added>0);diaryStatus()}
 }
 function pullChunks(){
   if(!NATIVE_DIARY)return;
@@ -1338,7 +1350,7 @@ function wakeOff(){if(APP){try{Android.keepScreenOn(false)}catch{}dr.wake=null;r
 document.addEventListener('visibilitychange',()=>{if(document.hidden)return;if(dr.on&&!dr.native&&!dr.wake)wakeOn();if(NATIVE_DIARY){pullResults();pullChunks();let st={};try{st=JSON.parse(Android.diaryState())}catch{}if(st.on&&!dr.on){dr.on=true;dr.native=true;diaryUI(true);nativeTick()}}});
 function diaryStatus(){
   const q=dr.queue.length+(dr.inflight?.length||0)+(dr.npending||0);
-  $('dStat').textContent=dr.on?`Kaydediliyor${dr.native?' · ekran kapansa da sürer':''}${q?` · ${q} parça işleniyor`:''}`
+  $('dStat').textContent=dr.on?`Kaydediliyor${dr.native?' · ekran kapansa da sürer':''}${q?` · ${q} parça işleniyor`:''}${dr.nrefine?' · ✓ iyileştiriliyor':''}`
     :q?`${q} parça yazıya dökülüyor...`:'Kaydı başlatmak için dokun';
 }
 function enqueue(blob,start){dr.queue.push({blob,start});diaryStatus();processQueue()}
@@ -1356,6 +1368,12 @@ async function processOne({blob,start,native}){
   if(e.text||e.err){if(!(native&&diary.some(x=>x.chunk===native))){diary.push(e);saveDiary();renderDiary(true)}}
   done();
 }
+function refinePrompt(){return `Bu, sesli günlük kaydının yaklaşık 1,5-2 dakikalık bir bölümü. Görevin: sesi baştan sona dikkatle dinleyip KELİMESİ KELİMESİNE en doğru Türkçe dökümü çıkarmak.
+- Her kelimeyi cümlenin ve konuşmanın bağlamına göre değerlendir; anlamsız ya da bağlama uymayan bir kelime duyarsan sesi tekrar değerlendir ve sese en yakın, anlamlı Türkçe kelimeyi seç.
+- Ağız, şive, hızlı konuşma ve arka plan gürültüsüne (kompresör, makine) rağmen konuşmayı ayıkla.
+- Özetleme, yorum, düzeltme yapma; söyleneni olduğu gibi yaz (argo dahil).
+- Konuşmacıları her satırda "Konuşmacı 1:", "Konuşmacı 2:" diye ayır, isim geçiyorsa ismi kullan; bölüm boyunca aynı kişiye aynı etiketi ver.
+- Anlaşılmayan yerlere [anlaşılmıyor] yaz. Konuşma yoksa yalnızca BOŞ yaz. Sadece döküm metnini ver.${vocabHint()}`}
 function diaryPrompt(){return `Bu ses kaydını Türkçe olarak KELİMESİ KELİMESİNE yazıya dök. Özetleme, yorum ekleme, düzeltme yapma.
 Birden fazla kişi konuşuyorsa her konuşmayı yeni satırda "Konuşmacı 1:", "Konuşmacı 2:" diye ayır; konuşmada isim geçiyorsa o ismi kullan.
 Anlaşılmayan yerlere [anlaşılmıyor] yaz. Hiç konuşma yoksa (sadece gürültü, makine sesi, sessizlik) yalnızca BOŞ yaz; <noise> gibi etiketler kullanma.${vocabHint()}`}
@@ -1385,7 +1403,7 @@ function renderDiary(scroll){
   list=[...list].sort((a,b)=>q?b.ts-a.ts:a.ts-b.ts);
   const mins=Math.round(list.reduce((s,e)=>s+(e.dur||0),0)/60);
   $('dCount').textContent=list.length?(q?`"${q}" geçen ${list.length} kayıt (tüm günler)`:`${list.length} kayıt · ~${mins} dk konuşma`):'';
-  $('dList').innerHTML=list.length?list.map(e=>`<div class="dent${e.kind==='call'?' call':''}"><div class="tm">${q?stampDate(e.ts):hm(e.ts)}${e.kind==='call'?` <span class="tag">📞 ${esc(e.who||'Telefon')}</span>`:''}${e.dur?` <span class="mut" style="font-weight:500">${Math.round(e.dur)} sn</span>`:''}<span style="flex:1"></span>${(e.audio||e.nfile)&&!dr.retrying?.has(e.id)?`<button class="sm" onclick="retryEntry('${e.id}')">↻ Yazıya dök</button>`:''}<button class="sm ghost" onclick="editEntry('${e.id}')" title="Düzenle">✏️</button><button class="sm ghost" onclick="delEntry('${e.id}')">✕</button></div>
+  $('dList').innerHTML=list.length?list.map(e=>`<div class="dent${e.kind==='call'?' call':''}${e.chunk?.startsWith('r_')&&!e.edited&&Date.now()-e.ts<15*60e3?' draft':''}"><div class="tm">${q?stampDate(e.ts):hm(e.ts)}${e.refined?' <span class="tag ok-tag" title="Güçlü modelle iyileştirildi">✓</span>':''}${e.kind==='call'?` <span class="tag">📞 ${esc(e.who||'Telefon')}</span>`:''}${e.dur?` <span class="mut" style="font-weight:500">${Math.round(e.dur)} sn</span>`:''}<span style="flex:1"></span>${(e.audio||e.nfile)&&!dr.retrying?.has(e.id)?`<button class="sm" onclick="retryEntry('${e.id}')">↻ Yazıya dök</button>`:''}<button class="sm ghost" onclick="editEntry('${e.id}')" title="Düzenle">✏️</button><button class="sm ghost" onclick="delEntry('${e.id}')">✕</button></div>
     <div class="tx">${dEdit===e.id?`<textarea rows="4">${esc(e.text)}</textarea><div class="row" style="margin-top:6px"><button class="sm" onclick="dEdit=null;renderDiary()">Vazgeç</button><button class="sm pri" onclick="saveEntry('${e.id}')">Kaydet</button></div>`:dr.retrying?.has(e.id)?'<span class="pend"><span class="spin"></span> Yazıya dökülüyor...</span>':e.text?hl(e.text,q):`<span class="pend">⚠️ ${esc(e.err||'Yazıya dökülemedi')} — ses saklandı, ↻ ile tekrar dene.</span>`}</div></div>`).join('')
     :(live?'':`<div class="empty">${q?'Eşleşen kayıt yok':'Bu gün için kayıt yok'}</div>`);
   if(live){
@@ -1773,7 +1791,7 @@ async function transcribeCall(blob,who,onPart){
     const seg=f.subarray(k*SEG,Math.min(f.length,(k+1)*SEG));
     let sq=0;for(let i=0;i<seg.length;i+=8)sq+=seg[i]*seg[i];if(Math.sqrt(sq/(seg.length/8))<0.004)continue;
     let t=(await gemini(`Bu, bir telefon görüşmesi kaydının ${k+1}/${n}. bölümü. Kelimesi kelimesine Türkçe yazıya dök; özetleme, yorum ekleme.
-Konuşmacıları her satırda "Ben:" (telefonun sahibi) ve "${who}:" (karşı taraf) olarak ayır. Anlaşılmayan yerlere [anlaşılmıyor] yaz. Konuşma yoksa yalnızca BOŞ yaz.${vocabHint()}${prev?`\nÖnceki bölümün sonu (bağlam için, tekrar yazma): "${prev}"`:''}`,{parts:[{inlineData:{mimeType:'audio/wav',data:wavB64(seg)}}]})).trim();
+Konuşmacıları her satırda "Ben:" (telefonun sahibi) ve "${who}:" (karşı taraf) olarak ayır. Anlaşılmayan yerlere [anlaşılmıyor] yaz. Konuşma yoksa yalnızca BOŞ yaz.${vocabHint()}${prev?`\nÖnceki bölümün sonu (bağlam için, tekrar yazma): "${prev}"`:''}`,{parts:[{inlineData:{mimeType:'audio/wav',data:wavB64(seg)}}],model:'gemini-pro-latest'})).trim();
     t=t.replace(/<\s*\/?\s*(noise|silence|music|inaudible)\s*>/gi,'').trim();
     if(t&&!/^BOŞ\.?$/i.test(t)){out.push(t);prev=t.slice(-200)}
     onPart?.(k+1,n);

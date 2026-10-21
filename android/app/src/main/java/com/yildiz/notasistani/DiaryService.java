@@ -32,8 +32,14 @@ public class DiaryService extends Service {
     // Konuşmadaki duraklamada kes: en az 4 sn, en çok 25 sn; 1 sn sessizlik = cümle sonu
     static final long MIN_CHUNK = 5000, MAX_CHUNK = 25000, SILENCE = 1000;
     static final AtomicInteger pending = new AtomicInteger(0);
-    ExecutorService pool;
-    String prompt, code, model;
+    ExecutorService pool, refinePool;
+    String prompt, code, model, refinePrompt, refineModel;
+    static final AtomicInteger refining = new AtomicInteger(0);
+    // İyileştirme tamponu: taslağı çıkan parçalar ~100 sn birikince güçlü modelle birlikte yeniden yazıya dökülür
+    static final long REFINE_MS = 100000;
+    final java.util.List<long[]> qbuf = new java.util.ArrayList<>();
+    final java.util.Map<Long, String> qtext = new java.util.HashMap<>();
+    volatile String lastRefined = "";
     volatile String lastText = "";
     static final int VOICE_AMP = 1500;
     long lastVoice = 0;
@@ -90,11 +96,19 @@ public class DiaryService extends Service {
         }
         if (intent != null && intent.hasExtra("prompt")) {
             prompt = intent.getStringExtra("prompt");
+            refinePrompt = intent.getStringExtra("refinePrompt");
+            refineModel = intent.getStringExtra("refineModel");
             code = intent.getStringExtra("code");
             model = intent.getStringExtra("model");
         }
         if (!running) {
             if (pool == null || pool.isShutdown()) pool = Executors.newFixedThreadPool(2);
+            if (refinePool == null || refinePool.isShutdown()) refinePool = Executors.newSingleThreadExecutor();
+            synchronized (qbuf) {
+                qbuf.clear();
+                qtext.clear();
+            }
+            lastRefined = "";
             lastText = "";
             startFg();
             running = true;
@@ -204,12 +218,17 @@ public class DiaryService extends Service {
         if (h != null) h.removeCallbacksAndMessages(null);
         finishChunk();
         // Kalan parçalar bitene kadar servisi açık tut (en fazla 5 dk)
-        final ExecutorService p = pool;
+        final ExecutorService p = pool, rp = refinePool;
         new Thread(() -> {
             try {
                 if (p != null) {
                     p.shutdown();
                     p.awaitTermination(5, TimeUnit.MINUTES);
+                }
+                flushRefine(); // kalan taslakları da iyileştir
+                if (rp != null) {
+                    rp.shutdown();
+                    rp.awaitTermination(6, TimeUnit.MINUTES);
                 }
             } catch (Exception ignored) {
             }
@@ -222,6 +241,77 @@ public class DiaryService extends Service {
                 stopSelf();
             });
         }).start();
+    }
+
+    void flushRefine() {
+        final java.util.List<long[]> items;
+        final java.util.Map<Long, String> texts;
+        synchronized (qbuf) {
+            if (qbuf.isEmpty()) return;
+            items = new java.util.ArrayList<>(qbuf);
+            texts = new java.util.HashMap<>(qtext);
+            qbuf.clear();
+            qtext.clear();
+        }
+        items.sort((a, b) -> Long.compare(a[0], b[0]));
+        refining.incrementAndGet();
+        try {
+            refinePool.submit(() -> refine(items, texts));
+        } catch (Exception e) {
+            refining.decrementAndGet();
+            for (long[] q : items) new File(dir(this), "q_" + q[0] + "_" + q[1] + ".aac").delete();
+        }
+    }
+
+    /** Birkaç parçanın sesini birleştirip güçlü modelle bağlamıyla birlikte yeniden yazıya döker. */
+    void refine(java.util.List<long[]> items, java.util.Map<Long, String> texts) {
+        try {
+            java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream();
+            StringBuilder draft = new StringBuilder();
+            JSONArray rep = new JSONArray();
+            long total = 0;
+            for (long[] q : items) {
+                File f = new File(dir(this), "q_" + q[0] + "_" + q[1] + ".aac");
+                if (!f.exists()) continue;
+                try (InputStream is = new FileInputStream(f)) { // ADTS çerçeveleri art arda eklenebilir
+                    byte[] b = new byte[16384];
+                    int n;
+                    while ((n = is.read(b)) > 0) bo.write(b, 0, n);
+                }
+                draft.append(texts.getOrDefault(q[0], "")).append("\n");
+                rep.put(q[0]);
+                total += q[1];
+            }
+            if (rep.length() == 0) return;
+            String pr = refinePrompt + "\n\nTASLAK (hızlı yapılmış döküm; yanlış duyulmuş kelimeler içerebilir, taslağa değil SESE güven):\n" + draft
+                    + (lastRefined.isEmpty() ? "" : "\nBir önceki bölümün sonu (bağlam için, tekrar yazma): \"" + lastRefined + "\"");
+            JSONObject body = new JSONObject()
+                    .put("contents", new JSONArray().put(new JSONObject().put("role", "user").put("parts", new JSONArray()
+                            .put(new JSONObject().put("inlineData", new JSONObject().put("mimeType", "audio/aac").put("data", Base64.encodeToString(bo.toByteArray(), Base64.NO_WRAP))))
+                            .put(new JSONObject().put("text", pr)))))
+                    .put("generationConfig", new JSONObject().put("temperature", 0));
+            JSONObject payload = new JSONObject().put("model", refineModel == null || refineModel.isEmpty() ? "gemini-pro-latest" : refineModel).put("body", body);
+            String text = null;
+            for (int a = 0; a < 2 && text == null; a++) {
+                try {
+                    text = Summary.post(this, payload, code);
+                } catch (Exception e) {
+                    Thread.sleep(4000);
+                }
+            }
+            if (text != null) {
+                text = text.replaceAll("(?i)<\\s*/?\\s*(noise|silence|music|inaudible)\\s*>", "").trim();
+                if (!text.isEmpty() && !text.matches("(?i)^BOŞ\\.?$")) {
+                    lastRefined = text.length() > 200 ? text.substring(text.length() - 200) : text;
+                    Summary.write(new File(dir(this), "rf_" + items.get(0)[0] + ".json"), new JSONObject()
+                            .put("ts", items.get(0)[0]).put("dur", total).put("text", text).put("replaces", rep).toString());
+                }
+            }
+        } catch (Exception ignored) {
+        } finally {
+            for (long[] q : items) new File(dir(this), "q_" + q[0] + "_" + q[1] + ".aac").delete();
+            refining.decrementAndGet();
+        }
     }
 
     void transcribe(File f, long start, long dur) {
@@ -259,9 +349,19 @@ public class DiaryService extends Service {
                 text = text.replaceAll("(?i)<\\s*/?\\s*(noise|silence|music|inaudible)\\s*>", "").trim();
                 if (text.matches("(?i)^BOŞ\\.?$") || text.matches("^[\\s.…,-]*$")) text = "";
                 if (!text.isEmpty()) lastText = text.length() > 200 ? text.substring(text.length() - 200) : text;
-                f.delete();
-                if (!text.isEmpty())
+                if (!text.isEmpty()) {
                     Summary.write(new File(dir(this), "r_" + start + ".json"), new JSONObject().put("ts", start).put("dur", dur).put("text", text).toString());
+                    if (refinePrompt != null && !refinePrompt.isEmpty()) {
+                        f.renameTo(new File(dir(this), "q_" + start + "_" + dur + ".aac"));
+                        long total = 0;
+                        synchronized (qbuf) {
+                            qbuf.add(new long[]{start, dur});
+                            qtext.put(start, text);
+                            for (long[] q : qbuf) total += q[1];
+                        }
+                        if (total >= REFINE_MS) flushRefine();
+                    } else f.delete();
+                } else f.delete();
             } else {
                 File keep = new File(dir(this), "f_" + start + "_" + dur + ".aac");
                 f.renameTo(keep);
