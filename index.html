@@ -741,7 +741,8 @@ $('qBtn').onclick=async()=>{
   busy($('qBtn'),true,'Ayrıştırılıyor...');
   try{
     pending=await gemini(text,{system:quickSys(),json:true});
-    pending.notes=pending.notes||[];pending.tasks=pending.tasks||[];
+    pending.notes=pending.notes||[];pending.tasks=pending.tasks||[];pending.src=text;
+    $('qText').value='';$('qText').style.height=''; // yazı önizlemeye geçti, alan temizlenir
     renderPreview();
   }catch(e){if(OFFLINE_ERR.test(e.message))queueAI(text);else toastMsg('⚠️ '+e.message)}
   busy($('qBtn'),false);
@@ -842,7 +843,7 @@ function renderPreview(){
     <button style="flex:0 0 46px" onclick="voice('fix')" title="Sesle düzelt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3.5"/></svg></button>
     <button class="ai" style="flex:0 0 auto" id="qFixBtn" onclick="aiFix()">✨ Düzelt</button>
   </div>
-  <div class="row" style="margin-top:8px"><button onclick="pending=null;renderPreview()">Vazgeç</button><button class="pri" onclick="pvSave(true);commitPending()">Hepsini ekle</button></div>`;
+  <div class="row" style="margin-top:8px"><button onclick="pvCancel()">Vazgeç</button><button class="pri" onclick="pvSave(true);commitPending()">Hepsini ekle</button></div>`;
   $('qPreview').innerHTML=h;
   $('qFix').onkeydown=e=>{if(e.key==='Enter')aiFix()};
   const ed=$('qPreview').querySelector('.pvedit input');if(ed)ed.focus();
@@ -878,6 +879,7 @@ async function aiFix(text){
   }catch(e){toastMsg('⚠️ '+esc(e.message))}
   busy(b,false);renderPreview();
 }
+function pvCancel(){const t=pending?.src||'';pending=null;renderPreview();if(t&&!$('qText').value.trim()){$('qText').value=t;$('qText').dispatchEvent(new Event('input'))}}
 function commitPending(){
   const now=Date.now();
   pending.tasks.forEach(t=>tasks.push({id:uid(),title:t.title,note:t.note||'',due:t.due||'',remind:t.remind||'',priority:t.priority||'orta',repeat:t.repeat||'',done:false,notified:false,created:now}));
@@ -965,7 +967,7 @@ function applyVoice(mode,text){
     let r;try{r=JSON.parse(text)}catch{const m=String(text).match(/\{[\s\S]*\}/);r=m?JSON.parse(m[0]):null}
     if(!r)throw new Error('AI yanıtı çözümlenemedi');
     pending={notes:r.notes||[],tasks:r.tasks||[],transcript:r.transcript||''};
-    show('bugun');$('qText').value=pending.transcript;$('qText').dispatchEvent(new Event('input'));renderPreview();$('qPreview').scrollIntoView({behavior:'smooth',block:'center'});beep();
+    show('bugun');pending.src=pending.transcript;renderPreview();$('qPreview').scrollIntoView({behavior:'smooth',block:'center'});beep();
   }else if(mode==='note'){
     const t=String(text).trim();
     if($('mNote').classList.contains('on')){const b=$('nBody');b.value=(b.value.trim()?b.value.trimEnd()+'\n\n':'')+t;if(!$('nTitle').value.trim())$('nTitle').value=t.split(/[.\n]/)[0].slice(0,50)}
