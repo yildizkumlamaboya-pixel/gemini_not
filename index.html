@@ -137,6 +137,9 @@ nav button.act b{background:linear-gradient(135deg,rgba(37,99,235,.13),rgba(6,18
 .recbar.on{display:flex}
 .recbar i{width:9px;height:9px;border-radius:50%;background:#ef4444;animation:pul 1.4s ease-out infinite}
 .mono{font-family:var(--mono)}
+#ttsBtn.act{background:var(--grad);color:#fff;border-color:transparent}
+.spk{padding:2px 6px!important;margin-left:4px;vertical-align:middle;opacity:.7}
+.spk svg{width:16px;height:16px}
 .cam{position:fixed;inset:0;z-index:40;background:#000;display:flex;flex-direction:column}
 .camstage{position:relative;flex:1;overflow:hidden}
 .camstage video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000}
@@ -249,6 +252,7 @@ details.card[open] summary{margin-bottom:6px}
   </div>
   <div id="chat"></div>
   <div class="row" style="position:sticky;bottom:80px;background:var(--bg);padding:6px 0">
+    <button style="flex:0 0 46px" id="ttsBtn" onclick="toggleTTS()" title="Sesli cevap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg></button>
     <button style="flex:0 0 46px" onclick="voice('chat')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3.5"/></svg></button>
     <input id="cIn" placeholder="Sor...">
     <button class="pri" style="flex:0 0 auto" id="cBtn">Gönder</button>
@@ -301,11 +305,34 @@ details.card[open] summary{margin-bottom:6px}
   </div>
   <div class="card">
     <h3>Yedek</h3>
-    <div class="row">
-      <button onclick="exportData()">Dışa aktar</button>
-      <button onclick="document.getElementById('impFile').click()">İçe aktar</button>
+    <div id="bkStat" class="mut"></div>
+    <div class="row" style="margin-top:8px" id="bkRow">
+      <button onclick="pickFolder()">📁 Klasör seç</button>
+      <button onclick="folderBackup(true)">Şimdi yedekle</button>
+    </div>
+    <label id="bkPhotoL" style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--tx);margin-top:10px"><input type="checkbox" id="bkPhotos"> Fotoğrafları da bu klasöre kaydet</label>
+    <div class="row" style="margin-top:8px">
+      <button class="sm" onclick="exportData()">Dosyaya aktar</button>
+      <button class="sm" onclick="document.getElementById('impFile').click()">Dosyadan yükle</button>
+      <button class="sm" id="bkRestore" onclick="folderRestore()">Klasörden yükle</button>
     </div>
     <input type="file" id="impFile" accept=".json,application/json" class="hidden">
+  </div>
+  <div class="card">
+    <h3>Asistan</h3>
+    <div class="row">
+      <label style="margin:0;flex:1;display:flex;align-items:center;gap:6px;font-size:14px;color:var(--tx)"><input type="checkbox" id="sumOn"> Akşam özeti bildirimi</label>
+      <input type="time" id="sumTime" value="20:00" style="flex:0 0 112px">
+    </div>
+    <button class="sm" style="margin-top:8px" id="sumNowBtn" onclick="summaryNow()">Özeti şimdi oluştur</button>
+    <div class="row" style="margin-top:12px">
+      <span class="mut" style="flex:0 0 auto">Cevap sesi</span>
+      <select id="ttsVoice">
+        <option value="Charon">Erkek 1</option><option value="Fenrir">Erkek 2</option><option value="Orus">Erkek 3</option>
+        <option value="Kore">Kadın 1</option><option value="Aoede">Kadın 2</option><option value="phone">Telefonun sesi</option>
+      </select>
+      <button class="sm" style="flex:0 0 auto" onclick="speak('Merhaba, ben Not Asistanı. Cevaplarım böyle duyulacak.')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg></button>
+    </div>
   </div>
   <details class="card">
     <summary style="font-weight:650;cursor:pointer">Gelişmiş</summary>
@@ -509,7 +536,7 @@ const LS={get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch{re
 let notes=LS.get('na_notes',[]), tasks=LS.get('na_tasks',[]), chat=LS.get('na_chat',[]);
 let cfg=LS.get('na_cfg',{key:'',model:'gemini-flash-latest',sound:true});
 const APP=typeof window.Android!=='undefined';
-const save=()=>{LS.set('na_notes',notes);LS.set('na_tasks',tasks);LS.set('na_chat',chat.filter(m=>!m.typing).slice(-40));syncAlarms()};
+const save=()=>{LS.set('na_notes',notes);LS.set('na_tasks',tasks);LS.set('na_chat',chat.filter(m=>!m.typing).slice(-40));syncAlarms();afterChange()};
 // Uygulamada: hatırlatmaları Android alarmına kur (uygulama kapalıyken de bildirim gelir)
 function syncAlarms(){
   if(!APP)return;
@@ -551,6 +578,10 @@ function trErr(status,msg){
 async function callGemini(payload){
   if(cfg.key){ // kendi anahtarınla doğrudan (yedek modellere geçişli)
     const base='https://generativelanguage.googleapis.com/v1beta';
+    if(payload.op==='tts'){
+      for(const m of ['gemini-2.5-flash-preview-tts','gemini-2.5-flash-tts']){const r=await fetch(`${base}/models/${m}:generateContent`,{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':cfg.key},body:JSON.stringify({contents:[{parts:[{text:payload.text}]}],generationConfig:{responseModalities:['AUDIO'],speechConfig:{voiceConfig:{prebuiltVoiceConfig:{voiceName:payload.voice}}}}})});const d=await r.json().catch(()=>({}));if(r.ok)return d}
+      throw new Error('Ses üretilemedi');
+    }
     if(payload.op==='models'){const r=await fetch(base+'/models?pageSize=200',{headers:{'x-goog-api-key':cfg.key}});const d=await r.json();if(!r.ok)throw new Error(trErr(r.status,d.error?.message));return d}
     let last;
     for(const m of [cfg.model,...FALLBACK.filter(x=>x!==cfg.model)]){
@@ -661,7 +692,7 @@ async function onRecStop(){
       if(!$('nTitle').value.trim())$('nTitle').value=t.trim().split(/[.\n]/)[0].slice(0,50);
     }else if(rec.mode==='chat'){
       const t=await gemini('Bu ses kaydını Türkçe yazıya dök. Sadece metni ver.',{parts:[part]});
-      closeRec();show('asistan');$('cIn').value=t.trim();sendChat();
+      closeRec();show('asistan');$('cIn').value=t.trim();speakNext=true;sendChat();
     }
   }catch(e){closeRec();toastMsg('⚠️ '+esc(e.message),6000)}
 }
@@ -809,7 +840,7 @@ function normTpl(t){
 }
 let tpls=LS.get('na_tpls',null);if(!Array.isArray(tpls)||!tpls.length){tpls=TPL_DEF.map(normTpl);LS.set('na_tpls',tpls)}
 let tplSel=LS.get('na_tplsel','t_zk'),tplVals=LS.get('na_tplvals',{});
-const saveTpls=()=>{LS.set('na_tpls',tpls);LS.set('na_tplsel',tplSel)};
+const saveTpls=()=>{LS.set('na_tpls',tpls);LS.set('na_tplsel',tplSel);afterChange()};
 const curTpl=()=>tpls.find(t=>t.id===tplSel)||tpls[0];
 function fieldVals(t){const v=tplVals[t.id]||{},o={};for(const f of t.fields||[])o[f.label]=v[f.label]??f.value??'';return o}
 let logoImg=null;
@@ -1039,7 +1070,7 @@ async function viewPhoto(i){
 
 // ================= SESLİ GÜNLÜK =================
 let diary=LS.get('na_diary',[]); // [{id,ts,dur,text,audio?,err?}]
-const saveDiary=()=>LS.set('na_diary',diary);
+const saveDiary=()=>{LS.set('na_diary',diary);afterChange()};
 const dayKey=ts=>{const d=new Date(ts);return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`};
 const hm=ts=>{const d=new Date(ts);return `${pad(d.getHours())}:${pad(d.getMinutes())}`};
 const CHUNK=45; // saniye
@@ -1047,22 +1078,52 @@ let dr={on:false,stream:null,mr:null,t0:0,tick:null,timer:null,queue:[],busy:fal
 $('dDate').value=dayKey(Date.now());
 $('dDate').onchange=renderDiary;$('dSearch').oninput=renderDiary;
 async function diaryToggle(){dr.on?diaryStop():diaryStart()}
+const NATIVE_DIARY=APP&&typeof Android.diaryStart==='function';
+const fmtDur=s=>`${Math.floor(s/3600)?Math.floor(s/3600)+':':''}${pad(Math.floor(s/60)%60)}:${pad(s%60)}`;
+function diaryUI(on){
+  $('dBtn').classList.toggle('on',on);$('recBar').classList.toggle('on',on);$('dTime').classList.toggle('mono',on);
+  if(!on){$('dLvl').style.width='0';$('dTime').textContent='Sesli günlük'}
+  diaryStatus();
+}
 async function diaryStart(){
+  if(NATIVE_DIARY){
+    if(!Android.diaryStart()){toastMsg('🎤 Mikrofon izni gerekli');return}
+    dr.on=true;dr.native=true;dr.t0=Date.now();diaryUI(true);nativeTick();return;
+  }
   if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder){toastMsg('Bu cihaz ses kaydını desteklemiyor');return}
   try{dr.stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}})}
   catch{toastMsg('🎤 Mikrofon izni yok — Ayarlar → İzinler');return}
-  dr.on=true;dr.t0=Date.now();
+  dr.on=true;dr.native=false;dr.t0=Date.now();
   try{dr.ac=new (window.AudioContext||window.webkitAudioContext)();dr.an=dr.ac.createAnalyser();dr.an.fftSize=512;dr.ac.createMediaStreamSource(dr.stream).connect(dr.an)}catch{}
   const buf=new Uint8Array(256);
   dr.tick=setInterval(()=>{
-    const s=Math.floor((Date.now()-dr.t0)/1000),t=`${Math.floor(s/3600)?Math.floor(s/3600)+':':''}${pad(Math.floor(s/60)%60)}:${pad(s%60)}`;
-    $('dTime').textContent=t;$('rbTime').textContent=t;
+    const t=fmtDur(Math.floor((Date.now()-dr.t0)/1000));$('dTime').textContent=t;$('rbTime').textContent=t;
     if(dr.an){dr.an.getByteTimeDomainData(buf);let m=0;for(const v of buf)m=Math.max(m,Math.abs(v-128));$('dLvl').style.width=Math.min(100,m*1.6)+'%'}
   },200);
-  wakeOn();$('dTime').classList.add('mono');
-  $('dBtn').classList.add('on');$('recBar').classList.add('on');
-  diaryStatus();
-  nextChunk();
+  wakeOn();diaryUI(true);nextChunk();
+}
+// Uygulamada kayıt Android servisinde sürer (ekran kapalıyken de); burada sadece durum gösterilir ve parçalar yazıya dökülür
+function nativeTick(){
+  clearInterval(dr.tick);let n=0;
+  dr.tick=setInterval(()=>{
+    let st={};try{st=JSON.parse(Android.diaryState())}catch{}
+    if(!st.on){clearInterval(dr.tick);if(dr.on){dr.on=false;diaryUI(false);if(st.error)toastMsg('⚠️ '+st.error)}pullChunks();return}
+    dr.on=true;const t=fmtDur(Math.floor((Date.now()-st.since)/1000));$('dTime').textContent=t;$('rbTime').textContent=t;$('dLvl').style.width=(st.level||0)+'%';
+    if(++n%25===0)pullChunks();
+  },200);
+}
+function pullChunks(){
+  if(!NATIVE_DIARY)return;
+  let list=[];try{list=JSON.parse(Android.diaryChunks())}catch{}
+  dr.seen=dr.seen||new Set();
+  for(const name of list){
+    if(dr.seen.has(name))continue;dr.seen.add(name);
+    const m=name.match(/^c_(\d+)_(\d+)\.m4a$/);if(!m)continue;
+    const b64=Android.readChunk(name);if(!b64){Android.deleteChunk(name);continue}
+    const bin=atob(b64),u8=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u8[i]=bin.charCodeAt(i);
+    dr.queue.push({blob:new Blob([u8],{type:'audio/mp4'}),start:+m[1],native:name});
+  }
+  diaryStatus();processQueue();
 }
 function nextChunk(){
   if(!dr.on)return;
@@ -1074,28 +1135,28 @@ function nextChunk(){
 }
 function diaryStop(){
   if(!dr.on)return;
+  if(dr.native){Android.diaryStop();dr.on=false;clearInterval(dr.tick);diaryUI(false);setTimeout(pullChunks,1200);return}
   dr.on=false;clearTimeout(dr.timer);clearInterval(dr.tick);
   if(dr.mr?.state==='recording')dr.mr.stop();
   setTimeout(()=>{dr.stream?.getTracks().forEach(t=>t.stop());try{dr.ac?.close()}catch{}},300);
-  wakeOff();
-  $('dBtn').classList.remove('on');$('recBar').classList.remove('on');$('dLvl').style.width='0';
-  $('dTime').classList.remove('mono');$('dTime').textContent='Sesli günlük';diaryStatus();
+  wakeOff();diaryUI(false);
 }
 async function wakeOn(){if(APP){try{Android.keepScreenOn(true)}catch{}dr.wake=1;return}try{dr.wake=await navigator.wakeLock?.request('screen')}catch{}}
 function wakeOff(){if(APP){try{Android.keepScreenOn(false)}catch{}dr.wake=null;return}try{dr.wake?.release()}catch{}dr.wake=null}
-document.addEventListener('visibilitychange',()=>{if(!document.hidden&&dr.on&&!dr.wake)wakeOn()});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)return;if(dr.on&&!dr.native&&!dr.wake)wakeOn();if(NATIVE_DIARY){pullChunks();let st={};try{st=JSON.parse(Android.diaryState())}catch{}if(st.on&&!dr.on){dr.on=true;dr.native=true;diaryUI(true);nativeTick()}}});
 function diaryStatus(){
   const q=dr.queue.length+(dr.busy?1:0);
-  $('dStat').textContent=dr.on?`Kaydediliyor${q?` · ${q} parça işleniyor`:''}`
+  $('dStat').textContent=dr.on?`Kaydediliyor${dr.native?' · ekran kapansa da sürer':''}${q?` · ${q} parça işleniyor`:''}`
     :q?`${q} parça yazıya dökülüyor...`:'Kaydı başlatmak için dokun';
 }
 function enqueue(blob,start){dr.queue.push({blob,start});diaryStatus();processQueue()}
 async function processQueue(){
   if(dr.busy)return;dr.busy=true;
   while(dr.queue.length){
-    const {blob,start}=dr.queue.shift();diaryStatus();
-    let w;try{w=await toWav16k(blob,true)}catch{continue}
-    if(w.rms<0.006)continue; // sessiz parça
+    const {blob,start,native}=dr.queue.shift();diaryStatus();
+    const done=()=>{if(native)try{Android.deleteChunk(native)}catch{}};
+    let w;try{w=await toWav16k(blob,true)}catch{done();continue}
+    if(w.rms<0.006){done();continue} // sessiz parça
     const e={id:'d'+uid(),ts:start,dur:Math.round(w.dur),text:''};
     try{e.text=await transcribe(w.data)}
     catch(err){
@@ -1103,6 +1164,7 @@ async function processQueue(){
       e.err=err.message;e.text='';
     }
     if(e.text||e.err){diary.push(e);saveDiary();renderDiary()}
+    done();
   }
   dr.busy=false;diaryStatus();
 }
@@ -1214,7 +1276,7 @@ function renderToday(){
 
 // ================= ASİSTAN =================
 function askSug(b){$('cIn').value=b.textContent;sendChat()}
-function renderChat(){$('cSug').classList.toggle('hidden',chat.length>0);$('chat').innerHTML=chat.map((m,i)=>`<div class="msg ${m.r==='user'?'u':'m'}">${esc(m.t)}${m.err&&i===chat.length-1?`<div style="margin-top:8px"><button class="sm pri" onclick="retryChat()">↻ Tekrar dene</button></div>`:''}</div>`).join('');}
+function renderChat(){$('cSug').classList.toggle('hidden',chat.length>0);$('chat').innerHTML=chat.map((m,i)=>`<div class="msg ${m.r==='user'?'u':'m'}">${esc(m.t)}${m.r==='model'&&!m.err&&!m.typing?`<button class="sm ghost spk" onclick="speak(chat[${i}].t)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg></button>`:''}${m.err&&i===chat.length-1?`<div style="margin-top:8px"><button class="sm pri" onclick="retryChat()">↻ Tekrar dene</button></div>`:''}</div>`).join('');}
 function retryChat(){if(chat.length&&chat[chat.length-1].err)chat.pop();runChat()}
 async function sendChat(){
   const q=$('cIn').value.trim();if(!q)return;$('cIn').value='';
@@ -1238,6 +1300,7 @@ Kullanıcı yeni görev/hatırlatma eklemeni isterse cevabının EN SONUNA şu s
     const m=r.match(/@@EKLE\s*(\{[\s\S]*\})\s*$/);
     if(m){r=r.slice(0,m.index).trim();try{const a=JSON.parse(m[1]);pending={tasks:a.tasks||[],notes:a.notes||[]};commitPending()}catch{}}
     chat.push({r:'model',t:r});
+    if(cfg.tts||speakNext)speak(r);speakNext=false;
   }catch(e){chat=chat.filter(m=>!m.typing);chat.push({r:'model',t:'⚠️ '+e.message,err:true})}
   busy(btn,false);save();renderChat();window.scrollTo(0,1e9);
 }
@@ -1312,6 +1375,116 @@ window.nativeBack=()=>{for(const id of['mTplEd','mTpls'])if($(id).classList.cont
   if(!$('cam').classList.contains('hidden')){closeCam();return true}
   const m=[...document.querySelectorAll('.modal.on')].pop();if(m){if(m.id==='mNote')closeNote();else if(m.id==='mRec')recCancel();else m.classList.remove('on');return true}
   const cur=document.querySelector('main>section:not(.hidden)');if(cur&&cur.id!=='v-bugun'){show('bugun');return true}return false};
+
+// ================= OTOMATİK YEDEK (seçilen klasöre) =================
+function HAS_FOLDER(){return typeof window.Android!=='undefined'&&typeof Android.pickFolder==='function'}
+var bkTimer,snapTimer;
+function afterChange(){
+  if(HAS_FOLDER()&&Android.folderName()){clearTimeout(bkTimer);bkTimer=setTimeout(()=>folderBackup(false),2500)}
+  if(typeof window.Android!=='undefined'&&typeof Android.saveSnapshot==='function'){clearTimeout(snapTimer);snapTimer=setTimeout(pushSnapshot,3000)}
+}
+function pickFolder(){if(!HAS_FOLDER()){toastMsg('Klasöre otomatik yedek uygulamada çalışır');return}Android.pickFolder()}
+window.onFolderPicked=()=>{LS.set('na_bk_photos',{});renderBackup();folderBackup(true)};
+const slug=s=>String(s||'').toLocaleLowerCase('tr').replace(/[çğıöşü]/g,c=>({ç:'c',ğ:'g',ı:'i',ö:'o',ş:'s',ü:'u'}[c])).replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,30)||'foto';
+var bkBusy=false;
+async function folderBackup(manual){
+  if(!HAS_FOLDER()||!Android.folderName()){if(manual)toastMsg('Önce yedek klasörünü seç');return}
+  if(bkBusy){bkTimer=setTimeout(()=>folderBackup(manual),3000);return}bkBusy=true;
+  try{
+    const saved=LS.get('na_bk_photos',{});
+    if(LS.get('na_bk_ph',true))for(const n of notes)for(const p of n.photos||[]){
+      if(saved[p.id])continue;
+      try{const b=await DB.get(p.id);if(!b)continue;const fn=`${dayKey(p.ts)}_${hm(p.ts).replace(':','-')}_${slug(p.tpl)}_${p.id}.jpg`;
+        if(Android.writeFile('Fotograflar/'+fn,await blobToB64(b),'image/jpeg',false))saved[p.id]=fn}catch{}
+    }
+    LS.set('na_bk_photos',saved);
+    const js=JSON.stringify({notes,tasks,diary,tpls,logo:LS.get('na_logo',''),photoFiles:saved,v:5,at:Date.now()});
+    const ok=Android.writeText('NotAsistani-yedek.json',js)&&Android.writeText('Yedekler/yedek-'+dayKey(Date.now())+'.json',js);
+    if(ok)LS.set('na_bk_last',Date.now());
+    if(manual)toastMsg(ok?'✔ Yedeklendi':'⚠️ Yedeklenemedi — klasörü yeniden seç');
+  }catch(e){if(manual)toastMsg('⚠️ '+esc(e.message))}
+  bkBusy=false;renderBackup();
+}
+async function folderRestore(){
+  if(!HAS_FOLDER()||!Android.folderName()){toastMsg('Önce yedek klasörünü seç');return}
+  const s=Android.readText('NotAsistani-yedek.json');if(!s){toastMsg('Klasörde yedek bulunamadı');return}
+  let d;try{d=JSON.parse(s)}catch{toastMsg('Yedek dosyası okunamadı');return}
+  if(!confirm(`${d.notes?.length||0} not, ${d.tasks?.length||0} görev, ${d.diary?.length||0} günlük kaydı yüklensin mi? (mevcutlara eklenir)`))return;
+  const ids=new Set([...notes,...tasks].map(x=>x.id));
+  notes.push(...(d.notes||[]).filter(x=>!ids.has(x.id)));tasks.push(...(d.tasks||[]).filter(x=>!ids.has(x.id)));
+  const di=new Set(diary.map(x=>x.id));diary.push(...(d.diary||[]).filter(x=>!di.has(x.id)));
+  if(Array.isArray(d.tpls)){const ti=new Set(tpls.map(x=>x.id));tpls.push(...d.tpls.filter(x=>!ti.has(x.id)).map(normTpl))}
+  if(d.logo&&!LS.get('na_logo','')){LS.set('na_logo',d.logo);loadLogo()}
+  let n=0;for(const[id,fn]of Object.entries(d.photoFiles||{})){try{if(await DB.get(id))continue;const b64=Android.readFileB64('Fotograflar/'+fn);if(!b64)continue;await DB.put(id,await (await fetch('data:image/jpeg;base64,'+b64)).blob());n++}catch{}}
+  LS.set('na_bk_photos',{...LS.get('na_bk_photos',{}),...(d.photoFiles||{})});
+  saveTpls();saveDiary();save();renderAll();toastMsg(`✔ Yüklendi${n?` · ${n} fotoğraf`:''}`);
+}
+function renderBackup(){
+  const app=HAS_FOLDER(),name=app?Android.folderName():'',last=LS.get('na_bk_last',0);
+  $('bkStat').innerHTML=!app?'Klasöre otomatik yedek uygulamada çalışır.':name?`📁 <b>${esc(name)}</b> · her değişiklikte otomatik yedeklenir${last?`<br>Son yedek: ${fmt(toLocal(new Date(last)))}`:''}`:'Klasör seçersen her not, görev ve kayıttan sonra oraya otomatik yedek alınır.';
+  $('bkRow').classList.toggle('hidden',!app);$('bkRestore').classList.toggle('hidden',!app||!name);$('bkPhotoL').classList.toggle('hidden',!app||!name);
+  $('bkPhotos').checked=LS.get('na_bk_ph',true);
+}
+$('bkPhotos').onchange=e=>{LS.set('na_bk_ph',e.target.checked);if(e.target.checked)folderBackup(false)};
+
+// ================= AKŞAM ÖZETİ =================
+function daySnapshot(){
+  const today=dayKey(Date.now()),tom=new Date(new Date().setHours(23,59,59,999)).getTime()+864e5;
+  const dt=diary.filter(e=>dayKey(e.ts)===today&&e.text).sort((a,b)=>a.ts-b.ts).map(e=>`[${hm(e.ts)}] ${e.text}`).join('\n').slice(-100000);
+  const done=tasks.filter(t=>t.done&&t.doneAt&&dayKey(t.doneAt)===today).map(t=>'- '+t.title).join('\n');
+  const open=tasks.filter(t=>!t.done&&t.due&&+new Date(t.due)<=tom).map(t=>`- ${t.title} (${stampDate(+new Date(t.due))})`).join('\n');
+  const nts=notes.filter(n=>dayKey(n.updated)===today).map(n=>`- ${n.title}: ${String(n.body||'').slice(0,300)}`).join('\n');
+  return {date:today,code:cfg.code||'',model:cfg.model||'gemini-flash-latest',text:`KONUŞMALAR:\n${dt||'(yok)'}\n\nBUGÜN TAMAMLANAN:\n${done||'(yok)'}\n\nYARIN / GECİKEN İŞLER:\n${open||'(yok)'}\n\nBUGÜNKÜ NOTLAR:\n${nts||'(yok)'}`};
+}
+function pushSnapshot(){try{Android.saveSnapshot(JSON.stringify(daySnapshot()))}catch{}}
+function sumSettings(){
+  const [hh,mm]=($('sumTime').value||'20:00').split(':').map(Number);
+  cfg.sumOn=$('sumOn').checked;cfg.sumTime=$('sumTime').value;LS.set('na_cfg',cfg);
+  if(APP&&typeof Android.setSummary==='function'){Android.setSummary(!!cfg.sumOn,hh,mm);pushSnapshot()}
+  else if(cfg.sumOn)toastMsg('Akşam özeti bildirimi uygulamada çalışır');
+}
+$('sumOn').onchange=sumSettings;$('sumTime').onchange=sumSettings;
+function addSummaryNote(date,text){
+  const title='Günün özeti · '+date.split('-').reverse().join('.');
+  const ex=notes.find(n=>n.title===title);
+  if(ex){ex.body=text;ex.updated=Date.now()}else notes.push({id:uid(),title,body:text,tags:['özet'],pinned:false,created:Date.now(),updated:Date.now()});
+  save();renderAll();
+}
+async function summaryNow(){
+  const b=$('sumNowBtn');busy(b,true,'Hazırlanıyor...');
+  try{const s=daySnapshot();
+    const r=(await gemini(`Tarih: ${s.date}. Bugünün özetini çıkar: önce konuşmalarda öne çıkan konular, kararlar, kişi/firma ve rakamlar; sonra bugün tamamlananlar; en sonda yarın ve geciken işler. Veri yoksa o kısmı atla.\n\n${s.text}`,{system:'Kullanıcının kişisel asistanısın. Türkçe, kısa ve maddeli yaz; en fazla 12 satır. Markdown işareti kullanma, madde için • kullan.'})).trim();
+    addSummaryNote(s.date,r);notify('📋 Günün özeti',r,'ozet');toastMsg('✔ Özet Notlar\'a eklendi');
+  }catch(e){toastMsg('⚠️ '+esc(e.message))}
+  busy(b,false);
+}
+function importNativeSummary(){
+  if(!APP||typeof Android.lastSummary!=='function')return;
+  try{const s=Android.lastSummary();if(!s)return;const d=JSON.parse(s);if(d.ts>LS.get('na_sum_seen',0)){LS.set('na_sum_seen',d.ts);addSummaryNote(d.date,d.text)}}catch{}
+}
+
+// ================= SESLİ CEVAP =================
+let ttsAC=null,ttsSrc=null;
+function cleanSpeech(t){return String(t||'').replace(/@@EKLE[\s\S]*$/,'').replace(/[*#_`>]/g,'').replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu,'').replace(/\s+/g,' ').trim().slice(0,2500)}
+function stopSpeak(){try{ttsSrc?.stop()}catch{}ttsSrc=null;try{window.speechSynthesis?.cancel()}catch{}if(APP)try{Android.stopSpeak()}catch{}}
+function phoneSpeak(t){if(APP&&typeof Android.speak==='function'){Android.speak(t);return}try{const u=new SpeechSynthesisUtterance(t);u.lang='tr-TR';speechSynthesis.cancel();speechSynthesis.speak(u)}catch{}}
+async function speak(text){
+  const t=cleanSpeech(text);if(!t)return;stopSpeak();
+  const voice=cfg.voice||'Charon';
+  if(voice==='phone'){phoneSpeak(t);return}
+  try{
+    const d=await callGemini({op:'tts',text:t,voice});
+    const part=(d.candidates?.[0]?.content?.parts||[]).find(p=>p.inlineData);if(!part)throw 0;
+    const rate=+((part.inlineData.mimeType||'').match(/rate=(\d+)/)||[])[1]||24000,bin=atob(part.inlineData.data),n=bin.length>>1,f=new Float32Array(n);
+    for(let i=0;i<n;i++){let v=bin.charCodeAt(2*i)|(bin.charCodeAt(2*i+1)<<8);if(v>32767)v-=65536;f[i]=v/32768}
+    ttsAC=ttsAC||new (window.AudioContext||window.webkitAudioContext)();await ttsAC.resume?.();
+    const buf=ttsAC.createBuffer(1,n,rate);buf.copyToChannel(f,0);ttsSrc=ttsAC.createBufferSource();ttsSrc.buffer=buf;ttsSrc.connect(ttsAC.destination);ttsSrc.start();
+  }catch{phoneSpeak(t)} // Gemini sesi yoksa telefonun sesiyle oku
+}
+function toggleTTS(){cfg.tts=!cfg.tts;LS.set('na_cfg',cfg);$('ttsBtn').classList.toggle('act',!!cfg.tts);if(!cfg.tts)stopSpeak();toastMsg(cfg.tts?'🔊 Sesli cevap açık':'🔇 Sesli cevap kapalı')}
+$('ttsVoice').onchange=e=>{cfg.voice=e.target.value;LS.set('na_cfg',cfg)};
+let speakNext=false;
+
 // ================= AYARLAR =================
 function saveSettings(){cfg.key=$('sKey').value.trim();cfg.code=$('sCode').value.trim();cfg.model=$('sModel').value;cfg.sound=$('sSound').checked;LS.set('na_cfg',cfg);$('sOut').textContent='✔ Kaydedildi'}
 $('sSound').onchange=()=>{cfg.sound=$('sSound').checked;LS.set('na_cfg',cfg)};
@@ -1344,12 +1517,14 @@ $('toast').onclick=e=>{if(e.target===$('toast'))hideToast()};
 function closeM(id){$(id).classList.remove('on')}
 document.querySelectorAll('.modal').forEach(m=>m.onclick=e=>{if(e.target===m){if(m.id==='mNote')closeNote();else m.classList.remove('on')}});
 $('nav').onclick=e=>{const b=e.target.closest('button');if(!b)return;show(b.dataset.v)};
-function show(v){if(!$('v-'+v))v='bugun';if(v==='ayarlar')renderPerms();document.querySelectorAll('main>section').forEach(s=>s.classList.toggle('hidden',s.id!=='v-'+v));[...$('nav').children].forEach(b=>b.classList.toggle('act',b.dataset.v===v));window.scrollTo(0,0);if(v==='asistan')renderChat()}
+function show(v){if(!$('v-'+v))v='bugun';if(v==='ayarlar')renderBackup();if(v==='ayarlar')renderPerms();document.querySelectorAll('main>section').forEach(s=>s.classList.toggle('hidden',s.id!=='v-'+v));[...$('nav').children].forEach(b=>b.classList.toggle('act',b.dataset.v===v));window.scrollTo(0,0);if(v==='asistan')renderChat()}
 function renderAll(){renderToday();renderNotes();renderTasks();renderDiary()}
 setInterval(()=>{const n=new Date();$('clock').textContent=`${GUN[n.getDay()].slice(0,3)} ${pad(n.getHours())}:${pad(n.getMinutes())}`},1000);
-$('sKey').value=cfg.key||'';$('sCode').value=cfg.code||'';$('sModel').innerHTML=`<option>${esc(cfg.model)}</option>`;$('sSound').checked=cfg.sound!==false;
+$('sKey').value=cfg.key||'';$('sCode').value=cfg.code||'';$('sModel').innerHTML=`<option>${esc(cfg.model)}</option>`;$('sSound').checked=cfg.sound!==false;$('sumOn').checked=!!cfg.sumOn;$('sumTime').value=cfg.sumTime||'20:00';$('ttsVoice').value=cfg.voice||'Charon';$('ttsBtn').classList.toggle('act',!!cfg.tts);
 {const e=new Date(new Date().setHours(23,59,0,0));if(!tasks.some(t=>!t.done&&t.due&&new Date(t.due)<=e))tF='acik'}
-checkServer();renderNStat();renderAll();checkReminders();syncAlarms();
+checkServer();renderNStat();renderAll();checkReminders();syncAlarms();renderBackup();importNativeSummary();
+if(NATIVE_DIARY){pullChunks();let st={};try{st=JSON.parse(Android.diaryState())}catch{}if(st.on){dr.on=true;dr.native=true;diaryUI(true);nativeTick()}}
+if(APP&&cfg.sumOn&&typeof Android.setSummary==='function')sumSettings();
 renderPerms().then(all=>{if(!all&&!LS.get('na_perm',0))setTimeout(()=>$('mPerm').classList.add('on'),900)});
 setTimeout(()=>{if(!cfg.key&&!(srv.ok&&srv.hasKey))toastMsg('👋 Gemini bağlantısı yok — <b>Ayarlar</b>\'a bak.',6000)},1500);
 const sv=new URLSearchParams(location.search).get('v');if(sv)show(sv);

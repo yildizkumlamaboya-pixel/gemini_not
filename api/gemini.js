@@ -2,6 +2,7 @@
 // Model yoğun/kotası dolu olursa sırayla yedek modellere geçer.
 // Vercel → Settings → Environment Variables: GEMINI_API_KEY, (isteğe bağlı) APP_CODE
 const FALLBACK = ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-flash-lite-latest', 'gemini-2.5-flash-lite', 'gemini-2.0-flash'];
+const TTS = ['gemini-2.5-flash-preview-tts', 'gemini-2.5-flash-tts', 'gemini-2.5-pro-preview-tts'];
 const RETRY = new Set([429, 500, 502, 503, 504, 404]);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -23,6 +24,20 @@ module.exports = async (req, res) => {
     if (op === 'models') {
       const r = await fetch(`${base}/models?pageSize=200`, { headers: { 'x-goog-api-key': KEY } });
       return res.status(r.status).json(await r.json());
+    }
+    if (op === 'tts') {
+      const voice = /^[A-Za-z]{2,20}$/.test(input.voice || '') ? input.voice : 'Charon';
+      const tb = { contents: [{ parts: [{ text: String(input.text || '').slice(0, 3000) }] }],
+        generationConfig: { responseModalities: ['AUDIO'], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } } } };
+      let lastT = { status: 503, data: { error: { message: 'Ses üretilemedi' } } };
+      for (const m of TTS) {
+        const r = await fetch(`${base}/models/${m}:generateContent`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': KEY }, body: JSON.stringify(tb) });
+        const data = await r.json().catch(() => ({}));
+        if (r.ok) return res.status(200).json(data);
+        lastT = { status: r.status, data };
+        if (!RETRY.has(r.status)) break;
+      }
+      return res.status(lastT.status).json(lastT.data);
     }
     const first = /^[a-z0-9.\-]+$/i.test(model || '') ? model : FALLBACK[0];
     const models = [first, ...FALLBACK.filter(m => m !== first)];

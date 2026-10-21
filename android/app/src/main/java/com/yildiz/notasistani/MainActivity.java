@@ -28,6 +28,13 @@ import android.webkit.WebViewClient;
 import android.widget.Toast;
 
 import androidx.core.content.FileProvider;
+import androidx.documentfile.provider.DocumentFile;
+import android.speech.tts.TextToSpeech;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.util.HashMap;
+import java.util.Locale;
+import java.util.Map;
 
 import org.json.JSONObject;
 
@@ -41,7 +48,7 @@ public class MainActivity extends Activity {
     static final String URL = "https://yildiz-not-asistani.vercel.app/";
     static final String HOST = "yildiz-not-asistani.vercel.app";
     static final String AUTH = "com.yildiz.notasistani.files";
-    static final int RC_ALL = 1, RC_FILE = 2, RC_WEBPERM = 3, RC_GEO = 4, RC_CAMFILE = 5;
+    static final int RC_ALL = 1, RC_FILE = 2, RC_WEBPERM = 3, RC_GEO = 4, RC_CAMFILE = 5, RC_TREE = 6;
 
     static final String MIC = Manifest.permission.RECORD_AUDIO;
     static final String CAM = Manifest.permission.CAMERA;
@@ -56,6 +63,10 @@ public class MainActivity extends Activity {
     GeolocationPermissions.Callback geoCb;
     String geoOrigin;
     SharedPreferences prefs;
+    TextToSpeech tts;
+    boolean ttsReady;
+    String ttsPending;
+    final Map<String, DocumentFile> dirCache = new HashMap<>();
 
     @Override
     protected void onCreate(Bundle state) {
@@ -255,6 +266,19 @@ public class MainActivity extends Activity {
     @Override
     protected void onActivityResult(int rc, int res, Intent data) {
         super.onActivityResult(rc, res, data);
+        if (rc == RC_TREE) {
+            if (res == RESULT_OK && data != null && data.getData() != null) {
+                Uri u = data.getData();
+                try {
+                    getContentResolver().takePersistableUriPermission(u, Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                } catch (Exception ignored) {
+                }
+                prefs.edit().putString("tree", u.toString()).apply();
+                dirCache.clear();
+                web.evaluateJavascript("window.onFolderPicked&&window.onFolderPicked()", null);
+            }
+            return;
+        }
         if (rc != RC_FILE || fileCb == null) return;
         Uri[] out = null;
         if (res == RESULT_OK) {
@@ -299,6 +323,91 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         if (web != null) sendPerms();
+    }
+
+    // ---------- klasör (otomatik yedek) ----------
+    DocumentFile root() {
+        String t = prefs.getString("tree", null);
+        if (t == null) return null;
+        DocumentFile d = DocumentFile.fromTreeUri(this, Uri.parse(t));
+        return (d != null && d.canWrite()) ? d : null;
+    }
+
+    DocumentFile folder(String rel, boolean create) {
+        DocumentFile c = dirCache.get(rel);
+        if (c != null && c.exists()) return c;
+        DocumentFile cur = root();
+        if (cur == null) return null;
+        if (!rel.isEmpty()) for (String seg : rel.split("/")) {
+            DocumentFile n = cur.findFile(seg);
+            if (n == null) {
+                if (!create) return null;
+                n = cur.createDirectory(seg);
+            }
+            if (n == null) return null;
+            cur = n;
+        }
+        dirCache.put(rel, cur);
+        return cur;
+    }
+
+    boolean writeBytes(String path, byte[] data, String mime, boolean overwrite) {
+        try {
+            int i = path.lastIndexOf('/');
+            String d = i < 0 ? "" : path.substring(0, i), name = path.substring(i + 1);
+            DocumentFile dir = folder(d, true);
+            if (dir == null) return false;
+            DocumentFile f = overwrite ? dir.findFile(name) : null;
+            if (f == null) f = dir.createFile(mime, name);
+            if (f == null) return false;
+            try (OutputStream os = getContentResolver().openOutputStream(f.getUri(), "wt")) {
+                os.write(data);
+            }
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    byte[] readBytes(String path) {
+        try {
+            int i = path.lastIndexOf('/');
+            DocumentFile dir = folder(i < 0 ? "" : path.substring(0, i), false);
+            if (dir == null) return null;
+            DocumentFile f = dir.findFile(path.substring(i + 1));
+            if (f == null) return null;
+            try (InputStream is = getContentResolver().openInputStream(f.getUri())) {
+                ByteArrayOutputStream bo = new ByteArrayOutputStream();
+                byte[] b = new byte[16384];
+                int n;
+                while ((n = is.read(b)) > 0) bo.write(b, 0, n);
+                return bo.toByteArray();
+            }
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    // ---------- sesli okuma ----------
+    void speakNow(String text) {
+        if (tts == null) {
+            ttsPending = text;
+            tts = new TextToSpeech(this, st -> {
+                if (st == TextToSpeech.SUCCESS) {
+                    tts.setLanguage(new Locale("tr", "TR"));
+                    ttsReady = true;
+                    if (ttsPending != null) tts.speak(ttsPending, TextToSpeech.QUEUE_FLUSH, null, "na");
+                    ttsPending = null;
+                }
+            });
+        } else if (ttsReady) tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "na");
+        else ttsPending = text;
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (tts != null) tts.shutdown();
+        super.onDestroy();
     }
 
     // ---------- JS köprüsü ----------
@@ -409,7 +518,151 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public String version() {
-            return "2";
+            return "3";
+        }
+
+        // --- klasöre otomatik yedek ---
+        @JavascriptInterface
+        public void pickFolder() {
+            runOnUiThread(() -> {
+                try {
+                    Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+                    i.addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                    startActivityForResult(i, RC_TREE);
+                } catch (Exception e) {
+                    Toast.makeText(MainActivity.this, "Klasör seçici açılamadı", Toast.LENGTH_SHORT).show();
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public String folderName() {
+            DocumentFile r = root();
+            return r == null ? "" : String.valueOf(r.getName());
+        }
+
+        @JavascriptInterface
+        public boolean writeText(String path, String text) {
+            try {
+                return writeBytes(path, text.getBytes("UTF-8"), "application/json", true);
+            } catch (Exception e) {
+                return false;
+            }
+        }
+
+        @JavascriptInterface
+        public boolean writeFile(String path, String b64, String mime, boolean overwrite) {
+            return writeBytes(path, Base64.decode(b64, Base64.DEFAULT), mime, overwrite);
+        }
+
+        @JavascriptInterface
+        public String readText(String path) {
+            try {
+                byte[] b = readBytes(path);
+                return b == null ? null : new String(b, "UTF-8");
+            } catch (Exception e) {
+                return null;
+            }
+        }
+
+        @JavascriptInterface
+        public String readFileB64(String path) {
+            byte[] b = readBytes(path);
+            return b == null ? null : Base64.encodeToString(b, Base64.NO_WRAP);
+        }
+
+        // --- arka planda sesli günlük ---
+        @JavascriptInterface
+        public boolean diaryStart() {
+            if (!has(MIC)) {
+                runOnUiThread(() -> requestPermissions(new String[]{MIC}, RC_ALL));
+                return false;
+            }
+            Intent i = new Intent(MainActivity.this, DiaryService.class);
+            if (Build.VERSION.SDK_INT >= 26) startForegroundService(i);
+            else startService(i);
+            return true;
+        }
+
+        @JavascriptInterface
+        public void diaryStop() {
+            if (DiaryService.running) startService(new Intent(MainActivity.this, DiaryService.class).setAction(DiaryService.STOP));
+        }
+
+        @JavascriptInterface
+        public String diaryState() {
+            try {
+                return new JSONObject().put("on", DiaryService.running).put("since", DiaryService.since).put("level", DiaryService.level).put("error", DiaryService.error).toString();
+            } catch (Exception e) {
+                return "{}";
+            }
+        }
+
+        @JavascriptInterface
+        public String diaryChunks() {
+            org.json.JSONArray a = new org.json.JSONArray();
+            File[] fs = DiaryService.dir(MainActivity.this).listFiles();
+            if (fs != null) {
+                java.util.Arrays.sort(fs);
+                for (File f : fs) if (f.getName().matches("c_\\d+_\\d+\\.m4a")) a.put(f.getName());
+            }
+            return a.toString();
+        }
+
+        @JavascriptInterface
+        public String readChunk(String name) {
+            if (!name.matches("c_\\d+_\\d+\\.m4a")) return null;
+            try (InputStream is = new java.io.FileInputStream(new File(DiaryService.dir(MainActivity.this), name))) {
+                ByteArrayOutputStream bo = new ByteArrayOutputStream();
+                byte[] b = new byte[16384];
+                int n;
+                while ((n = is.read(b)) > 0) bo.write(b, 0, n);
+                return Base64.encodeToString(bo.toByteArray(), Base64.NO_WRAP);
+            } catch (Exception e) {
+                return null;
+            }
+        }
+
+        @JavascriptInterface
+        public void deleteChunk(String name) {
+            if (name.matches("c_\\d+_\\d+\\.m4a")) new File(DiaryService.dir(MainActivity.this), name).delete();
+        }
+
+        // --- akşam özeti ---
+        @JavascriptInterface
+        public void setSummary(boolean on, int hh, int mm) {
+            Summary.set(MainActivity.this, on, hh, mm);
+        }
+
+        @JavascriptInterface
+        public void saveSnapshot(String json) {
+            try {
+                Summary.write(new File(getFilesDir(), "snapshot.json"), json);
+            } catch (Exception ignored) {
+            }
+        }
+
+        @JavascriptInterface
+        public String lastSummary() {
+            try {
+                File f = new File(getFilesDir(), "summary.json");
+                return f.exists() ? Summary.read(f) : "";
+            } catch (Exception e) {
+                return "";
+            }
+        }
+
+        // --- sesli okuma (telefonun sesi) ---
+        @JavascriptInterface
+        public void speak(String text) {
+            runOnUiThread(() -> speakNow(text));
+        }
+
+        @JavascriptInterface
+        public void stopSpeak() {
+            runOnUiThread(() -> {
+                if (tts != null) tts.stop();
+            });
         }
     }
 }

@@ -12,6 +12,8 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" android:maxSdkVersion="32" />
 
     <uses-feature android:name="android.hardware.camera" android:required="false" />
@@ -39,6 +41,15 @@
         </activity>
 
         <receiver android:name=".AlarmReceiver" android:exported="false" />
+        <receiver android:name=".SummaryReceiver" android:exported="false" />
+        <service
+            android:name=".DiaryService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
+        <service
+            android:name=".SummaryJob"
+            android:exported="true"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
         <receiver android:name=".BootReceiver" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
