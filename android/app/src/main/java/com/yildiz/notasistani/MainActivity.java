@@ -74,6 +74,7 @@ public class MainActivity extends Activity {
     SpeechRecognizer sr;
     final StringBuilder sttAcc = new StringBuilder();
     volatile boolean sttOn = false, sttDone = true;
+    int sttErr = 0;
     boolean ttsReady;
     String ttsPending;
     final Map<String, DocumentFile> dirCache = new HashMap<>();
@@ -607,9 +608,12 @@ public class MainActivity extends Activity {
                 }
 
                 public void onError(int e) {
-                    if (sttOn && (e == SpeechRecognizer.ERROR_NO_MATCH || e == SpeechRecognizer.ERROR_SPEECH_TIMEOUT || e == SpeechRecognizer.ERROR_RECOGNIZER_BUSY)) {
-                        if (e == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) sttRelease();
-                        web.postDelayed(MainActivity.this::sttListen, 150);
+                    // Duraklamada ya da geçici hatada kaydı bitirme: dinlemeye devam (bitişe sayfa sessizliğe göre karar verir)
+                    if (sttOn && e != SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS && (sttAcc.length() > 0 || ++sttErr < 4
+                            || e == SpeechRecognizer.ERROR_NO_MATCH || e == SpeechRecognizer.ERROR_SPEECH_TIMEOUT)) {
+                        boolean hard = e == SpeechRecognizer.ERROR_RECOGNIZER_BUSY || e == SpeechRecognizer.ERROR_CLIENT;
+                        if (hard) sttRelease();
+                        web.postDelayed(MainActivity.this::sttListen, hard ? 350 : 120);
                         return;
                     }
                     if (sttOn && sttAcc.length() == 0 && e != SpeechRecognizer.ERROR_CLIENT) {
@@ -885,6 +889,7 @@ public class MainActivity extends Activity {
             runOnUiThread(() -> {
                 sttRelease();
                 sttAcc.setLength(0);
+                sttErr = 0;
                 sttOn = true;
                 sttDone = false;
                 sttListen();

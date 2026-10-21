@@ -962,7 +962,7 @@ function sttVoice(mode){
   $('micBtn').classList.add('rec');rec.lastP=Date.now();
   rec.tick=setInterval(()=>{const s=Math.floor((Date.now()-rec.t0)/1000);$('recTime').textContent=`${Math.floor(s/60)}:${pad(s%60)}`;
     // susunca kendiliğinden kaydet; hiç konuşulmazsa kapat
-    if(rec.stt&&rec.sttText&&Date.now()-rec.lastP>4500)recFinish();
+    if(rec.stt&&rec.sttText&&Date.now()-rec.lastP>5000)recFinish();
     else if(rec.stt&&!rec.sttText&&Date.now()-rec.t0>10000){recCancel();toastMsg('🤫 Ses duyulmadı')}},250);
 }
 window.onStt=(type,text)=>{
