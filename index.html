@@ -1943,6 +1943,7 @@ function importBubble(){
   try{Android.setQuickPrompt(quickSys().replace(nowCtx(),'{{NOW}}'),cfg.code||'',cfg.model||'gemini-flash-latest')}catch{}
   let res=[];try{res=JSON.parse(Android.bubbleResults())}catch{}
   if(!res.length)return;let nt=0,nn=0;
+  importBubblePhotos(res.filter(r=>r.photo));res=res.filter(r=>!r.photo);
   for(const r of res.sort((a,b)=>a.ts-b.ts)){
     if(!notes.some(n=>n.bub===r.ts)&&!tasks.some(t=>t.bub===r.ts)){
       if(r.pending||(!r.tasks?.length&&!r.notes?.length)){notes.push({id:uid(),title:(r.transcript||'').split(/[.\n]/)[0].slice(0,50)||'Sesli not',body:r.transcript||'',tags:[],pinned:false,created:r.ts,updated:r.ts,src:'manual',via:'voice',aiPending:!!r.pending,bub:r.ts});nn++}
@@ -1955,6 +1956,23 @@ function importBubble(){
   }
   save();renderAll();if(nt||nn)toastMsg(`🎤 Kayan mikrofondan: ${nt} görev, ${nn} not eklendi`);
   setTimeout(processAIQueue,1500);
+}
+// Kayan kamerayla (uygulama açılmadan) çekilen fotoğraflar: damga basılıp fotoğraflı not olur
+async function importBubblePhotos(list){
+  if(!list.length||importBubblePhotos.busy)return;importBubblePhotos.busy=true;let n=0;
+  for(const r of list.sort((a,b)=>a.ts-b.ts)){
+    try{
+      if(notes.some(x=>x.bub===r.ts)){Android.bubbleAck(r.photo);Android.bubbleAck(r.name);continue}
+      const b64=Android.bubbleFile(r.photo);if(!b64){Android.bubbleAck(r.name);continue}
+      const blob=await (await fetch('data:image/jpeg;base64,'+b64)).blob();
+      let loc=null;if(r.lat!=null){loc={lat:+(+r.lat).toFixed(6),lng:+(+r.lng).toFixed(6),acc:r.acc||0,t:r.ts};try{loc.addr=navigator.onLine?await revGeo(loc.lat,loc.lng):''}catch{loc.addr=''}}
+      const {blob:out,t,fields}=await stampPhoto(blob,r.ts,loc),id='p'+uid();
+      await DB.put(id,out);
+      notes.push({id:uid(),title:'Fotoğraf · '+stampDate(r.ts),body:'',tags:[],pinned:false,created:r.ts,updated:r.ts,src:'manual',photos:[photoMeta(id,r.ts,loc,t,fields)],bub:r.ts});n++;
+      save();Android.bubbleAck(r.photo);Android.bubbleAck(r.name);
+    }catch(e){console.log(e)}
+  }
+  importBubblePhotos.busy=false;if(n){renderAll();toastMsg(`📷 Kayan kameradan ${n} fotoğraflı not eklendi`)}
 }
 function renderShortcuts(){
   if(!APP||typeof Android.bubbleState!=='function')return;$('scCard').classList.remove('hidden');

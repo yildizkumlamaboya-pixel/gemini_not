@@ -46,9 +46,11 @@ public class QuickRecService extends Service {
             public void state(boolean on) {
                 recording = on;
                 QuickWidget.refresh(QuickRecService.this);
+                BubbleService.recState(on);
             }
 
             public void text(String t) {
+                BubbleService.recText(t);
                 long now = System.currentTimeMillis();
                 if (now - lastNote < 700) return;
                 lastNote = now;
@@ -59,6 +61,7 @@ public class QuickRecService extends Service {
             }
 
             public void done(String summary, boolean ok) {
+                BubbleService.recDone(summary, ok);
                 recording = false;
                 QuickWidget.refresh(QuickRecService.this);
                 stopForeground(true);
@@ -79,16 +82,17 @@ public class QuickRecService extends Service {
             rec.finish(false);
             return START_NOT_STICKY;
         }
-        if (rec.busy) return START_NOT_STICKY; // önceki not işleniyor
         try {
-            Notification n = note("Dinliyorum… konuş; susunca kendiliğinden kaydedilir", true);
+            Notification n = note(rec.busy ? "Önceki not kaydediliyor…" : "Dinliyorum… konuş; susunca kendiliğinden kaydedilir", true);
             if (Build.VERSION.SDK_INT >= 30) startForeground(8, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE);
             else startForeground(8, n);
         } catch (Exception e) {
-            openApp();
+            BubbleService b = BubbleService.inst;
+            if (b == null || !b.micReady || !b.rec.start()) openApp();
             stopSelf();
             return START_NOT_STICKY;
         }
+        if (rec.busy) return START_NOT_STICKY; // önceki not işleniyor; bitince servis kapanır
         if (!rec.start()) { // mikrofon açılamadı: uygulamada dene
             stopForeground(true);
             openApp();

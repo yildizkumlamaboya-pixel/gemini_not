@@ -246,13 +246,54 @@ public class BubbleService extends Service {
     });
 
     void tap(String act) {
-        if (rec.isOn()) { // kayıt sırasında: mikrofon = kaydet, ✕ = iptal
+        if (rec.isOn()) { // (yedek yol) kayıt sırasında: mikrofon = kaydet, ✕ = iptal
             rec.finish(!"voice".equals(act));
             return;
         }
-        if ("voice".equals(act) && micReady && rec.start()) return;
-        if ("voice".equals(act) && rec.busy) return; // önceki not işleniyor
-        open(act);
+        if (QuickRecService.recording) { // kayıt sırasında: mikrofon = kaydet, ✕ = iptal
+            sendRec("voice".equals(act) ? QuickRecService.TOGGLE : QuickRecService.CANCEL);
+            return;
+        }
+        if ("voice".equals(act)) { // uygulamayı açmadan kayda başla
+            sendRec(QuickRecService.TOGGLE);
+            return;
+        }
+        // kamera: uygulamayı açmadan telefonun kamerası
+        try {
+            startActivity(new Intent(this, CaptureActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_NO_ANIMATION));
+        } catch (Exception e) {
+            open(act);
+        }
+    }
+
+    void sendRec(String action) {
+        Intent i = new Intent(this, QuickRecService.class).setAction(action).putExtra("bubble", true);
+        try {
+            if (Build.VERSION.SDK_INT >= 26 && QuickRecService.TOGGLE.equals(action) && !QuickRecService.recording) startForegroundService(i);
+            else startService(i);
+        } catch (Exception e) {
+            if (micReady && rec.start()) return;
+            open("voice");
+        }
+    }
+
+    // QuickRecService'ten gelen durum: kayan düğmede göster
+    static void recState(boolean on) {
+        BubbleService s = inst;
+        if (s != null) s.recUI(on);
+    }
+
+    static void recText(String t) {
+        BubbleService s = inst;
+        if (s != null && s.box != null) s.showPanel(t + "\n■ kaydet · ✕ iptal");
+    }
+
+    static void recDone(String summary, boolean ok) {
+        BubbleService s = inst;
+        if (s != null && s.box != null) {
+            s.showPanel(summary);
+            s.hidePanel(ok ? 3500 : 1800);
+        }
     }
 
     // ---------------- Uygulamayı açmadan sesli not ----------------
@@ -282,7 +323,7 @@ public class BubbleService extends Service {
 
     void hidePanel(long delay) {
         h.postDelayed(() -> {
-            if (rec.isOn()) return;
+            if (rec.isOn() || QuickRecService.recording) return;
             try {
                 if (panel != null) wm.removeView(panel);
             } catch (Exception ignored) {

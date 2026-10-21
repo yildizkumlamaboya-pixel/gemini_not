@@ -42,6 +42,14 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".CaptureActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="false"
+            android:taskAffinity="com.yildiz.notasistani.capture"
+            android:launchMode="singleTask"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
         <receiver android:name=".AlarmReceiver" android:exported="false" />
         <receiver android:name=".SummaryReceiver" android:exported="false" />
         <service

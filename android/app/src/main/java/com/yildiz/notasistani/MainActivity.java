@@ -696,7 +696,21 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public void bubbleAck(String name) {
-            if (name != null && name.matches("\\d+\\.json")) new File(new File(getFilesDir(), "bubble"), name).delete();
+            if (name != null && name.matches("(\\d+\\.json|photo_\\d+\\.jpg)")) new File(new File(getFilesDir(), "bubble"), name).delete();
+        }
+
+        @JavascriptInterface
+        public String bubbleFile(String name) {
+            if (name == null || !name.matches("photo_\\d+\\.jpg")) return null;
+            try (InputStream is = new java.io.FileInputStream(new File(new File(getFilesDir(), "bubble"), name))) {
+                ByteArrayOutputStream bo = new ByteArrayOutputStream();
+                byte[] b = new byte[65536];
+                int n;
+                while ((n = is.read(b)) > 0) bo.write(b, 0, n);
+                return Base64.encodeToString(bo.toByteArray(), Base64.NO_WRAP);
+            } catch (Exception e) {
+                return null;
+            }
         }
 
         @JavascriptInterface
