@@ -43,6 +43,10 @@
         <receiver android:name=".AlarmReceiver" android:exported="false" />
         <receiver android:name=".SummaryReceiver" android:exported="false" />
         <service
+            android:name=".VoiceService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
+        <service
             android:name=".DiaryService"
             android:exported="false"
             android:foregroundServiceType="microphone" />

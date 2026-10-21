@@ -80,6 +80,40 @@ class Summary {
         }
     }
 
+    /** Sunucu üzerinden Gemini'ye istek atar, cevabın metnini döndürür (hata olursa mesajla Exception). */
+    static String post(Context c, JSONObject payload, String code) throws Exception {
+        HttpURLConnection con = (HttpURLConnection) new URL(API).openConnection();
+        con.setRequestMethod("POST");
+        con.setConnectTimeout(20000);
+        con.setReadTimeout(150000);
+        con.setDoOutput(true);
+        con.setRequestProperty("Content-Type", "application/json");
+        if (code != null && !code.isEmpty()) con.setRequestProperty("x-app-code", code);
+        try (OutputStream os = con.getOutputStream()) {
+            os.write(payload.toString().getBytes("UTF-8"));
+        }
+        int st = con.getResponseCode();
+        String resp = readAll(st < 400 ? con.getInputStream() : con.getErrorStream());
+        if (st >= 400) {
+            String msg = "Hata " + st;
+            try {
+                JSONObject e = new JSONObject(resp);
+                Object er = e.opt("error");
+                if (er instanceof JSONObject) msg = ((JSONObject) er).optString("message", msg);
+                else if (er != null) msg = String.valueOf(er);
+            } catch (Exception ignored) {
+            }
+            if (st == 503 || msg.toLowerCase().contains("demand")) msg = "Gemini şu an çok yoğun";
+            else if (st == 429) msg = "Gemini kotası doldu";
+            throw new Exception(msg);
+        }
+        JSONObject d = new JSONObject(resp);
+        JSONArray parts = d.getJSONArray("candidates").getJSONObject(0).getJSONObject("content").getJSONArray("parts");
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < parts.length(); i++) sb.append(parts.getJSONObject(i).optString("text"));
+        return sb.toString().trim();
+    }
+
     static String generate(Context c) throws Exception {
         File snap = new File(c.getFilesDir(), "snapshot.json");
         if (!snap.exists()) return null;
@@ -91,27 +125,10 @@ class Summary {
         JSONObject body = new JSONObject()
                 .put("contents", new JSONArray().put(new JSONObject().put("role", "user").put("parts", new JSONArray().put(new JSONObject().put("text", prompt)))))
                 .put("systemInstruction", new JSONObject().put("parts", new JSONArray().put(new JSONObject().put("text", sys))))
-                .put("generationConfig", new JSONObject().put("temperature", 0.4));
+                .put("generationConfig", new JSONObject().put("temperature", 0.4).put("thinkingConfig", new JSONObject().put("thinkingBudget", 0)));
         JSONObject payload = new JSONObject().put("model", s.optString("model", "gemini-flash-latest")).put("body", body);
 
-        HttpURLConnection con = (HttpURLConnection) new URL(API).openConnection();
-        con.setRequestMethod("POST");
-        con.setConnectTimeout(20000);
-        con.setReadTimeout(120000);
-        con.setDoOutput(true);
-        con.setRequestProperty("Content-Type", "application/json");
-        String code = s.optString("code", "");
-        if (!code.isEmpty()) con.setRequestProperty("x-app-code", code);
-        try (OutputStream os = con.getOutputStream()) {
-            os.write(payload.toString().getBytes("UTF-8"));
-        }
-        int st = con.getResponseCode();
-        if (st >= 400) return null;
-        JSONObject d = new JSONObject(readAll(con.getInputStream()));
-        JSONArray parts = d.getJSONArray("candidates").getJSONObject(0).getJSONObject("content").getJSONArray("parts");
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < parts.length(); i++) sb.append(parts.getJSONObject(i).optString("text"));
-        String text = sb.toString().trim();
+        String text = post(c, payload, s.optString("code", ""));
         if (text.isEmpty()) return null;
         write(new File(c.getFilesDir(), "summary.json"), new JSONObject().put("date", today).put("text", text).put("ts", System.currentTimeMillis()).toString());
         return text;

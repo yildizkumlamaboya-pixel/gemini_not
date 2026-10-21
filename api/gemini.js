@@ -45,12 +45,18 @@ module.exports = async (req, res) => {
     for (let i = 0; i < models.length; i++) {
       // İlk modeli bir kez daha dene (anlık yoğunluk çoğu zaman saniyeler içinde geçer)
       for (let attempt = 0; attempt < (i === 0 ? 2 : 1); attempt++) {
-        const r = await fetch(`${base}/models/${models[i]}:generateContent`, {
+        let r = await fetch(`${base}/models/${models[i]}:generateContent`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-goog-api-key': KEY },
           body: JSON.stringify(body || {}),
         });
-        const data = await r.json().catch(() => ({}));
+        let data = await r.json().catch(() => ({}));
+        // Model "düşünme kapatma" ayarını desteklemiyorsa ayarsız tekrar dene
+        if (r.status === 400 && body?.generationConfig?.thinkingConfig) {
+          delete body.generationConfig.thinkingConfig;
+          r = await fetch(`${base}/models/${models[i]}:generateContent`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': KEY }, body: JSON.stringify(body) });
+          data = await r.json().catch(() => ({}));
+        }
         if (r.ok) { res.setHeader('x-gemini-model', models[i]); return res.status(200).json(data); }
         last = { status: r.status, data };
         if (!RETRY.has(r.status)) return res.status(r.status).json(data);

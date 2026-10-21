@@ -56,6 +56,7 @@ public class MainActivity extends Activity {
     static final String COARSE = Manifest.permission.ACCESS_COARSE_LOCATION;
     static final String NOTIF = "android.permission.POST_NOTIFICATIONS";
 
+    static volatile boolean visible = false;
     WebView web;
     ValueCallback<Uri[]> fileCb;
     Uri camUri;
@@ -320,8 +321,15 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    protected void onPause() {
+        visible = false;
+        super.onPause();
+    }
+
+    @Override
     protected void onResume() {
         super.onResume();
+        visible = true;
         if (web != null) sendPerms();
     }
 
@@ -626,6 +634,57 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void deleteChunk(String name) {
             if (name.matches("c_\\d+_\\d+\\.m4a")) new File(DiaryService.dir(MainActivity.this), name).delete();
+        }
+
+        // --- sesli not (arka planda kayıt + Gemini) ---
+        @JavascriptInterface
+        public boolean voiceStart(String req, String prompt, String system, boolean json, String code, String model) {
+            if (!has(MIC)) {
+                runOnUiThread(() -> requestPermissions(new String[]{MIC}, RC_ALL));
+                return false;
+            }
+            Intent i = new Intent(MainActivity.this, VoiceService.class).putExtra("req", req).putExtra("prompt", prompt).putExtra("system", system)
+                    .putExtra("json", json).putExtra("code", code).putExtra("model", model);
+            if (Build.VERSION.SDK_INT >= 26) startForegroundService(i);
+            else startService(i);
+            return true;
+        }
+
+        @JavascriptInterface
+        public void voiceStop() {
+            if (VoiceService.recording) startService(new Intent(MainActivity.this, VoiceService.class).setAction(VoiceService.STOP));
+        }
+
+        @JavascriptInterface
+        public void voiceCancel() {
+            if (VoiceService.recording) startService(new Intent(MainActivity.this, VoiceService.class).setAction(VoiceService.CANCEL));
+        }
+
+        @JavascriptInterface
+        public String voiceState() {
+            try {
+                return new JSONObject().put("rec", VoiceService.recording).put("busy", VoiceService.busy).put("since", VoiceService.since).put("level", VoiceService.level).toString();
+            } catch (Exception e) {
+                return "{}";
+            }
+        }
+
+        @JavascriptInterface
+        public String voiceResults() {
+            org.json.JSONArray a = new org.json.JSONArray();
+            File[] fs = VoiceService.resDir(MainActivity.this).listFiles();
+            if (fs != null) for (File f : fs) {
+                try {
+                    a.put(new JSONObject(Summary.read(f)));
+                } catch (Exception ignored) {
+                }
+            }
+            return a.toString();
+        }
+
+        @JavascriptInterface
+        public void voiceAck(String id) {
+            if (id != null && id.matches("[A-Za-z0-9_]+")) new File(VoiceService.resDir(MainActivity.this), id + ".json").delete();
         }
 
         // --- akşam özeti ---

@@ -137,6 +137,13 @@ nav button.act b{background:linear-gradient(135deg,rgba(37,99,235,.13),rgba(6,18
 .recbar.on{display:flex}
 .recbar i{width:9px;height:9px;border-radius:50%;background:#ef4444;animation:pul 1.4s ease-out infinite}
 .mono{font-family:var(--mono)}
+.vbusy{position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:35;background:#0f172a;color:#fff;font-size:13px;font-weight:600;padding:8px 14px;border-radius:20px;box-shadow:0 8px 24px rgba(15,23,42,.3);display:flex;gap:8px;align-items:center;white-space:nowrap}
+html,body{overscroll-behavior-y:none}
+.ptr{position:fixed;top:44px;left:50%;z-index:8;width:42px;height:42px;margin-left:-21px;border-radius:50%;background:#fff;color:var(--mut);display:grid;place-items:center;box-shadow:0 6px 20px rgba(15,23,42,.18);opacity:0;pointer-events:none;transition:transform .25s,opacity .25s}
+.ptr.drag{transition:none}
+.ptr svg{width:22px;height:22px}
+.ptr.ready{color:var(--acc)}
+.ptr.spin svg{animation:s .8s linear infinite}
 .ai-tag{background:linear-gradient(135deg,rgba(37,99,235,.14),rgba(6,182,212,.14));color:var(--acc)}
 #tagChips:empty{display:none}
 #tagChips{margin-top:-4px}
@@ -203,6 +210,7 @@ details.card[open] summary{margin-bottom:6px}
 </header>
 
 <div class="recbar" id="recBar" onclick="show('gunluk')"><i></i><span style="flex:1">Sesli günlük kaydediliyor · <span id="rbTime" class="mono">0:00</span></span><button class="sm" onclick="event.stopPropagation();diaryStop()">Durdur</button></div>
+<div class="ptr" id="ptr"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg></div>
 <main>
 <!-- BUGÜN -->
 <section id="v-bugun">
@@ -531,6 +539,7 @@ details.card[open] summary{margin-bottom:6px}
   </div>
 </div></div>
 
+<div class="vbusy hidden" id="vBusy"><span class="spin"></span> <span id="vBusyT">Ses işleniyor…</span></div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -590,7 +599,9 @@ async function callGemini(payload){
     let last;
     for(const m of [cfg.model,...FALLBACK.filter(x=>x!==cfg.model)]){
       const r=await fetch(`${base}/models/${m}:generateContent`,{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':cfg.key},body:JSON.stringify(payload.body)});
-      const d=await r.json().catch(()=>({}));if(r.ok)return d;
+      let d=await r.json().catch(()=>({}));
+      if(r.status===400&&payload.body?.generationConfig?.thinkingConfig){delete payload.body.generationConfig.thinkingConfig;const r2=await fetch(`${base}/models/${m}:generateContent`,{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':cfg.key},body:JSON.stringify(payload.body)});d=await r2.json().catch(()=>({}));if(r2.ok)return d}
+      if(r.ok)return d;
       last=trErr(r.status,d.error?.message);if(![429,500,502,503,504,404].includes(r.status))break;
     }
     throw new Error(last);
@@ -607,7 +618,7 @@ async function callGemini(payload){
 }
 async function gemini(prompt,{system='',json=false,history=null,parts=null}={}){
   const contents=history||[{role:'user',parts:[...(parts||[]),{text:prompt}]}];
-  const body={contents,generationConfig:{temperature:.4}};
+  const body={contents,generationConfig:{temperature:.4,thinkingConfig:{thinkingBudget:0}}};
   if(system)body.systemInstruction={parts:[{text:system}]};
   if(json)body.generationConfig.responseMimeType='application/json';
   const d=await callGemini({body});
@@ -658,47 +669,90 @@ function commitPending(){
 // ================= SESLİ GİRİŞ (Gemini ses) =================
 const MIC='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3.5"/></svg>';
 $('micBtn').onclick=()=>voice('quick');
-let rec={mr:null,stream:null,chunks:[],mode:'',t0:0,tick:null,cancel:false};
+let rec={mr:null,stream:null,chunks:[],mode:'',t0:0,tick:null,cancel:false,native:null};
+const NATIVE_VOICE=APP&&typeof Android.voiceStart==='function';
+// Her sesli mod için Gemini isteği (yazıya dökme + ayrıştırma tek adımda)
+function voicePrompt(mode){
+  if(mode==='quick')return {prompt:'Bu ses kaydını Türkçe yazıya dök ve kurallara göre ayrıştır.',system:quickSys('\nAyrıca JSON\'a "transcript" alanı ekle: kaydın düzgün noktalamalı Türkçe metni.'),json:true};
+  if(mode==='note')return {prompt:'Bu ses kaydını Türkçe yazıya dök. Noktalama ve paragrafları düzelt, anlamı değiştirme. Sadece metni ver.',system:'',json:false};
+  return {prompt:'Bu ses kaydını Türkçe yazıya dök. Sadece metni ver.',system:'',json:false};
+}
+let vJobs=LS.get('na_vjobs',{}); // bekleyen arka plan istekleri
+function vBusy(){const n=Object.keys(vJobs).length+(rec.busy||0);$('vBusy').classList.toggle('hidden',!n);$('vBusyT').textContent=n>1?`${n} sesli not işleniyor…`:'Ses işleniyor…'}
 async function voice(mode){
+  rec.mode=mode;rec.cancel=false;
+  $('recTitle').textContent={quick:'Dinliyorum... not, görev veya hatırlatma söyle',note:'Dinliyorum... notunu söyle',chat:'Dinliyorum... asistana sor'}[mode];
+  $('recDot').className='recdot';$('recDot').innerHTML=MIC;$('recBtns').classList.remove('hidden');
+  $('recTime').textContent='0:00';
+  if(NATIVE_VOICE){
+    const id='v'+uid(),vp=voicePrompt(mode);
+    if(!Android.voiceStart(id,vp.prompt,vp.system,vp.json,cfg.code||'',cfg.model||'gemini-flash-latest')){toastMsg('🎤 Mikrofon izni gerekli');return}
+    rec.native=id;vJobs[id]={mode,ts:Date.now()};
+    $('recHint').textContent='Ekranı kapatabilirsin · bildirimden de bitirebilirsin';$('mRec').classList.add('on');
+    clearInterval(rec.tick);rec.t0=Date.now();
+    rec.tick=setInterval(()=>{let st={};try{st=JSON.parse(Android.voiceState())}catch{}
+      if(!st.rec&&rec.native){clearInterval(rec.tick);rec.native=null;$('mRec').classList.remove('on');LS.set('na_vjobs',vJobs);vBusy();pollVoice();return}
+      const s=Math.floor((Date.now()-(st.since||rec.t0))/1000);$('recTime').textContent=`${Math.floor(s/60)}:${pad(s%60)}`},250);
+    return;
+  }
   if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder){toastMsg('Bu tarayıcı ses kaydını desteklemiyor');return}
   try{rec.stream=await navigator.mediaDevices.getUserMedia({audio:true})}
   catch{toastMsg('🎤 Mikrofon izni verilmedi');return}
-  rec.mode=mode;rec.chunks=[];rec.cancel=false;
-  rec.mr=new MediaRecorder(rec.stream);
+  rec.chunks=[];rec.mr=new MediaRecorder(rec.stream);
   rec.mr.ondataavailable=e=>{if(e.data.size)rec.chunks.push(e.data)};
   rec.mr.onstop=onRecStop;rec.mr.start();
-  rec.t0=Date.now();
-  $('recTitle').textContent={dq:'Dinliyorum... konuşmalarına dair sorunu sor',quick:'Dinliyorum... not, görev veya hatırlatma söyle',note:'Dinliyorum... notunu söyle',chat:'Dinliyorum... asistana sor'}[mode];
-  $('recDot').className='recdot';$('recDot').innerHTML=MIC;$('recBtns').classList.remove('hidden');$('recHint').textContent='En fazla 90 saniye';
-  $('recTime').textContent='0:00';$('mRec').classList.add('on');
+  rec.t0=Date.now();$('recHint').textContent='En fazla 90 saniye';$('mRec').classList.add('on');
   rec.tick=setInterval(()=>{const s=Math.floor((Date.now()-rec.t0)/1000);$('recTime').textContent=`${Math.floor(s/60)}:${pad(s%60)}`;if(s>=90)recFinish()},250);
 }
-function recFinish(){if(rec.mr?.state==='recording')rec.mr.stop()}
-function recCancel(){rec.cancel=true;recFinish();closeRec()}
+function recFinish(){
+  if(rec.native){Android.voiceStop();clearInterval(rec.tick);rec.native=null;$('mRec').classList.remove('on');LS.set('na_vjobs',vJobs);vBusy();pollVoice();return}
+  if(rec.mr?.state==='recording')rec.mr.stop();
+}
+function recCancel(){
+  if(rec.native){Android.voiceCancel();delete vJobs[rec.native];rec.native=null;clearInterval(rec.tick);$('mRec').classList.remove('on');return}
+  rec.cancel=true;recFinish();closeRec();
+}
 function closeRec(){clearInterval(rec.tick);rec.stream?.getTracks().forEach(t=>t.stop());$('mRec').classList.remove('on')}
+// Sonucu ekrana işle (hem web hem uygulama için ortak)
+function applyVoice(mode,text){
+  if(mode==='quick'){
+    let r;try{r=JSON.parse(text)}catch{const m=String(text).match(/\{[\s\S]*\}/);r=m?JSON.parse(m[0]):null}
+    if(!r)throw new Error('AI yanıtı çözümlenemedi');
+    pending={notes:r.notes||[],tasks:r.tasks||[],transcript:r.transcript||''};
+    show('bugun');$('qText').value=pending.transcript;renderPreview();$('qPreview').scrollIntoView({behavior:'smooth',block:'center'});beep();
+  }else if(mode==='note'){
+    const t=String(text).trim();
+    if($('mNote').classList.contains('on')){const b=$('nBody');b.value=(b.value.trim()?b.value.trimEnd()+'\n\n':'')+t;if(!$('nTitle').value.trim())$('nTitle').value=t.split(/[.\n]/)[0].slice(0,50)}
+    else{notes.push({id:uid(),title:t.split(/[.\n]/)[0].slice(0,50)||'Sesli not',body:t,tags:[],pinned:false,created:Date.now(),updated:Date.now(),src:'manual',via:'voice'});save();renderAll();toastMsg('✔ Sesli not kaydedildi')}
+  }else if(mode==='chat'){show('asistan');$('cIn').value=String(text).trim();speakNext=true;sendChat()}
+}
+var vPollT=null;
+function pollVoice(){
+  if(!NATIVE_VOICE)return;
+  let res=[];try{res=JSON.parse(Android.voiceResults())}catch{}
+  for(const r of res){
+    const job=vJobs[r.id]||{mode:'quick'};delete vJobs[r.id];Android.voiceAck(r.id);
+    if(r.ok){try{applyVoice(job.mode,r.text)}catch(e){toastMsg('⚠️ '+esc(e.message),6000)}}
+    else toastMsg('⚠️ Sesli not: '+esc(r.error||'işlenemedi'),6000);
+  }
+  // süresi geçmiş (servis bitmiş, sonuç yok) işleri temizle
+  let st={};try{st=JSON.parse(Android.voiceState())}catch{}
+  if(!st.rec&&!st.busy)for(const[k,v]of Object.entries(vJobs))if(Date.now()-v.ts>5*60e3)delete vJobs[k];
+  LS.set('na_vjobs',vJobs);vBusy();
+  clearTimeout(vPollT);if(Object.keys(vJobs).length)vPollT=setTimeout(pollVoice,1000);
+}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)pollVoice()});
 async function onRecStop(){
   clearInterval(rec.tick);rec.stream?.getTracks().forEach(t=>t.stop());
   if(rec.cancel||!rec.chunks.length){closeRec();return}
-  $('recDot').className='recdot wait';$('recDot').innerHTML='<span class="spin" style="width:40px;height:40px;border-width:4px"></span>';
-  $('recTitle').textContent='Gemini dinliyor ve işliyor...';$('recHint').textContent='';$('recBtns').classList.add('hidden');
+  closeRec();const mode=rec.mode,blob=new Blob(rec.chunks,{type:rec.mr.mimeType});
+  rec.busy=(rec.busy||0)+1;vBusy();
   try{
-    const audio=await toWav16k(new Blob(rec.chunks,{type:rec.mr.mimeType}));
-    const part={inlineData:{mimeType:'audio/wav',data:audio}};
-    if(rec.mode==='quick'){
-      pending=await gemini('Bu ses kaydını Türkçe yazıya dök ve kurallara göre ayrıştır.',{parts:[part],json:true,
-        system:quickSys('\nAyrıca JSON\'a "transcript" alanı ekle: kaydın düzgün noktalamalı Türkçe metni.')});
-      pending.notes=pending.notes||[];pending.tasks=pending.tasks||[];
-      closeRec();show('bugun');$('qText').value=pending.transcript||'';renderPreview();
-      $('qPreview').scrollIntoView({behavior:'smooth',block:'center'});
-    }else if(rec.mode==='note'){
-      const t=await gemini('Bu ses kaydını Türkçe yazıya dök. Noktalama ve paragrafları düzelt, anlamı değiştirme. Sadece metni ver.',{parts:[part]});
-      closeRec();const b=$('nBody');b.value=(b.value.trim()?b.value.trimEnd()+'\n\n':'')+t.trim();
-      if(!$('nTitle').value.trim())$('nTitle').value=t.trim().split(/[.\n]/)[0].slice(0,50);
-    }else if(rec.mode==='chat'){
-      const t=await gemini('Bu ses kaydını Türkçe yazıya dök. Sadece metni ver.',{parts:[part]});
-      closeRec();show('asistan');$('cIn').value=t.trim();speakNext=true;sendChat();
-    }
-  }catch(e){closeRec();toastMsg('⚠️ '+esc(e.message),6000)}
+    const audio=await toWav16k(blob),vp=voicePrompt(mode);
+    const t=await gemini(vp.prompt,{parts:[{inlineData:{mimeType:'audio/wav',data:audio}}],system:vp.system});
+    applyVoice(mode,t);
+  }catch(e){toastMsg('⚠️ '+esc(e.message),6000)}
+  rec.busy--;vBusy();
 }
 // Her tarayıcının kaydını (webm/mp4) 16 kHz mono WAV'a çevir — Gemini hepsini sorunsuz okur, boyut küçük kalır
 async function toWav16k(blob,withRms){
@@ -1495,6 +1549,25 @@ function toggleTTS(){cfg.tts=!cfg.tts;LS.set('na_cfg',cfg);$('ttsBtn').classList
 $('ttsVoice').onchange=e=>{cfg.voice=e.target.value;LS.set('na_cfg',cfg)};
 let speakNext=false;
 
+// ================= AŞAĞI ÇEK → YENİLE =================
+(()=>{const ind=$('ptr'),TH=72;let y0=null,d=0;
+  const blocked=()=>document.querySelector('.modal.on')||!$('cam').classList.contains('hidden');
+  const reset=()=>{ind.classList.remove('drag','ready');ind.style.transform='';ind.style.opacity=0};
+  addEventListener('touchstart',e=>{y0=(window.scrollY<=0&&!blocked()&&e.touches.length===1&&!e.target.closest('textarea,input,select'))?e.touches[0].clientY:null;d=0},{passive:true});
+  addEventListener('touchmove',e=>{if(y0==null)return;const dy=e.touches[0].clientY-y0;if(dy<=0||window.scrollY>0){d=0;reset();return}
+    d=Math.min(dy*.5,110);ind.classList.add('drag');ind.style.transform=`translateY(${d}px)`;ind.style.opacity=Math.min(1,d/TH);
+    ind.querySelector('svg').style.transform=`rotate(${d*3}deg)`;ind.classList.toggle('ready',d>=TH)},{passive:true});
+  addEventListener('touchend',()=>{if(y0==null)return;y0=null;
+    if(d>=TH){ind.classList.remove('drag');ind.classList.add('spin');ind.style.transform='translateY(70px)';ind.querySelector('svg').style.transform='';refreshAll()}else reset();d=0});
+})();
+function refreshAll(){
+  const cur=document.querySelector('main>section:not(.hidden)')?.id?.slice(2)||'bugun';
+  // Web'de süren günlük kaydı varsa sayfayı yeniden yükleme, sadece ekranları tazele
+  if(dr.on&&!dr.native){renderAll();renderPerms();renderBackup();checkServer();checkReminders();
+    setTimeout(()=>{const i=$('ptr');i.classList.remove('spin');i.style.transform='';i.style.opacity=0;toastMsg('✔ Yenilendi',1500)},500);return}
+  try{sessionStorage.setItem('na_ptr',cur)}catch{}
+  setTimeout(()=>location.reload(),350);
+}
 // ================= AYARLAR =================
 function saveSettings(){cfg.key=$('sKey').value.trim();cfg.code=$('sCode').value.trim();cfg.model=$('sModel').value;cfg.sound=$('sSound').checked;LS.set('na_cfg',cfg);$('sOut').textContent='✔ Kaydedildi'}
 $('sSound').onchange=()=>{cfg.sound=$('sSound').checked;LS.set('na_cfg',cfg)};
@@ -1532,12 +1605,13 @@ function renderAll(){renderToday();renderNotes();renderTasks();renderDiary()}
 setInterval(()=>{const n=new Date();$('clock').textContent=`${GUN[n.getDay()].slice(0,3)} ${pad(n.getHours())}:${pad(n.getMinutes())}`},1000);
 $('sKey').value=cfg.key||'';$('sCode').value=cfg.code||'';$('sModel').innerHTML=`<option>${esc(cfg.model)}</option>`;$('sSound').checked=cfg.sound!==false;$('sumOn').checked=!!cfg.sumOn;$('sumTime').value=cfg.sumTime||'20:00';$('ttsVoice').value=cfg.voice||'Charon';$('ttsBtn').classList.toggle('act',!!cfg.tts);
 {const e=new Date(new Date().setHours(23,59,0,0));if(!tasks.some(t=>!t.done&&t.due&&new Date(t.due)<=e))tF='acik'}
-checkServer();renderNStat();renderAll();checkReminders();syncAlarms();renderBackup();importNativeSummary();
+checkServer();renderNStat();renderAll();checkReminders();syncAlarms();renderBackup();importNativeSummary();pollVoice();vBusy();
 if(NATIVE_DIARY){pullChunks();let st={};try{st=JSON.parse(Android.diaryState())}catch{}if(st.on){dr.on=true;dr.native=true;diaryUI(true);nativeTick()}}
 if(APP&&cfg.sumOn&&typeof Android.setSummary==='function')sumSettings();
 renderPerms().then(all=>{if(!all&&!LS.get('na_perm',0))setTimeout(()=>$('mPerm').classList.add('on'),900)});
 setTimeout(()=>{if(!cfg.key&&!(srv.ok&&srv.hasKey))toastMsg('👋 Gemini bağlantısı yok — <b>Ayarlar</b>\'a bak.',6000)},1500);
 const sv=new URLSearchParams(location.search).get('v');if(sv)show(sv);
+try{const pv=sessionStorage.getItem('na_ptr');if(pv){sessionStorage.removeItem('na_ptr');show(pv);setTimeout(()=>toastMsg('✔ Yenilendi',1500),300)}}catch{}
 </script>
 </body>
 </html>
