@@ -188,6 +188,10 @@ public class MainActivity extends Activity {
 
     /** Sayfa dosyaları (index.html vb.) APK'nın içinden verilir: internet yokken de açılır. Yalnızca /api istekleri internete gider. */
     android.webkit.WebResourceResponse local(Uri u) {
+        return localAsset(this, u);
+    }
+
+    static android.webkit.WebResourceResponse localAsset(Context c, Uri u) {
         try {
             if (u == null || !HOST.equals(u.getHost())) return null;
             String p = u.getPath();
@@ -205,7 +209,7 @@ public class MainActivity extends Activity {
                 case "svg": mime = "image/svg+xml"; break;
                 default: return null;
             }
-            InputStream is = getAssets().open("www/" + name);
+            InputStream is = c.getAssets().open("www/" + name);
             android.webkit.WebResourceResponse r = new android.webkit.WebResourceResponse(mime, "utf-8", is);
             Map<String, String> hd = new HashMap<>();
             hd.put("Cache-Control", "no-cache");

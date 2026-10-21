@@ -49,7 +49,8 @@
             android:noHistory="false"
             android:taskAffinity="com.yildiz.notasistani.capture"
             android:launchMode="singleTask"
-            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|keyboard|uiMode|density"
+            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
         <receiver android:name=".AlarmReceiver" android:exported="false" />
         <receiver android:name=".SummaryReceiver" android:exported="false" />
         <service
