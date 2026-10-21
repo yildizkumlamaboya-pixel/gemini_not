@@ -137,6 +137,7 @@ nav button.act b{background:linear-gradient(135deg,rgba(37,99,235,.13),rgba(6,18
 .recbar.on{display:flex}
 .recbar i{width:9px;height:9px;border-radius:50%;background:#ef4444;animation:pul 1.4s ease-out infinite}
 .mono{font-family:var(--mono)}
+.donesep{font-size:12px;font-weight:600;color:var(--mut);padding:14px 0 4px;border-top:1px dashed var(--line);margin-top:4px}
 .dent.draft .tx{color:#475569}
 .ok-tag{background:#d1fae5;color:#047857}
 .dent.call{border-left:3px solid var(--acc2);padding-left:10px}
@@ -1474,12 +1475,15 @@ const sortT=(a,b)=>(a.due||'9999').localeCompare(b.due||'9999')||({yuksek:0,orta
 function renderTasks(){
   const n=new Date(),wk=new Date(n);wk.setDate(n.getDate()+7);
   let l=tasks.filter(t=>{
-    if(tF==='biten')return t.done; if(t.done)return false;
+    if(tF==='biten')return t.done; if(tF==='acik')return true; if(t.done)return false;
     if(tF==='bugun')return t.due&&new Date(t.due)<=new Date(n.getFullYear(),n.getMonth(),n.getDate(),23,59);
     if(tF==='hafta')return t.due&&new Date(t.due)<=wk;
     if(tF==='geciken')return t.due&&new Date(t.due)<n;
     return true});
   l.sort(tF==='biten'?(a,b)=>(b.doneAt||0)-(a.doneAt||0):sortT);
+  // Tümü: önce açık işler, altında bitenler (en son biten üstte)
+  if(tF==='acik'){const o=l.filter(t=>!t.done),d=l.filter(t=>t.done).sort((a,b)=>(b.doneAt||0)-(a.doneAt||0));l=[...o,...d];
+    if(o.length&&d.length){$('taskList').innerHTML=o.map(taskRow).join('')+`<div class="donesep">Bitenler · ${d.length}</div>`+d.map(taskRow).join('');return}}
   $('taskList').innerHTML=l.length?l.map(taskRow).join(''):`<div class="empty">${tF==='bugun'?'Bugün için görev yok':tF==='geciken'?'Geciken iş yok 🎉':tF==='biten'?'Tamamlanan görev yok':'Görev yok'}</div>`;
 }
 $('tFilter').onclick=e=>{const b=e.target.closest('button');if(!b)return;tF=b.dataset.f;renderToday();renderTasks()};
@@ -1487,7 +1491,7 @@ $('tFilter').onclick=e=>{const b=e.target.closest('button');if(!b)return;tF=b.da
 // ================= BUGÜN =================
 function renderToday(){
   const n=new Date(),end=new Date(n.getFullYear(),n.getMonth(),n.getDate(),23,59),wk=new Date(+n+7*864e5),open=tasks.filter(t=>!t.done);
-  const c={acik:open.length,bugun:open.filter(t=>t.due&&new Date(t.due)<=end).length,hafta:open.filter(t=>t.due&&new Date(t.due)<=wk).length,geciken:open.filter(t=>t.due&&new Date(t.due)<n).length,biten:0};
+  const c={acik:tasks.length,bugun:open.filter(t=>t.due&&new Date(t.due)<=end).length,hafta:open.filter(t=>t.due&&new Date(t.due)<=wk).length,geciken:open.filter(t=>t.due&&new Date(t.due)<n).length,biten:0};
   [...$('tFilter').children].forEach(b=>{const k=b.dataset.f;b.innerHTML=b.dataset.l+(c[k]?` <span class="cnt${k==='geciken'?' bad':''}">${c[k]}</span>`:'');b.classList.toggle('act',k===tF)});
 }
 
