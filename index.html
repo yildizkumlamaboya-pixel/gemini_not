@@ -307,7 +307,7 @@ details.card[open] summary{margin-bottom:6px}
       <button class="sm ai" onclick="show('asistan');$('cIn').focus()">✨ Soru sor</button>
     </div>
     <div id="dqOut"></div>
-    <div class="mut" id="dCount"></div>
+    <div class="row" style="align-items:center"><div class="mut" id="dCount" style="flex:1"></div><button class="sm hidden" id="dRetryAll" onclick="retryAll(true)"></button></div>
     <div id="dList"></div>
   </div>
 </section>
@@ -1348,7 +1348,7 @@ function diaryStop(){
 }
 async function wakeOn(){if(APP){try{Android.keepScreenOn(true)}catch{}dr.wake=1;return}try{dr.wake=await navigator.wakeLock?.request('screen')}catch{}}
 function wakeOff(){if(APP){try{Android.keepScreenOn(false)}catch{}dr.wake=null;return}try{dr.wake?.release()}catch{}dr.wake=null}
-document.addEventListener('visibilitychange',()=>{if(document.hidden)return;if(dr.on&&!dr.native&&!dr.wake)wakeOn();if(NATIVE_DIARY){pullResults();pullChunks();let st={};try{st=JSON.parse(Android.diaryState())}catch{}if(st.on&&!dr.on){dr.on=true;dr.native=true;diaryUI(true);nativeTick()}}});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)return;setTimeout(()=>retryAll(false),3000);if(dr.on&&!dr.native&&!dr.wake)wakeOn();if(NATIVE_DIARY){pullResults();pullChunks();let st={};try{st=JSON.parse(Android.diaryState())}catch{}if(st.on&&!dr.on){dr.on=true;dr.native=true;diaryUI(true);nativeTick()}}});
 function diaryStatus(){
   const q=dr.queue.length+(dr.inflight?.length||0)+(dr.npending||0),w=dr.pauseUntil>Date.now()?' · kota için kısa bekleme':'';
   $('dStat').textContent=dr.on?`Kaydediliyor${dr.native?' · ekran kapansa da sürer':''}${q?` · ${q} parça işleniyor`:''}${dr.nrefine?' · ✓ iyileştiriliyor':''}${w}`
@@ -1370,28 +1370,33 @@ function processQueue(){
 }
 async function processBatch(batch){
   const del=js=>js.forEach(j=>{if(j.native)try{Android.deleteChunk(j.native)}catch{}});
+  const unmark=js=>js.forEach(j=>{if(j.retryOf)dr.retrying?.delete(j.retryOf)});
+  const dropOld=js=>{const ids=new Set(js.map(j=>j.retryOf).filter(Boolean));if(!ids.size)return;
+    diary.filter(e=>ids.has(e.id)&&e.audio).forEach(e=>DB.del(e.audio).catch(()=>{}));diary=diary.filter(e=>!ids.has(e.id));saveDiary()};
   const segs=[],used=[];
   for(const j of batch){
-    let d;try{d=await decode16k(j.blob)}catch{del([j]);continue}
+    let d;try{d=await decode16k(j.blob)}catch{if(j.retryOf)unmark([j]);else del([j]);continue} // tekrar denenen kaydın sesi korunur
     let sq=0;for(let i=0;i<d.length;i+=4)sq+=d[i]*d[i];
-    if(Math.sqrt(sq/Math.max(1,d.length/4))<0.006){del([j]);continue} // sessiz parça
+    if(Math.sqrt(sq/Math.max(1,d.length/4))<0.006){unmark([j]);dropOld([j]);del([j]);continue} // sessiz parça
     segs.push(d);used.push(j);
   }
-  if(!used.length)return;
-  const names=used.map(j=>j.native).filter(Boolean);
-  if(names.length&&names.every(x=>diary.some(e=>e.chunk===x||e.parts?.includes(x)))){del(used);return}
+  if(!used.length){renderDiary();return}
+  const names=used.filter(j=>!j.retryOf).map(j=>j.native).filter(Boolean);
+  if(names.length&&names.length===used.length&&names.every(x=>diary.some(e=>e.chunk===x||e.parts?.includes(x)))){del(used);return}
   const n=segs.reduce((a,d)=>a+d.length,0),all=new Float32Array(n);let o=0;for(const d of segs){all.set(d,o);o+=d.length}
   const wav=wavB64(all);
   const e={id:'d'+uid(),ts:used[0].start,dur:Math.round(n/16000),text:'',chunk:names[0]||''};
   if(names.length>1)e.parts=names;
   try{e.text=await transcribe(wav)}
   catch(err){
-    if(/kota|yoğun|429|quota/i.test(err.message)&&(used[0].tries||0)<6){ // kota/yoğunluk: bekle, sonra aynı paketi tekrar dene
-      used.forEach(j=>j.tries=(j.tries||0)+1);dr.pauseUntil=Date.now()+20000*used[0].tries;dr.queue.unshift(...used);return}
+    if(/kota|yoğun|429|quota|internet|ulaşılamadı/i.test(err.message)&&(used[0].tries||0)<6){ // kota/yoğunluk/bağlantı: bekle, sonra aynı paketi tekrar dene
+      used.forEach(j=>j.tries=(j.tries||0)+1);dr.pauseUntil=Date.now()+15000*used[0].tries;dr.queue.unshift(...used);return}
+    unmark(used);
+    if(used.every(j=>j.retryOf)){used.forEach(j=>{const o=diary.find(x=>x.id===j.retryOf);if(o)o.err=err.message});saveDiary();renderDiary();return} // eski kayıtlar sesleriyle kalır
     const aid='a'+uid();try{await DB.put(aid,await (await fetch('data:audio/wav;base64,'+wav)).blob());e.audio=aid}catch{}
     e.err=err.message;e.text='';
   }
-  dr.pauseUntil=0;
+  dr.pauseUntil=0;unmark(used);dropOld(used);
   if(e.text||e.err){diary.push(e);saveDiary();renderDiary(true)}
   del(used);
 }
@@ -1411,6 +1416,26 @@ async function transcribe(b64,mime='audio/wav'){
   if(/^BOŞ\.?$/i.test(t)||!t||/^[\s.…,-]*$/.test(t))return '';
   dr.last=t.slice(-200);return t;
 }
+// Yazıya dökülemeyen kayıtları paketler halinde yeniden dener (elle ya da bağlantı gelince kendiliğinden)
+async function retryAll(manual){
+  if(!manual&&(!navigator.onLine||Date.now()-(dr.lastAuto||0)<10*60e3))return;
+  dr.retrying=dr.retrying||new Set();
+  const fails=diary.filter(e=>e.err&&!e.text&&(e.audio||e.nfile)&&!dr.retrying.has(e.id));
+  if(!fails.length)return;
+  if(!manual)dr.lastAuto=Date.now();
+  for(const e of fails){
+    let blob=null;
+    try{
+      if(e.nfile&&APP){const b64=Android.readChunk(e.nfile);if(b64){const bin=atob(b64),u8=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u8[i]=bin.charCodeAt(i);blob=new Blob([u8],{type:'audio/aac'})}}
+      else if(e.audio)blob=await DB.get(e.audio);
+    }catch{}
+    if(!blob)continue;
+    dr.retrying.add(e.id);
+    dr.queue.push({blob,start:e.ts,dur:e.dur||CHUNK,native:e.nfile||undefined,retryOf:e.id});
+  }
+  renderDiary();diaryStatus();processQueue();
+}
+window.addEventListener('online',()=>setTimeout(()=>retryAll(false),2000));
 async function retryEntry(id){
   const e=diary.find(x=>x.id===id);if(!e||!(e.audio||e.nfile))return;
   dr.retrying=dr.retrying||new Set();dr.retrying.add(id);renderDiary();
@@ -1429,6 +1454,7 @@ function renderDiary(scroll){
   let list=q?diary.filter(e=>e.text.toLocaleLowerCase('tr').includes(ql)):diary.filter(e=>dayKey(e.ts)===day);
   list=[...list].sort((a,b)=>q?b.ts-a.ts:a.ts-b.ts);
   const mins=Math.round(list.reduce((s,e)=>s+(e.dur||0),0)/60);
+  {const nf=diary.filter(e=>e.err&&!e.text&&(e.audio||e.nfile)&&!dr.retrying?.has(e.id)).length,b=$('dRetryAll');b.classList.toggle('hidden',!nf);b.textContent=`↻ Hepsini yazıya dök (${nf})`}
   $('dCount').textContent=list.length?(q?`"${q}" geçen ${list.length} kayıt (tüm günler)`:`${list.length} kayıt · ~${mins} dk konuşma`):'';
   $('dList').innerHTML=list.length?list.map(e=>`<div class="dent${e.kind==='call'?' call':''}${e.chunk?.startsWith('r_')&&!e.edited&&Date.now()-e.ts<15*60e3?' draft':''}"><div class="tm">${q?stampDate(e.ts):hm(e.ts)}${e.refined?' <span class="tag ok-tag" title="Güçlü modelle iyileştirildi">✓</span>':''}${e.kind==='call'?` <span class="tag">📞 ${esc(e.who||'Telefon')}</span>`:''}${e.dur?` <span class="mut" style="font-weight:500">${Math.round(e.dur)} sn</span>`:''}<span style="flex:1"></span>${(e.audio||e.nfile)&&!dr.retrying?.has(e.id)?`<button class="sm" onclick="retryEntry('${e.id}')">↻ Yazıya dök</button>`:''}<button class="sm ghost" onclick="editEntry('${e.id}')" title="Düzenle">✏️</button><button class="sm ghost" onclick="delEntry('${e.id}')">✕</button></div>
     <div class="tx">${dEdit===e.id?`<textarea rows="4">${esc(e.text)}</textarea><div class="row" style="margin-top:6px"><button class="sm" onclick="dEdit=null;renderDiary()">Vazgeç</button><button class="sm pri" onclick="saveEntry('${e.id}')">Kaydet</button></div>`:dr.retrying?.has(e.id)?'<span class="pend"><span class="spin"></span> Yazıya dökülüyor...</span>':e.text?hl(e.text,q):`<span class="pend">⚠️ ${esc(e.err||'Yazıya dökülemedi')} — ses saklandı, ↻ ile tekrar dene.</span>`}</div></div>`).join('')
@@ -1902,7 +1928,7 @@ if(LS.get('na_fix_kova',1)){LS.set('na_fix_kova',0);const re=/\bkoyle\b/gi,f=s=>
   for(const t of tasks){const a=t.title+t.note;t.title=f(t.title);t.note=f(t.note);if(a!==t.title+t.note)c++}
   for(const e of diary){const a=e.text;e.text=f(e.text);if(a!==e.text)c++}
   if(c){save();saveDiary();setTimeout(()=>toastMsg(`✔ ${c} kayıtta "koyle" → "kova" düzeltildi`,3000),1200)}}
-checkServer();renderNStat();renderAll();checkReminders();syncAlarms();renderBackup();importNativeSummary();pollVoice();vBusy();startCallWatch();
+checkServer();renderNStat();renderAll();checkReminders();syncAlarms();renderBackup();importNativeSummary();pollVoice();vBusy();startCallWatch();setTimeout(()=>retryAll(false),6000);
 if(NATIVE_DIARY){pullResults();pullChunks();let st={};try{st=JSON.parse(Android.diaryState())}catch{}if(st.on){dr.on=true;dr.native=true;diaryUI(true);nativeTick()}}
 if(APP&&cfg.sumOn&&typeof Android.setSummary==='function')sumSettings();
 renderPerms().then(all=>{if(!all&&!LS.get('na_perm',0))setTimeout(()=>$('mPerm').classList.add('on'),900)});
