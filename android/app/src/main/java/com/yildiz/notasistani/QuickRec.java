@@ -73,8 +73,146 @@ class QuickRec {
         return recOn;
     }
 
+    // Yöntem A: Google tanıma mikrofonu kendisi dinler (Gemini/Google uygulamasıyla aynı kalite).
+    // Çalışmazsa yöntem B: sesi kendimiz kaydedip Google tanımaya / Gemini'ye veririz.
+    volatile boolean modeA = false;
+    String engine = "";
+    final Runnable tick = new Runnable() {
+        public void run() {
+            if (!recOn || !modeA) return;
+            long s = (System.currentTimeMillis() - recStart) / 1000;
+            String t = (said + " " + partial).trim();
+            l.text((t.isEmpty() ? "🎤 Dinliyorum… " : "🎤 " + t + "  ") + String.format(java.util.Locale.ROOT, "%d:%02d", s / 60, s % 60));
+            if (System.currentTimeMillis() - recStart > MAX_MS) finish(false);
+            else h.postDelayed(this, 400);
+        }
+    };
+
     boolean start() {
         if (recOn || busy) return recOn;
+        if (Build.VERSION.SDK_INT >= 26) {
+            said.setLength(0);
+            partial = "";
+            canceled = false;
+            heard = false;
+            modeA = true;
+            engine = "google";
+            recOn = true;
+            recStart = System.currentTimeMillis();
+            l.state(true);
+            l.text("🎤 Dinliyorum…");
+            h.post(this::listenA);
+            h.postDelayed(tick, 400);
+            return true;
+        }
+        return startOwn();
+    }
+
+    void listenA() {
+        if (!recOn || !modeA) return;
+        try {
+            if (sr != null) try {
+                sr.destroy();
+            } catch (Exception ignored) {
+            }
+            boolean hasG;
+            try {
+                svc.getPackageManager().getServiceInfo(MainActivity.GOOGLE_STT, 0);
+                hasG = true;
+            } catch (Exception e) {
+                hasG = false;
+            }
+            sr = hasG ? SpeechRecognizer.createSpeechRecognizer(svc, MainActivity.GOOGLE_STT) : SpeechRecognizer.createSpeechRecognizer(svc);
+            sr.setRecognitionListener(new RecognitionListener() {
+                public void onReadyForSpeech(Bundle b) {}
+                public void onBeginningOfSpeech() { heard = true; }
+                public void onRmsChanged(float v) {}
+                public void onBufferReceived(byte[] b) {}
+                public void onEndOfSpeech() {}
+                public void onEvent(int t, Bundle b) {}
+
+                public void onPartialResults(Bundle b) {
+                    ArrayList<String> r = b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                    if (r != null && !r.isEmpty() && r.get(0) != null) partial = r.get(0);
+                }
+
+                public void onResults(Bundle b) {
+                    ArrayList<String> r = b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                    if (r != null && !r.isEmpty() && r.get(0) != null && !r.get(0).trim().isEmpty()) said.append(said.length() > 0 ? " " : "").append(r.get(0).trim());
+                    partial = "";
+                    finishA(false); // susunca Google oturumu bitirir: kaydet
+                }
+
+                public void onError(int e) {
+                    if (!recOn) return;
+                    boolean nothing = said.length() == 0 && partial.trim().isEmpty();
+                    if (e == SpeechRecognizer.ERROR_NO_MATCH || e == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
+                        finishA(false); // konuşma yoksa process "duyulmadı" der
+                        return;
+                    }
+                    if (nothing && !heard) { // Google tanıma arka planda dinleyemedi: kendi kaydımıza geç
+                        modeA = false;
+                        recOn = false;
+                        try {
+                            sr.destroy();
+                        } catch (Exception ignored) {
+                        }
+                        sr = null;
+                        if (!startOwn()) l.done("⚠️ Mikrofon açılamadı", false);
+                        return;
+                    }
+                    finishA(false);
+                }
+            });
+            Intent i = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+            i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+            i.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "tr-TR");
+            i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "tr-TR");
+            i.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
+            i.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
+            i.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, svc.getPackageName());
+            i.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, SILENCE_MS);
+            i.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, SILENCE_MS);
+            sr.startListening(i);
+        } catch (Exception e) {
+            modeA = false;
+            recOn = false;
+            if (!startOwn()) l.done("⚠️ Mikrofon açılamadı", false);
+        }
+    }
+
+    void finishA(boolean cancel) {
+        if (!recOn || !modeA) return;
+        recOn = false;
+        modeA = false;
+        canceled = cancel;
+        h.removeCallbacks(tick);
+        l.state(false);
+        try {
+            if (sr != null) sr.destroy();
+        } catch (Exception ignored) {
+        }
+        sr = null;
+        if (cancel) {
+            l.done("✕ İptal edildi", false);
+            return;
+        }
+        sttEnded = true;
+        if (said.length() > 0 || !partial.trim().isEmpty()) heard = true;
+        l.text("⏳ Not kaydediliyor…");
+        busy = true;
+        new Thread(() -> {
+            try {
+                process();
+            } finally {
+                busy = false;
+            }
+        }, "kayan-isle").start();
+    }
+
+    boolean startOwn() {
+        if (recOn || busy) return recOn;
+        engine = Build.VERSION.SDK_INT >= 33 ? "google-ses" : "gemini";
         try {
             int min = AudioRecord.getMinBufferSize(RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
             AudioRecord a = null;
@@ -243,6 +381,23 @@ class QuickRec {
     }
 
     void finish(boolean cancel) {
+        if (modeA) {
+            if (!recOn) return;
+            if (cancel) {
+                try {
+                    if (sr != null) sr.cancel();
+                } catch (Exception ignored) {
+                }
+                finishA(true);
+            } else {
+                try { // son sözleri de alsın: Google'a "bitti" de, sonuç gelince kaydedilir
+                    if (sr != null) sr.stopListening();
+                } catch (Exception ignored) {
+                }
+                h.postDelayed(() -> finishA(false), 1500);
+            }
+            return;
+        }
         if (!recOn) return;
         recOn = false;
         canceled = cancel;
@@ -359,7 +514,7 @@ class QuickRec {
             out.put("ts", ts);
             if (!text.isEmpty()) {
                 // 1) hemen kaydet
-                out.put("transcript", text).put("pending", true);
+                out.put("transcript", text).put("pending", true).put("engine", engine);
                 Summary.write(f, out.toString());
                 l.done("✔ Kaydedildi\n“" + (text.length() > 120 ? text.substring(0, 120) + "…" : text) + "”", true);
                 // 2) arkada görev/hatırlatmaya ayır
@@ -368,7 +523,7 @@ class QuickRec {
                     if (f.exists()) { // uygulama henüz almadıysa sonucu ekle
                         String sum = apply(out, r, ts);
                         Summary.write(f, out.toString());
-                        l.after(sum);
+                        l.after(sum.replace("✔ Kaydedildi", "✔ Kaydedildi\n🎤 “" + (text.length() > 80 ? text.substring(0, 80) + "…" : text) + "”"));
                     }
                 } catch (Exception ignored) { // internet yok: uygulama sonra ayırır
                 }
@@ -398,8 +553,8 @@ class QuickRec {
                 l.done("🤫 Konuşma anlaşılmadı", false);
                 return;
             }
-            out.put("transcript", tr);
-            String sum = apply(out, r, ts);
+            out.put("transcript", tr).put("engine", "gemini");
+            String sum = apply(out, r, ts).replace("✔ Kaydedildi", "✔ Kaydedildi\n🎤 “" + (tr.length() > 80 ? tr.substring(0, 80) + "…" : tr) + "”");
             Summary.write(f, out.toString());
             l.done(sum, true);
         } catch (Exception e) {

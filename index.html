@@ -749,7 +749,10 @@ const busy=(btn,on,txt)=>{if(!btn)return;if(on){btn.dataset.t=btn.innerHTML;btn.
 let pending=null;
 function quickSys(extra=''){return `Kullanıcının serbest metnini not ve görevlere ayıran bir asistansın. ${nowCtx()}${vocabHint()}
 Kurallar: Yapılacak iş/arama/toplantı/kontrol → görev. Bilgi, fikir, gözlem → not. Saat verilmezse ama gün verilmişse 09:00 kullan. "Öğleden sonra"=14:00, "akşam"=18:00, "sabah"=09:00.
-Görevi olan ve saati belli işler için hatırlatmayı varsayılan olarak 15 dakika önceye koy; "hatırlat" denirse tam o saate koy. Tarihi yoksa due ve remind null.
+Görevi olan ve saati belli işler için hatırlatmayı varsayılan olarak 15 dakika önceye koy; "hatırlat" denirse tam o saate koy.
+Kullanıcı gün veya saat SÖYLEMEDİYSE due ve remind kesinlikle null olsun; kendinden tarih uydurma.
+Tek bir iş/istek söylendiyse (ör. "X'i ara", "Y'yi planla") sadece GÖREV oluştur; aynı şeyi ayrıca not olarak yazma. Not yalnızca bilgi/gözlem varsa oluşur.
+Kişi ve firma adlarını, söylenen kelimeleri metinde geçtiği gibi aynen kullan; değiştirme, kısaltma, başka isme çevirme.
 Öncelik: acil/önemli → yuksek, normal → orta, ertelenebilir → dusuk.
 Sadece JSON döndür: {"notes":[{"title":"","body":"","tags":[""]}],"tasks":[{"title":"","note":"","due":null,"remind":null,"priority":"orta","repeat":""}]}  (repeat: "", "gunluk","haftalik","aylik")`+extra}
 $('qText').addEventListener('input',e=>{const t=e.target;t.style.height='auto';t.style.height=Math.min(140,t.scrollHeight)+'px'});
