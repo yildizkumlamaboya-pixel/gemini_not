@@ -137,6 +137,9 @@ nav button.act b{background:linear-gradient(135deg,rgba(37,99,235,.13),rgba(6,18
 .recbar.on{display:flex}
 .recbar i{width:9px;height:9px;border-radius:50%;background:#ef4444;animation:pul 1.4s ease-out infinite}
 .mono{font-family:var(--mono)}
+.vrow{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line)}
+.vrow:last-child{border-bottom:0}
+.vrow .mut{font-size:12px}
 .pvedit .bd{display:grid;gap:6px}
 .pvedit input,.pvedit textarea,.pvedit select{padding:8px 10px;font-size:14px;min-height:0}
 .pvedit label{margin:0 0 3px}
@@ -313,6 +316,18 @@ details.card[open] summary{margin-bottom:6px}
     <div class="row" style="margin-top:8px">
       <button class="sm" onclick="testNotif()">Test bildirimi</button>
       <label style="margin:0;flex:1;display:flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" id="sSound"> Hatırlatmada ses</label>
+    </div>
+  </div>
+  <div class="card">
+    <h3>Özel isimler sözlüğü</h3>
+    <div id="vocList"></div>
+    <div class="row" style="margin-top:8px">
+      <input id="vocW" placeholder="Doğru yazım">
+      <input id="vocF" placeholder="Yanlış duyulan">
+    </div>
+    <div class="row" style="margin-top:8px">
+      <button class="pri" onclick="vocAdd()">Ekle</button>
+      <button onclick="vocFixAll(true)">Kayıtlarda düzelt</button>
     </div>
   </div>
   <div class="card">
@@ -553,6 +568,18 @@ const LS={get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch{re
 let notes=LS.get('na_notes',[]), tasks=LS.get('na_tasks',[]), chat=LS.get('na_chat',[]);
 let cfg=LS.get('na_cfg',{key:'',model:'gemini-flash-latest',sound:true});
 const APP=typeof window.Android!=='undefined';
+// ---- Özel isimler sözlüğü: Gemini'ye doğru yazımları öğretir + yanlış duyulanları düzeltir ----
+let vocab=LS.get('na_vocab',null);
+if(!Array.isArray(vocab)){vocab=[{w:'Omkon',from:'Hong Kong, Hongkong'},{w:'Acar Metal',from:''},{w:'Unique Raf',from:''},{w:'Delta Boya',from:''},{w:'Minimar',from:''},{w:'Yıldız Kumlama Boya',from:''}];LS.set('na_vocab',vocab);LS.set('na_vocab_fix',1)}
+const escRe=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+function vocabRules(){return vocab.flatMap(v=>String(v.from||'').split(',').map(f=>f.trim()).filter(Boolean).map(f=>[new RegExp(escRe(f),'gi'),v.w]))}
+function applyVocab(s){if(typeof s!=='string'||!s)return s;for(const[re,w]of vocabRules())s=s.replace(re,w);return s}
+function vocabDeep(o){if(typeof o==='string')return applyVocab(o);if(Array.isArray(o))return o.map(vocabDeep);if(o&&typeof o==='object'){const r={};for(const k in o)r[k]=vocabDeep(o[k]);return r}return o}
+function vocabHint(){
+  if(!vocab.length)return '';
+  const fx=vocab.filter(v=>v.from).map(v=>`"${v.from.split(',')[0].trim()}" gibi duyulursa "${v.w}" yaz`).join('; ');
+  return `\nKullanıcının sık geçen özel isimleri (doğru yazımları): ${vocab.map(v=>v.w).join(', ')}. Ses bunlara benziyorsa bu yazımı kullan.${fx?' Özellikle: '+fx+'.':''}`;
+}
 const save=()=>{LS.set('na_notes',notes);LS.set('na_tasks',tasks);LS.set('na_chat',chat.filter(m=>!m.typing).slice(-40));syncAlarms();afterChange()};
 // Uygulamada: hatırlatmaları Android alarmına kur (uygulama kapalıyken de bildirim gelir)
 function syncAlarms(){
@@ -638,7 +665,7 @@ const busy=(btn,on,txt)=>{if(!btn)return;if(on){btn.dataset.t=btn.innerHTML;btn.
 
 // ================= HIZLI EKLE =================
 let pending=null;
-function quickSys(extra=''){return `Kullanıcının serbest metnini not ve görevlere ayıran bir asistansın. ${nowCtx()}
+function quickSys(extra=''){return `Kullanıcının serbest metnini not ve görevlere ayıran bir asistansın. ${nowCtx()}${vocabHint()}
 Kurallar: Yapılacak iş/arama/toplantı/kontrol → görev. Bilgi, fikir, gözlem → not. Saat verilmezse ama gün verilmişse 09:00 kullan. "Öğleden sonra"=14:00, "akşam"=18:00, "sabah"=09:00.
 Görevi olan ve saati belli işler için hatırlatmayı varsayılan olarak 15 dakika önceye koy; "hatırlat" denirse tam o saate koy. Tarihi yoksa due ve remind null.
 Öncelik: acil/önemli → yuksek, normal → orta, ertelenebilir → dusuk.
@@ -647,7 +674,7 @@ $('qBtn').onclick=async()=>{
   const text=$('qText').value.trim(); if(!text)return;
   busy($('qBtn'),true,'Ayrıştırılıyor...');
   try{
-    pending=await gemini(text,{system:quickSys(),json:true});
+    pending=vocabDeep(await gemini(text,{system:quickSys(),json:true}));
     pending.notes=pending.notes||[];pending.tasks=pending.tasks||[];
     renderPreview();
   }catch(e){toastMsg('⚠️ '+e.message)}
@@ -699,7 +726,7 @@ async function aiFix(text){
   try{
     const cur={notes:pending.notes,tasks:pending.tasks};
     const r=await gemini(`Mevcut sonuç:\n${JSON.stringify(cur)}\n\nKullanıcının düzeltmesi: ${fix}\n\nDüzeltmeyi uygula (isim, tarih, saat, öncelik, not/görev ayrımı vb.), değişmeyenleri aynen koru ve tam JSON'u döndür.`,{system:quickSys(),json:true});
-    pending={...pending,notes:r.notes||[],tasks:r.tasks||[]};toastMsg('✔ Düzeltildi',1500);
+    pending=vocabDeep({...pending,notes:r.notes||[],tasks:r.tasks||[]});toastMsg('✔ Düzeltildi',1500);
   }catch(e){toastMsg('⚠️ '+esc(e.message))}
   busy(b,false);renderPreview();
 }
@@ -719,8 +746,8 @@ const NATIVE_VOICE=APP&&typeof Android.voiceStart==='function';
 // Her sesli mod için Gemini isteği (yazıya dökme + ayrıştırma tek adımda)
 function voicePrompt(mode){
   if(mode==='quick')return {prompt:'Bu ses kaydını Türkçe yazıya dök ve kurallara göre ayrıştır.',system:quickSys('\nAyrıca JSON\'a "transcript" alanı ekle: kaydın düzgün noktalamalı Türkçe metni.'),json:true};
-  if(mode==='note')return {prompt:'Bu ses kaydını Türkçe yazıya dök. Noktalama ve paragrafları düzelt, anlamı değiştirme. Sadece metni ver.',system:'',json:false};
-  return {prompt:'Bu ses kaydını Türkçe yazıya dök. Sadece metni ver.',system:'',json:false}; // chat, fix
+  if(mode==='note')return {prompt:'Bu ses kaydını Türkçe yazıya dök. Noktalama ve paragrafları düzelt, anlamı değiştirme. Sadece metni ver.'+vocabHint(),system:'',json:false};
+  return {prompt:'Bu ses kaydını Türkçe yazıya dök. Sadece metni ver.'+vocabHint(),system:'',json:false}; // chat, fix
 }
 let vJobs=LS.get('na_vjobs',{}); // bekleyen arka plan istekleri
 function vBusy(){const n=Object.keys(vJobs).length+(rec.busy||0);$('vBusy').classList.toggle('hidden',!n);$('vBusyT').textContent=n>1?`${n} sesli not işleniyor…`:'Ses işleniyor…'}
@@ -760,6 +787,7 @@ function recCancel(){
 function closeRec(){clearInterval(rec.tick);rec.stream?.getTracks().forEach(t=>t.stop());$('mRec').classList.remove('on')}
 // Sonucu ekrana işle (hem web hem uygulama için ortak)
 function applyVoice(mode,text){
+  text=applyVocab(String(text||''));
   if(mode==='quick'){
     let r;try{r=JSON.parse(text)}catch{const m=String(text).match(/\{[\s\S]*\}/);r=m?JSON.parse(m[0]):null}
     if(!r)throw new Error('AI yanıtı çözümlenemedi');
@@ -886,7 +914,7 @@ function renderNotes(){
   $('tagChips').innerHTML=tags.map(t=>`<button class="sm ${tagF===t?'act':''}" onclick="tagF=tagF==='${esc(t)}'?'':'${esc(t)}';renderNotes()">#${esc(t)}</button>`).join('');
   let list=notes.filter(n=>NF[nF][1](n)&&(!tagF||n.tags.includes(tagF))&&(!q||(n.title+' '+n.body+' '+n.tags.join(' ')+' '+(n.photos||[]).map(p=>[p.addr,p.tpl,p.title,...Object.values(p.fields||{})].join(' ')).join(' ')).toLocaleLowerCase('tr').includes(q)));
   list.sort((a,b)=>(b.pinned-a.pinned)||(b.updated-a.updated));
-  $('noteList').innerHTML=list.length?list.map(n=>`<div class="item note" onclick="openNote('${n.id}')"><div class="bd"><div class="t">${n.pinned?'<span class="pin">📌</span> ':''}${esc(n.title)}</div><div class="prev">${esc(n.body)}</div>${n.photos?.length?`<div class="nthumbs">${n.photos.slice(0,4).map(p=>`<img data-pid="${p.id}" alt="">`).join('')}${n.photos.length>4?`<span class="mut" style="align-self:center">+${n.photos.length-4}</span>`:''}</div>${n.photos[0].addr?`<div class="ploc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>${esc(n.photos[0].addr)}</div>`:''}`:''}<div>${isAI(n)?`<span class="tag ai-tag">✨ AI${n.via==='voice'?' · 🎤':''}</span>`:''}${n.tags.map(t=>`<span class="tag">#${esc(t)}</span>`).join('')}<span class="mut" style="font-size:11px"> ${fmt(toLocal(new Date(n.updated)))}</span></div></div></div>`).join(''):`<div class="empty">${nF==='all'&&!tagF&&!q?'Not yok':'Bu filtrede not yok'}</div>`;
+  $('noteList').innerHTML=list.length?list.map(n=>`<div class="item note" onclick="openNote('${n.id}')"><button class="sm ghost" style="order:2" onclick="event.stopPropagation();openNote('${n.id}')" title="Düzenle">✏️</button><div class="bd"><div class="t">${n.pinned?'<span class="pin">📌</span> ':''}${esc(n.title)}</div><div class="prev">${esc(n.body)}</div>${n.photos?.length?`<div class="nthumbs">${n.photos.slice(0,4).map(p=>`<img data-pid="${p.id}" alt="">`).join('')}${n.photos.length>4?`<span class="mut" style="align-self:center">+${n.photos.length-4}</span>`:''}</div>${n.photos[0].addr?`<div class="ploc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>${esc(n.photos[0].addr)}</div>`:''}`:''}<div>${isAI(n)?`<span class="tag ai-tag">✨ AI${n.via==='voice'?' · 🎤':''}</span>`:''}${n.tags.map(t=>`<span class="tag">#${esc(t)}</span>`).join('')}<span class="mut" style="font-size:11px"> ${fmt(toLocal(new Date(n.updated)))}</span></div></div></div>`).join(''):`<div class="empty">${nF==='all'&&!tagF&&!q?'Not yok':'Bu filtrede not yok'}</div>`;
   hydrate($('noteList'));
 }
 $('nSearch').oninput=renderNotes;
@@ -1280,9 +1308,10 @@ async function processQueue(){
 }
 async function transcribe(b64){
   const prev=dr.last?`\nBir önceki parçanın sonu (bağlam için, tekrar yazma): "${dr.last}"`:'';
-  const t=(await gemini(`Bu ses kaydını Türkçe olarak KELİMESİ KELİMESİNE yazıya dök. Özetleme, yorum ekleme, düzeltme yapma.
+  let t=(await gemini(`Bu ses kaydını Türkçe olarak KELİMESİ KELİMESİNE yazıya dök. Özetleme, yorum ekleme, düzeltme yapma.
 Birden fazla kişi konuşuyorsa her konuşmayı yeni satırda "Konuşmacı 1:", "Konuşmacı 2:" diye ayır; konuşmada isim geçiyorsa o ismi kullan.
-Anlaşılmayan yerlere [anlaşılmıyor] yaz. Hiç konuşma yoksa (sadece gürültü/sessizlik) yalnızca BOŞ yaz.${prev}`,{parts:[{inlineData:{mimeType:'audio/wav',data:b64}}]})).trim();
+Anlaşılmayan yerlere [anlaşılmıyor] yaz. Hiç konuşma yoksa (sadece gürültü/sessizlik) yalnızca BOŞ yaz.${vocabHint()}${prev}`,{parts:[{inlineData:{mimeType:'audio/wav',data:b64}}]})).trim();
+  t=applyVocab(t);
   if(/^BOŞ\.?$/i.test(t)||!t)return '';
   dr.last=t.slice(-200);return t;
 }
@@ -1301,8 +1330,8 @@ function renderDiary(){
   list=[...list].sort((a,b)=>q?b.ts-a.ts:a.ts-b.ts);
   const mins=Math.round(list.reduce((s,e)=>s+(e.dur||0),0)/60);
   $('dCount').textContent=list.length?(q?`"${q}" geçen ${list.length} kayıt (tüm günler)`:`${list.length} kayıt · ~${mins} dk konuşma`):'';
-  $('dList').innerHTML=list.length?list.map(e=>`<div class="dent"><div class="tm">${q?stampDate(e.ts):hm(e.ts)}${e.dur?` <span class="mut" style="font-weight:500">${Math.round(e.dur)} sn</span>`:''}<span style="flex:1"></span>${e.audio?`<button class="sm" onclick="retryEntry('${e.id}')">↻ Yazıya dök</button>`:''}<button class="sm ghost" onclick="delEntry('${e.id}')">✕</button></div>
-    <div class="tx">${e.err?`<span class="pend">⚠️ ${esc(e.err)} — ses saklandı, tekrar dene.</span>`:e.text?hl(e.text,q):'<span class="pend"><span class="spin"></span> Yazıya dökülüyor...</span>'}</div></div>`).join('')
+  $('dList').innerHTML=list.length?list.map(e=>`<div class="dent"><div class="tm">${q?stampDate(e.ts):hm(e.ts)}${e.dur?` <span class="mut" style="font-weight:500">${Math.round(e.dur)} sn</span>`:''}<span style="flex:1"></span>${e.audio?`<button class="sm" onclick="retryEntry('${e.id}')">↻ Yazıya dök</button>`:''}<button class="sm ghost" onclick="editEntry('${e.id}')" title="Düzenle">✏️</button><button class="sm ghost" onclick="delEntry('${e.id}')">✕</button></div>
+    <div class="tx">${dEdit===e.id?`<textarea rows="4">${esc(e.text)}</textarea><div class="row" style="margin-top:6px"><button class="sm" onclick="dEdit=null;renderDiary()">Vazgeç</button><button class="sm pri" onclick="saveEntry('${e.id}')">Kaydet</button></div>`:e.err?`<span class="pend">⚠️ ${esc(e.err)} — ses saklandı, tekrar dene.</span>`:e.text?hl(e.text,q):'<span class="pend"><span class="spin"></span> Yazıya dökülüyor...</span>'}</div></div>`).join('')
     :`<div class="empty">${q?'Eşleşen kayıt yok':'Bu gün için kayıt yok'}</div>`;
 }
 function diaryText(days){
@@ -1361,7 +1390,7 @@ function taskRow(t){
   return `<div class="item ${t.done?'done':''}"><div class="chk ${t.done?'on':''}" onclick="toggle('${t.id}')">${t.done?'✓':''}</div>
   <div class="bd" onclick="openTask('${t.id}')" style="cursor:pointer"><div class="t">${esc(t.title)}</div>
   <div class="mut">${t.due?`<span class="${late?'late':''}">📅 ${fmt(t.due)}</span>`:''}${t.remind&&!t.done?` ⏰ ${fmt(t.remind)}`:''}${t.repeat?' 🔁':''} <span class="tag p-${t.priority}">${PRI[t.priority]}</span></div>
-  ${t.note?`<div class="mut">${esc(t.note)}</div>`:''}</div></div>`;
+  ${t.note?`<div class="mut">${esc(t.note)}</div>`:''}</div><button class="sm ghost" onclick="openTask('${t.id}')" title="Düzenle">✏️</button></div>`;
 }
 const sortT=(a,b)=>(a.due||'9999').localeCompare(b.due||'9999')||({yuksek:0,orta:1,dusuk:2}[a.priority]-{yuksek:0,orta:1,dusuk:2}[b.priority]);
 function renderTasks(){
@@ -1508,7 +1537,7 @@ async function folderBackup(manual){
         if(Android.writeFile('Fotograflar/'+fn,await blobToB64(b),'image/jpeg',false))saved[p.id]=fn}catch{}
     }
     LS.set('na_bk_photos',saved);
-    const js=JSON.stringify({notes,tasks,diary,tpls,logo:LS.get('na_logo',''),photoFiles:saved,v:5,at:Date.now()});
+    const js=JSON.stringify({notes,tasks,diary,tpls,vocab,logo:LS.get('na_logo',''),photoFiles:saved,v:5,at:Date.now()});
     const ok=Android.writeText('NotAsistani-yedek.json',js)&&Android.writeText('Yedekler/yedek-'+dayKey(Date.now())+'.json',js);
     if(ok)LS.set('na_bk_last',Date.now());
     if(manual)toastMsg(ok?'✔ Yedeklendi':'⚠️ Yedeklenemedi — klasörü yeniden seç');
@@ -1614,6 +1643,33 @@ function refreshAll(){
   try{sessionStorage.setItem('na_ptr',cur)}catch{}
   setTimeout(()=>location.reload(),350);
 }
+
+// ================= SÖZLÜK EKRANI =================
+function renderVocab(){
+  $('vocList').innerHTML=vocab.length?vocab.map((v,i)=>`<div class="vrow"><b>${esc(v.w)}</b>${v.from?`<span class="mut">← ${esc(v.from)}</span>`:''}<span style="flex:1"></span><button class="sm ghost" onclick="vocEdit(${i})">✏️</button><button class="sm ghost" onclick="vocab.splice(${i},1);LS.set('na_vocab',vocab);renderVocab()">✕</button></div>`).join(''):'<div class="mut">Henüz kelime yok</div>';
+}
+function vocEdit(i){const v=vocab[i];$('vocW').value=v.w;$('vocF').value=v.from||'';vocab.splice(i,1);LS.set('na_vocab',vocab);renderVocab();$('vocW').focus()}
+function vocAdd(){
+  const w=$('vocW').value.trim(),f=$('vocF').value.trim();if(!w){$('vocW').focus();return}
+  const ex=vocab.find(v=>v.w.toLocaleLowerCase('tr')===w.toLocaleLowerCase('tr'));
+  if(ex)ex.from=[...new Set([...String(ex.from||'').split(','),...f.split(',')].map(s=>s.trim()).filter(Boolean))].join(', ');else vocab.push({w,from:f});
+  LS.set('na_vocab',vocab);$('vocW').value='';$('vocF').value='';renderVocab();
+  if(f&&confirm(`Mevcut kayıtlarda "${f}" → "${w}" düzeltilsin mi?`))vocFixAll(true);else toastMsg('✔ Sözlüğe eklendi');
+}
+// Kurallara göre tüm not, görev ve günlük kayıtlarını düzelt
+function vocFixAll(show){
+  let n=0;const fix=s=>{const r=applyVocab(s);if(r!==s)n++;return r};
+  for(const x of notes){x.title=fix(x.title);x.body=fix(x.body)}
+  for(const t of tasks){t.title=fix(t.title);t.note=fix(t.note)}
+  for(const e of diary)e.text=fix(e.text);
+  if(n){save();saveDiary();renderAll()}
+  if(show)toastMsg(n?`✔ ${n} yerde düzeltildi`:'Düzeltilecek kayıt yok');
+}
+// ================= GÜNLÜK KAYDI DÜZENLE =================
+let dEdit=null;
+function editEntry(id){dEdit=id;renderDiary();const t=$('dList').querySelector('textarea');if(t){t.focus();t.setSelectionRange(t.value.length,t.value.length)}}
+function saveEntry(id){const e=diary.find(x=>x.id===id),t=$('dList').querySelector('textarea');if(e&&t){e.text=t.value.trim();e.edited=true;saveDiary()}dEdit=null;renderDiary()}
+
 // ================= AYARLAR =================
 function saveSettings(){cfg.key=$('sKey').value.trim();cfg.code=$('sCode').value.trim();cfg.model=$('sModel').value;cfg.sound=$('sSound').checked;LS.set('na_cfg',cfg);$('sOut').textContent='✔ Kaydedildi'}
 $('sSound').onchange=()=>{cfg.sound=$('sSound').checked;LS.set('na_cfg',cfg)};
@@ -1646,11 +1702,12 @@ $('toast').onclick=e=>{if(e.target===$('toast'))hideToast()};
 function closeM(id){$(id).classList.remove('on')}
 document.querySelectorAll('.modal').forEach(m=>m.onclick=e=>{if(e.target===m){if(m.id==='mNote')closeNote();else m.classList.remove('on')}});
 $('nav').onclick=e=>{const b=e.target.closest('button');if(!b)return;show(b.dataset.v)};
-function show(v){if(!$('v-'+v))v='bugun';if(v==='ayarlar')renderBackup();if(v==='ayarlar')renderPerms();document.querySelectorAll('main>section').forEach(s=>s.classList.toggle('hidden',s.id!=='v-'+v));[...$('nav').children].forEach(b=>b.classList.toggle('act',b.dataset.v===v));window.scrollTo(0,0);if(v==='asistan')renderChat()}
+function show(v){if(!$('v-'+v))v='bugun';if(v==='ayarlar'){renderBackup();renderVocab()}if(v==='ayarlar')renderPerms();document.querySelectorAll('main>section').forEach(s=>s.classList.toggle('hidden',s.id!=='v-'+v));[...$('nav').children].forEach(b=>b.classList.toggle('act',b.dataset.v===v));window.scrollTo(0,0);if(v==='asistan')renderChat()}
 function renderAll(){renderToday();renderNotes();renderTasks();renderDiary()}
 setInterval(()=>{const n=new Date();$('clock').textContent=`${GUN[n.getDay()].slice(0,3)} ${pad(n.getHours())}:${pad(n.getMinutes())}`},1000);
 $('sKey').value=cfg.key||'';$('sCode').value=cfg.code||'';$('sModel').innerHTML=`<option>${esc(cfg.model)}</option>`;$('sSound').checked=cfg.sound!==false;$('sumOn').checked=!!cfg.sumOn;$('sumTime').value=cfg.sumTime||'20:00';$('ttsVoice').value=cfg.voice||'Charon';$('ttsBtn').classList.toggle('act',!!cfg.tts);
 {const e=new Date(new Date().setHours(23,59,0,0));if(!tasks.some(t=>!t.done&&t.due&&new Date(t.due)<=e))tF='acik'}
+if(LS.get('na_vocab_fix',0)){LS.set('na_vocab_fix',0);vocFixAll(false)}
 checkServer();renderNStat();renderAll();checkReminders();syncAlarms();renderBackup();importNativeSummary();pollVoice();vBusy();
 if(NATIVE_DIARY){pullChunks();let st={};try{st=JSON.parse(Android.diaryState())}catch{}if(st.on){dr.on=true;dr.native=true;diaryUI(true);nativeTick()}}
 if(APP&&cfg.sumOn&&typeof Android.setSummary==='function')sumSettings();
