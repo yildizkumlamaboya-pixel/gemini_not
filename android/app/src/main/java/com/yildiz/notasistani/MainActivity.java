@@ -52,7 +52,7 @@ public class MainActivity extends Activity {
     static final String URL = "https://yildiz-not-asistani.vercel.app/";
     static final String HOST = "yildiz-not-asistani.vercel.app";
     static final String AUTH = "com.yildiz.notasistani.files";
-    static final int RC_ALL = 1, RC_FILE = 2, RC_WEBPERM = 3, RC_GEO = 4, RC_CAMFILE = 5, RC_TREE = 6, RC_CALLTREE = 7;
+    static final int RC_ALL = 1, RC_FILE = 2, RC_WEBPERM = 3, RC_GEO = 4, RC_CAMFILE = 5, RC_TREE = 6, RC_CALLTREE = 7, RC_DRIVE_NEW = 8, RC_DRIVE_OPEN = 9;
 
     static final String MIC = Manifest.permission.RECORD_AUDIO;
     static final String CAM = Manifest.permission.CAMERA;
@@ -105,7 +105,22 @@ public class MainActivity extends Activity {
                 openExternal(u);
                 return true;
             }
+
+            @Override
+            public android.webkit.WebResourceResponse shouldInterceptRequest(WebView v, WebResourceRequest r) {
+                return "GET".equals(r.getMethod()) ? local(r.getUrl()) : null;
+            }
         });
+        // Service worker'ın istekleri de uygulamanın içindeki dosyalardan karşılanır
+        try {
+            android.webkit.ServiceWorkerController.getInstance().setServiceWorkerClient(new android.webkit.ServiceWorkerClient() {
+                @Override
+                public android.webkit.WebResourceResponse shouldInterceptRequest(WebResourceRequest r) {
+                    return "GET".equals(r.getMethod()) ? local(r.getUrl()) : null;
+                }
+            });
+        } catch (Exception ignored) {
+        }
 
         web.setWebChromeClient(new WebChromeClient() {
             @Override
@@ -165,6 +180,39 @@ public class MainActivity extends Activity {
         else web.loadUrl(URL);
 
         if (!prefs.getBoolean("askedAll", false)) web.postDelayed(this::askAll, 1500);
+    }
+
+    /** Sayfa dosyaları (index.html vb.) APK'nın içinden verilir: internet yokken de açılır. Yalnızca /api istekleri internete gider. */
+    android.webkit.WebResourceResponse local(Uri u) {
+        try {
+            if (u == null || !HOST.equals(u.getHost())) return null;
+            String p = u.getPath();
+            if (p == null || p.isEmpty() || p.equals("/")) p = "/index.html";
+            if (p.startsWith("/api/")) return null;
+            String name = p.substring(1);
+            if (!name.matches("[A-Za-z0-9._-]+")) return null;
+            String ext = name.substring(name.lastIndexOf('.') + 1).toLowerCase(Locale.ROOT);
+            String mime;
+            switch (ext) {
+                case "html": mime = "text/html"; break;
+                case "js": mime = "application/javascript"; break;
+                case "json": mime = "application/json"; break;
+                case "png": mime = "image/png"; break;
+                case "svg": mime = "image/svg+xml"; break;
+                default: return null;
+            }
+            InputStream is = getAssets().open("www/" + name);
+            android.webkit.WebResourceResponse r = new android.webkit.WebResourceResponse(mime, "utf-8", is);
+            Map<String, String> hd = new HashMap<>();
+            hd.put("Cache-Control", "no-cache");
+            hd.put("Access-Control-Allow-Origin", "*");
+            if (name.equals("sw.js")) hd.put("Service-Worker-Allowed", "/");
+            r.setResponseHeaders(hd);
+            r.setStatusCodeAndReasonPhrase(200, "OK");
+            return r;
+        } catch (Exception e) {
+            return null; // dosya APK'da yoksa internetten yüklenir
+        }
     }
 
     // ---------- izinler ----------
@@ -284,6 +332,33 @@ public class MainActivity extends Activity {
                 }
                 prefs.edit().putString("callTree", u.toString()).apply();
                 web.evaluateJavascript("window.onCallFolderPicked&&window.onCallFolderPicked()", null);
+            }
+            return;
+        }
+        if (rc == RC_DRIVE_NEW || rc == RC_DRIVE_OPEN) {
+            if (res == RESULT_OK && data != null && data.getData() != null) {
+                final Uri u = data.getData();
+                try {
+                    getContentResolver().takePersistableUriPermission(u, Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                } catch (Exception ignored) {
+                }
+                prefs.edit().putString("driveDoc", u.toString()).apply();
+                if (rc == RC_DRIVE_NEW) web.evaluateJavascript("window.onDrivePicked&&window.onDrivePicked()", null);
+                else new Thread(() -> { // geri yükleme: dosyayı önce telefona indir
+                    boolean ok = false;
+                    try (InputStream is = getContentResolver().openInputStream(u); OutputStream os = new FileOutputStream(new File(getCacheDir(), "drive_restore.txt"))) {
+                        byte[] b = new byte[65536];
+                        int n;
+                        while ((n = is.read(b)) > 0) os.write(b, 0, n);
+                        ok = true;
+                    } catch (Exception ignored) {
+                    }
+                    final boolean f = ok;
+                    runOnUiThread(() -> {
+                        closeReader();
+                        web.evaluateJavascript("window.onDriveRestore&&window.onDriveRestore(" + f + ")", null);
+                    });
+                }).start();
             }
             return;
         }
@@ -544,8 +619,139 @@ public class MainActivity extends Activity {
         }
     }
 
+    // ---------- Google Drive yedeği (tek dosya, Drive'ın dosya seçicisiyle) ----------
+    java.io.Writer driveTmp;
+    java.io.BufferedReader driveReader;
+    volatile boolean driveBusy = false;
+
+    void closeReader() {
+        try {
+            if (driveReader != null) driveReader.close();
+        } catch (Exception ignored) {
+        }
+        driveReader = null;
+    }
+
+    Uri driveDoc() {
+        String s = prefs.getString("driveDoc", null);
+        return s == null ? null : Uri.parse(s);
+    }
+
     // ---------- JS köprüsü ----------
     class Bridge {
+        @JavascriptInterface
+        public void drivePick() {
+            runOnUiThread(() -> {
+                try {
+                    Intent i = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                    i.addCategory(Intent.CATEGORY_OPENABLE);
+                    i.setType("text/plain");
+                    i.putExtra(Intent.EXTRA_TITLE, "NotAsistani-Drive-yedek.txt");
+                    startActivityForResult(i, RC_DRIVE_NEW);
+                } catch (Exception e) {
+                    Toast.makeText(MainActivity.this, "Dosya seçici açılamadı", Toast.LENGTH_LONG).show();
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void driveOpenPick() {
+            runOnUiThread(() -> {
+                try {
+                    Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                    i.addCategory(Intent.CATEGORY_OPENABLE);
+                    i.setType("*/*");
+                    startActivityForResult(i, RC_DRIVE_OPEN);
+                } catch (Exception e) {
+                    Toast.makeText(MainActivity.this, "Dosya seçici açılamadı", Toast.LENGTH_LONG).show();
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public String driveName() {
+            Uri u = driveDoc();
+            if (u == null) return "";
+            try {
+                DocumentFile d = DocumentFile.fromSingleUri(MainActivity.this, u);
+                String n = d == null ? null : d.getName();
+                return n == null ? "Drive dosyası" : n;
+            } catch (Exception e) {
+                return "Drive dosyası";
+            }
+        }
+
+        @JavascriptInterface
+        public void driveForget() {
+            prefs.edit().remove("driveDoc").apply();
+        }
+
+        @JavascriptInterface
+        public boolean driveBegin() {
+            if (driveBusy) return false;
+            try {
+                if (driveTmp != null) driveTmp.close();
+                driveTmp = new java.io.BufferedWriter(new java.io.OutputStreamWriter(new FileOutputStream(new File(getCacheDir(), "drive_tmp.txt")), "UTF-8"), 65536);
+                return true;
+            } catch (Exception e) {
+                return false;
+            }
+        }
+
+        @JavascriptInterface
+        public boolean driveAppend(String s) {
+            try {
+                driveTmp.write(s);
+                return true;
+            } catch (Exception e) {
+                return false;
+            }
+        }
+
+        /** Hazırlanan yedeği arka planda Drive dosyasının üzerine yazar; bitince window.onDriveDone(ok, hata). */
+        @JavascriptInterface
+        public void driveCommit() {
+            try {
+                driveTmp.close();
+            } catch (Exception ignored) {
+            }
+            driveTmp = null;
+            final Uri u = driveDoc();
+            if (u == null) return;
+            driveBusy = true;
+            new Thread(() -> {
+                String err = "";
+                try (InputStream is = new java.io.FileInputStream(new File(getCacheDir(), "drive_tmp.txt"));
+                     OutputStream os = getContentResolver().openOutputStream(u, "wt")) {
+                    if (os == null) throw new Exception("Drive dosyası açılamadı");
+                    byte[] b = new byte[65536];
+                    int n;
+                    while ((n = is.read(b)) > 0) os.write(b, 0, n);
+                } catch (SecurityException e) {
+                    err = "Drive izni kalktı — yeniden bağla";
+                } catch (Exception e) {
+                    err = e.getMessage() == null ? "Yazılamadı" : e.getMessage();
+                }
+                driveBusy = false;
+                final String js = "window.onDriveDone&&window.onDriveDone(" + err.isEmpty() + "," + JSONObject.quote(err) + ")";
+                runOnUiThread(() -> web.evaluateJavascript(js, null));
+            }).start();
+        }
+
+        /** Geri yüklenen dosyayı satır satır okur (bitince null). */
+        @JavascriptInterface
+        public String driveReadLine() {
+            try {
+                if (driveReader == null) driveReader = new java.io.BufferedReader(new java.io.InputStreamReader(new java.io.FileInputStream(new File(getCacheDir(), "drive_restore.txt")), "UTF-8"), 65536);
+                String l = driveReader.readLine();
+                if (l == null) closeReader();
+                return l;
+            } catch (Exception e) {
+                closeReader();
+                return null;
+            }
+        }
+
         @JavascriptInterface
         public boolean sttAvailable() {
             return SpeechRecognizer.isRecognitionAvailable(MainActivity.this) || hasGoogleStt();

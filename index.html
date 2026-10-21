@@ -100,6 +100,8 @@ nav button.act b{background:linear-gradient(135deg,rgba(37,99,235,.13),rgba(6,18
 @keyframes s{to{transform:rotate(360deg)}}
 .hidden{display:none!important}
 .reclive{margin-top:12px;max-height:34vh;overflow:auto;text-align:left;font-size:16px;line-height:1.5;background:#f8fafc;border:1px solid var(--line);border-radius:14px;padding:12px;white-space:pre-wrap}
+.sugg{border-color:rgba(99,102,241,.35);background:linear-gradient(180deg,rgba(99,102,241,.06),#fff 60%)}
+.sugg .q{font-style:italic;color:var(--mut);font-size:13px;margin-top:2px}
 .mic.rec{background:var(--bad);border-color:var(--bad);color:#fff}
 .empty{text-align:center;color:var(--mut);padding:22px 0;font-size:14px}
 .stat{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
@@ -242,6 +244,10 @@ details.card[open] summary{margin-bottom:6px}
 <!-- BUGÜN -->
 <section id="v-bugun">
   <div class="card ai" id="qPrevCard"><div id="qPreview"></div></div>
+  <div class="card sugg hidden" id="suggCard">
+    <div class="row" style="margin-bottom:6px"><h3 style="margin:0;flex:1">🤖 Konuşmalardan öneriler</h3><button class="sm pri" onclick="suggAddAll()">Tümünü ekle</button></div>
+    <div id="suggList"></div>
+  </div>
 
   <div class="card">
     <div class="row" style="margin-bottom:6px">
@@ -368,6 +374,15 @@ details.card[open] summary{margin-bottom:6px}
       <button class="sm" id="bkRestore" onclick="folderRestore()">Klasörden yükle</button>
     </div>
     <input type="file" id="impFile" accept=".json,application/json" class="hidden">
+    <div id="drvBox" class="hidden" style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--line)">
+      <div style="font-weight:700">☁️ Google Drive yedeği</div>
+      <div id="drvStat" class="mut" style="margin-top:4px"></div>
+      <div class="row" style="margin-top:8px">
+        <button id="drvPick" onclick="Android.drivePick()">☁️ Drive'a bağla</button>
+        <button id="drvNow" onclick="driveBackup(true)">Şimdi yedekle</button>
+        <button class="sm" onclick="driveRestorePick()">Drive'dan geri yükle</button>
+      </div>
+    </div>
   </div>
   <div class="card">
     <h3>Asistan</h3>
@@ -700,16 +715,87 @@ Görevi olan ve saati belli işler için hatırlatmayı varsayılan olarak 15 da
 Öncelik: acil/önemli → yuksek, normal → orta, ertelenebilir → dusuk.
 Sadece JSON döndür: {"notes":[{"title":"","body":"","tags":[""]}],"tasks":[{"title":"","note":"","due":null,"remind":null,"priority":"orta","repeat":""}]}  (repeat: "", "gunluk","haftalik","aylik")`+extra}
 $('qText').addEventListener('input',e=>{const t=e.target;t.style.height='auto';t.style.height=Math.min(140,t.scrollHeight)+'px'});
+const OFFLINE_ERR=/internet bağlantısı|ulaşılamadı|failed to fetch|network/i;
 $('qBtn').onclick=async()=>{
   const text=$('qText').value.trim(); if(!text)return;
+  if(!navigator.onLine){queueAI(text);return}
   busy($('qBtn'),true,'Ayrıştırılıyor...');
   try{
     pending=await gemini(text,{system:quickSys(),json:true});
     pending.notes=pending.notes||[];pending.tasks=pending.tasks||[];
     renderPreview();
-  }catch(e){toastMsg('⚠️ '+e.message)}
+  }catch(e){if(OFFLINE_ERR.test(e.message))queueAI(text);else toastMsg('⚠️ '+e.message)}
   busy($('qBtn'),false);
 };
+// İnternet yokken: yazılanı hemen not olarak sakla, bağlantı gelince AI ile görev/hatırlatmaya ayır
+function queueAI(text){
+  const now=Date.now();
+  notes.push({id:uid(),title:text.split(/[.\n]/)[0].slice(0,50)||'Not',body:text,tags:[],pinned:false,created:now,updated:now,src:'manual',aiPending:true});
+  $('qText').value='';$('qText').style.height='';save();renderAll();
+  toastMsg('📴 İnternet yok — not kaydedildi. Bağlantı gelince AI görev ve hatırlatmalara ayıracak.',4000);
+}
+async function processAIQueue(){
+  if(!navigator.onLine||processAIQueue.busy)return;
+  const list=notes.filter(n=>n.aiPending);if(!list.length)return;
+  processAIQueue.busy=true;let nt=0,nn=0;
+  for(const n of list){
+    try{
+      const r=await gemini(`(Bu metin ${stampDate(n.created)} tarihinde yazıldı; "yarın", "cuma" gibi ifadeleri o tarihe göre çöz.)\n${n.body}`,{system:quickSys(),json:true});
+      const now=Date.now();
+      (r.tasks||[]).forEach(t=>{tasks.push({id:uid(),title:t.title,note:t.note||'',due:t.due||'',remind:t.remind||'',priority:t.priority||'orta',repeat:t.repeat||'',done:false,notified:false,created:now});nt++});
+      (r.notes||[]).forEach(x=>{notes.push({id:uid(),title:x.title,body:x.body||'',tags:x.tags||[],pinned:false,created:n.created,updated:now,src:'ai'});nn++});
+      if((r.tasks||[]).length||(r.notes||[]).length)notes=notes.filter(x=>x.id!==n.id);else delete n.aiPending;
+      save();
+    }catch(e){if(OFFLINE_ERR.test(e.message))break}
+  }
+  processAIQueue.busy=false;renderAll();
+  if(nt||nn)toastMsg(`✔ İnternetsizken yazılanlar işlendi: ${nt} görev, ${nn} not`);
+}
+window.addEventListener('online',()=>setTimeout(processAIQueue,1500));
+// ---- Konuşmalardan görev önerisi: günlük ve telefon görüşmelerinde verilen sözleri yakalar ----
+let sugg=LS.get('na_sugg',[]);
+const saveSugg=()=>{LS.set('na_sugg',sugg);renderSugg()};
+function renderSugg(){
+  $('suggCard').classList.toggle('hidden',!sugg.length);
+  $('suggList').innerHTML=sugg.map(g=>`<div class="item"><div class="bd"><div class="t">✅ ${esc(g.title)}</div><div class="mut">${g.due?'📅 '+fmt(g.due):''}${g.remind?' ⏰ '+fmt(g.remind):''}${g.who?' · 👤 '+esc(g.who):''}</div>${g.quote?`<div class="q">“${esc(g.quote)}” · ${hm(g.ts||Date.now())}</div>`:''}</div><button class="sm pri" onclick="suggAdd('${g.id}')">Ekle</button><button class="sm ghost" onclick="suggDrop('${g.id}')" title="Yoksay">✕</button></div>`).join('');
+}
+function suggAdd(id,quiet){
+  const g=sugg.find(x=>x.id===id);if(!g)return;
+  tasks.push({id:uid(),title:g.title,note:[g.note,g.quote?`Konuşmadan: “${g.quote}”`:''].filter(Boolean).join('\n'),due:g.due||'',remind:g.remind||'',priority:g.priority||'orta',repeat:'',done:false,notified:false,created:Date.now(),src:'ai'});
+  sugg=sugg.filter(x=>x.id!==id);save();saveSugg();renderAll();if(!quiet)toastMsg('✔ Görev eklendi');
+}
+function suggAddAll(){const n=sugg.length;[...sugg].forEach(g=>suggAdd(g.id,true));toastMsg(`✔ ${n} görev eklendi`)}
+function suggDrop(id){sugg=sugg.filter(x=>x.id!==id);saveSugg()}
+async function suggScan(force){
+  if(!navigator.onLine||suggScan.busy)return;
+  const items=diary.filter(e=>!e.sg&&e.text&&!e.err&&e.ts>Date.now()-3*864e5).sort((a,b)=>a.ts-b.ts);
+  if(!items.length)return;
+  const chars=items.reduce((a,e)=>a+e.text.length,0),age=Date.now()-items[0].ts;
+  if(!force&&chars<300&&age<30*60e3)return; // biraz daha konuşma birikmesini bekle
+  if(!force&&Date.now()-(suggScan.at||0)<10*60e3)return;
+  suggScan.busy=true;suggScan.at=Date.now();
+  const lastTs=items[items.length-1].ts;
+  const txt=items.map(e=>`[${stampDate(e.ts)}${e.kind==='call'?' · telefon: '+(e.who||''):''}] ${e.text}`).join('\n').slice(-24000);
+  const open=tasks.filter(t=>!t.done).map(t=>t.title).slice(0,60).join(' | ');
+  try{
+    const r=await gemini(`Aşağıda telefon sahibinin gün içindeki konuşmalarının dökümü var (sesli günlük ve telefon görüşmeleri).
+Görevin: konuşmalarda telefon sahibinin YAPMASI GEREKEN somut işleri bul — verdiği sözler ("yarın ararım", "cuma teslim ederiz", "fiyatı gönderirim"), ondan istenen işler, kararlaştırılan teslim/ödeme/toplantı.
+Sohbet, geçmişte olmuş bitmiş işler, belirsiz dilekler ve başkasının kendi işleri GÖREV DEĞİLDİR. Emin değilsen ekleme. Aynı işi bir kez yaz.
+Zaten açık olan görevler (bunları tekrar önerme): ${open||'yok'}
+Tarihleri konuşmanın yapıldığı zamana göre çöz (köşeli parantezdeki zaman). ${nowCtx()}
+Saat belliyse hatırlatmayı 15 dk önceye koy; gün belli saat yoksa 09:00.
+Sadece JSON: {"tasks":[{"title":"kısa ve net iş","note":"","due":null,"remind":null,"priority":"orta","quote":"konuşmadan kısa alıntı","who":"varsa kişi/firma","ts":"alıntının köşeli parantezdeki zamanı"}]}
+
+KONUŞMALAR:
+${txt}`,{json:true,temp:.2});
+    const add=(r.tasks||[]).filter(t=>t.title&&!sugg.some(g=>g.title.toLocaleLowerCase('tr')===t.title.toLocaleLowerCase('tr'))&&!tasks.some(x=>!x.done&&x.title.toLocaleLowerCase('tr')===t.title.toLocaleLowerCase('tr')));
+    for(const t of add){const m=String(t.ts||'').match(/(\d{1,2})[.:](\d{2})\s*$/);let ts=items[0].ts;if(m){const d=new Date(lastTs);d.setHours(+m[1],+m[2],0,0);ts=d.getTime()}
+      sugg.push({id:'g'+uid(),title:t.title,note:t.note||'',due:t.due||'',remind:t.remind||'',priority:t.priority||'orta',quote:t.quote||'',who:t.who||'',ts})}
+    items.forEach(e=>e.sg=1);saveDiary();saveSugg();
+    if(add.length){toastMsg(`🤖 Konuşmalardan ${add.length} görev önerisi var — Ana sayfada`,4000);if(APP&&document.hidden)try{Android.notify('sugg','🤖 Görev önerisi',add.map(t=>t.title).join(' · '))}catch{}}
+  }catch(e){}
+  suggScan.busy=false;
+}
 let pvEdit=null; // düzenlenen önizleme kartı: 't3' / 'n0'
 function renderPreview(){
   const p=pending;if(!p){$('qPreview').innerHTML='';pvEdit=null;return}
@@ -982,7 +1068,7 @@ function renderNotes(){
   $('tagChips').innerHTML=tags.map(t=>`<button class="sm ${tagF===t?'act':''}" onclick="tagF=tagF==='${esc(t)}'?'':'${esc(t)}';renderNotes()">#${esc(t)}</button>`).join('');
   let list=notes.filter(n=>NF[nF][1](n)&&(!tagF||n.tags.includes(tagF))&&(!q||(n.title+' '+n.body+' '+n.tags.join(' ')+' '+(n.photos||[]).map(p=>[p.addr,p.tpl,p.title,...Object.values(p.fields||{})].join(' ')).join(' ')).toLocaleLowerCase('tr').includes(q)));
   list.sort((a,b)=>(b.pinned-a.pinned)||(b.updated-a.updated));
-  $('noteList').innerHTML=list.length?list.map(n=>`<div class="item note" onclick="openNote('${n.id}')"><button class="sm ghost" style="order:2" onclick="event.stopPropagation();openNote('${n.id}')" title="Düzenle">✏️</button><div class="bd"><div class="t">${n.pinned?'<span class="pin">📌</span> ':''}${esc(n.title)}</div><div class="prev">${esc(n.body)}</div>${n.photos?.length?`<div class="nthumbs">${n.photos.slice(0,4).map(p=>`<img data-pid="${p.id}" alt="">`).join('')}${n.photos.length>4?`<span class="mut" style="align-self:center">+${n.photos.length-4}</span>`:''}</div>${n.photos[0].addr?`<div class="ploc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>${esc(n.photos[0].addr)}</div>`:''}`:''}<div>${isAI(n)?`<span class="tag ai-tag">✨ AI${n.via==='voice'?' · 🎤':''}</span>`:''}${n.tags.map(t=>`<span class="tag">#${esc(t)}</span>`).join('')}<span class="mut" style="font-size:11px"> ${fmt(toLocal(new Date(n.updated)))}</span></div></div></div>`).join(''):`<div class="empty">${nF==='all'&&!tagF&&!q?'Not yok':'Bu filtrede not yok'}</div>`;
+  $('noteList').innerHTML=list.length?list.map(n=>`<div class="item note" onclick="openNote('${n.id}')"><button class="sm ghost" style="order:2" onclick="event.stopPropagation();openNote('${n.id}')" title="Düzenle">✏️</button><div class="bd"><div class="t">${n.pinned?'<span class="pin">📌</span> ':''}${esc(n.title)}${n.aiPending?' <span class="tag">📴 AI bekliyor</span>':''}</div><div class="prev">${esc(n.body)}</div>${n.photos?.length?`<div class="nthumbs">${n.photos.slice(0,4).map(p=>`<img data-pid="${p.id}" alt="">`).join('')}${n.photos.length>4?`<span class="mut" style="align-self:center">+${n.photos.length-4}</span>`:''}</div>${n.photos[0].addr?`<div class="ploc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>${esc(n.photos[0].addr)}</div>`:''}`:''}<div>${isAI(n)?`<span class="tag ai-tag">✨ AI${n.via==='voice'?' · 🎤':''}</span>`:''}${n.tags.map(t=>`<span class="tag">#${esc(t)}</span>`).join('')}<span class="mut" style="font-size:11px"> ${fmt(toLocal(new Date(n.updated)))}</span></div></div></div>`).join(''):`<div class="empty">${nF==='all'&&!tagF&&!q?'Not yok':'Bu filtrede not yok'}</div>`;
   hydrate($('noteList'));
 }
 $('nSearch').oninput=renderNotes;
@@ -1343,7 +1429,7 @@ function pullResults(st){
   }
   if(!st){try{st=JSON.parse(Android.diaryState())}catch{st={}}}
   dr.npending=st.pending||0;dr.nrefine=st.refining||0;const sm=st.stt||'';if(sm!==dr.sttMode){dr.sttMode=sm;diaryStatus()}
-  if(added)saveDiary();
+  if(added){saveDiary();setTimeout(()=>suggScan(false),1500)}
   if(added||dr.npending!==dr.lastNP||dr.nrefine!==dr.lastNR){dr.lastNP=dr.npending;dr.lastNR=dr.nrefine;renderDiary(added>0);diaryStatus()}
 }
 function pullChunks(){
@@ -1370,6 +1456,7 @@ function nextChunk(){
 }
 function diaryStop(){
   if(!dr.on)return;
+  setTimeout(()=>suggScan(true),45000); // kayıt bitince son konuşmalardan da öneri çıkar
   if(dr.native){Android.diaryStop();dr.on=false;diaryUI(false);nativeTick();return}
   dr.on=false;clearTimeout(dr.timer);clearInterval(dr.tick);
   if(dr.mr?.state==='recording')dr.mr.stop();
@@ -1378,7 +1465,7 @@ function diaryStop(){
 }
 async function wakeOn(){if(APP){try{Android.keepScreenOn(true)}catch{}dr.wake=1;return}try{dr.wake=await navigator.wakeLock?.request('screen')}catch{}}
 function wakeOff(){if(APP){try{Android.keepScreenOn(false)}catch{}dr.wake=null;return}try{dr.wake?.release()}catch{}dr.wake=null}
-document.addEventListener('visibilitychange',()=>{if(document.hidden)return;setTimeout(()=>retryAll(false),3000);if(dr.on&&!dr.native&&!dr.wake)wakeOn();if(NATIVE_DIARY){pullResults();pullChunks();let st={};try{st=JSON.parse(Android.diaryState())}catch{}if(st.on&&!dr.on){dr.on=true;dr.native=true;diaryUI(true);nativeTick()}}});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)return;setTimeout(()=>retryAll(false),3000);setTimeout(processAIQueue,1500);if(dr.on&&!dr.native&&!dr.wake)wakeOn();if(NATIVE_DIARY){pullResults();pullChunks();let st={};try{st=JSON.parse(Android.diaryState())}catch{}if(st.on&&!dr.on){dr.on=true;dr.native=true;diaryUI(true);nativeTick()}}});
 function diaryStatus(){
   const q=dr.queue.length+(dr.inflight?.length||0)+(dr.npending||0),w=dr.pauseUntil>Date.now()?' · kota için kısa bekleme':'';
   $('dStat').textContent=dr.on?`Kaydediliyor${dr.native?' · ekran kapansa da sürer':''}${dr.sttMode?' · Google tanıma':''}${q?` · ${q} parça işleniyor`:''}${dr.nrefine?' · ✓ iyileştiriliyor':''}${w}`
@@ -1684,6 +1771,7 @@ window.nativeBack=()=>{for(const id of['mTplEd','mTpls'])if($(id).classList.cont
 function HAS_FOLDER(){return typeof window.Android!=='undefined'&&typeof Android.pickFolder==='function'}
 var bkTimer,snapTimer;
 function afterChange(){
+  driveSoon();
   if(HAS_FOLDER()&&Android.folderName()){clearTimeout(bkTimer);bkTimer=setTimeout(()=>folderBackup(false),2500)}
   if(typeof window.Android!=='undefined'&&typeof Android.saveSnapshot==='function'){clearTimeout(snapTimer);snapTimer=setTimeout(pushSnapshot,3000)}
 }
@@ -1723,7 +1811,46 @@ async function folderRestore(){
   LS.set('na_bk_photos',{...LS.get('na_bk_photos',{}),...(d.photoFiles||{})});
   saveTpls();saveDiary();save();renderAll();toastMsg(`✔ Yüklendi${n?` · ${n} fotoğraf`:''}`);
 }
+// ---- Google Drive yedeği: notlar, görevler, günlük ve fotoğraflar tek dosyada; değişiklikten ~1 dk sonra güncellenir ----
+const HAS_DRIVE=()=>APP&&typeof Android.drivePick==='function';
+let drvTimer=null,drvDirty=false,drvBusy=false;
+function renderDrive(){
+  if(!HAS_DRIVE())return;$('drvBox').classList.remove('hidden');
+  const name=Android.driveName(),last=LS.get('na_drv_last',0),err=LS.get('na_drv_err','');
+  $('drvStat').innerHTML=name?`📄 <b>${esc(name)}</b> · değişikliklerden sonra otomatik güncellenir${last?`<br>Son Drive yedeği: ${fmt(toLocal(new Date(last)))}`:''}${err?`<br><span style="color:var(--bad)">⚠️ ${esc(err)}</span>`:''}`:'Bağlayınca dosya kaydetme ekranı açılır: sol menüden <b>Drive</b>\'ı seç, bir klasör seçip <b>Kaydet</b>\'e bas. Telefon kaybolsa da veriler Drive\'da kalır.';
+  $('drvPick').textContent=name?'☁️ Dosyayı değiştir':'☁️ Drive\'a bağla';$('drvNow').classList.toggle('hidden',!name);
+}
+window.onDrivePicked=()=>{toastMsg('☁️ Drive bağlandı, ilk yedek alınıyor…');renderDrive();driveBackup(true)};
+function driveSoon(){if(!HAS_DRIVE()||!Android.driveName())return;drvDirty=true;if(drvTimer)return; // en sık 10 dakikada bir yükle (mobil veri için)
+  const wait=Math.max(60000,10*60e3-(Date.now()-LS.get('na_drv_last',0)));drvTimer=setTimeout(()=>{drvTimer=null;driveBackup(false)},wait)}
+async function driveBackup(manual){
+  if(!HAS_DRIVE()||!Android.driveName()){if(manual)toastMsg('Önce Drive\'a bağla');return}
+  if(drvBusy||!Android.driveBegin()){clearTimeout(drvTimer);drvTimer=setTimeout(()=>{drvTimer=null;driveBackup(manual)},20000);return}
+  drvBusy=true;drvDirty=false;driveBackup.manual=manual;
+  try{
+    Android.driveAppend(JSON.stringify({app:'NotAsistani',v:6,at:Date.now(),notes,tasks,diary,tpls,vocab,sugg,logo:LS.get('na_logo','')})+'\n');
+    let n=0;for(const x of notes)for(const p of x.photos||[]){try{const b=await DB.get(p.id);if(b){Android.driveAppend('P\t'+p.id+'\t'+await blobToB64(b)+'\n');n++}}catch{}}
+    Android.driveCommit();if(manual)toastMsg('☁️ Drive\'a yükleniyor…',1500);
+  }catch(e){drvBusy=false;LS.set('na_drv_err',e.message);renderDrive()}
+}
+window.onDriveDone=(ok,err)=>{drvBusy=false;if(ok){LS.set('na_drv_last',Date.now());LS.set('na_drv_err','')}else LS.set('na_drv_err',err);
+  if(driveBackup.manual||!ok)toastMsg(ok?'✔ Drive\'a yedeklendi':'⚠️ Drive yedeği: '+err);renderDrive()};
+function driveRestorePick(){toastMsg('Drive\'daki NotAsistani yedek dosyasını seç');Android.driveOpenPick()}
+window.onDriveRestore=async ok=>{
+  if(!ok){toastMsg('⚠️ Dosya okunamadı');return}
+  let d;try{d=JSON.parse(Android.driveReadLine()||'')}catch{toastMsg('Bu bir Not Asistanı yedeği değil');return}
+  if(!confirm(`${d.notes?.length||0} not, ${d.tasks?.length||0} görev, ${d.diary?.length||0} günlük kaydı yüklensin mi? (mevcutlara eklenir)`)){while(Android.driveReadLine()!==null);renderDrive();return}
+  const ids=new Set([...notes,...tasks].map(x=>x.id));
+  notes.push(...(d.notes||[]).filter(x=>!ids.has(x.id)));tasks.push(...(d.tasks||[]).filter(x=>!ids.has(x.id)));
+  const di=new Set(diary.map(x=>x.id));diary.push(...(d.diary||[]).filter(x=>!di.has(x.id)));
+  if(Array.isArray(d.tpls)){const ti=new Set(tpls.map(x=>x.id));tpls.push(...d.tpls.filter(x=>!ti.has(x.id)).map(normTpl))}
+  if(d.logo&&!LS.get('na_logo','')){LS.set('na_logo',d.logo);loadLogo()}
+  let n=0,l;while((l=Android.driveReadLine())!==null){const m=l.match(/^P\t([^\t]+)\t(.+)$/);if(!m)continue;try{if(await DB.get(m[1]))continue;await DB.put(m[1],await (await fetch('data:image/jpeg;base64,'+m[2])).blob());n++}catch{}}
+  saveTpls();saveDiary();save();renderAll();renderDrive();toastMsg(`✔ Drive'dan yüklendi${n?` · ${n} fotoğraf`:''}`);
+};
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&drvDirty&&Date.now()-LS.get('na_drv_last',0)>2*60e3){clearTimeout(drvTimer);drvTimer=null;driveBackup(false)}});
 function renderBackup(){
+  renderDrive();
   const app=HAS_FOLDER(),name=app?Android.folderName():'',last=LS.get('na_bk_last',0);
   $('bkStat').innerHTML=!app?'Klasöre otomatik yedek uygulamada çalışır.':name?`📁 <b>${esc(name)}</b> · her değişiklikte otomatik yedeklenir${last?`<br>Son yedek: ${fmt(toLocal(new Date(last)))}`:''}`:'Klasör seçersen her not, görev ve kayıttan sonra oraya otomatik yedek alınır.';
   $('bkRow').classList.toggle('hidden',!app);$('bkRestore').classList.toggle('hidden',!app||!name);$('bkPhotoL').classList.toggle('hidden',!app||!name);
@@ -1901,7 +2028,7 @@ async function scanCalls(manual){
       const b64=Android.readUriB64(f.uri);if(!b64)throw new Error('Dosya okunamadı');
       const bin=atob(b64),u8=new Uint8Array(bin.length);for(let j=0;j<bin.length;j++)u8[j]=bin.charCodeAt(j);
       const r=await transcribeCall(new Blob([u8]),meta.who,(a,b)=>{$('vBusyT').textContent=`📞 ${meta.who} görüşmesi yazıya dökülüyor (${a}/${b})`});
-      if(r.text){diary.push({id:'d'+uid(),ts:meta.ts,dur:Math.round(r.dur),text:r.text,kind:'call',who:meta.who,file:f.name});saveDiary();renderDiary()}
+      if(r.text){diary.push({id:'d'+uid(),ts:meta.ts,dur:Math.round(r.dur),text:r.text,kind:'call',who:meta.who,file:f.name});saveDiary();renderDiary();setTimeout(()=>suggScan(true),2000)}
       done[key]=1;
     }catch(e){
       const fails=LS.get('na_calls_fail',{});fails[key]=(fails[key]||0)+1;LS.set('na_calls_fail',fails);
@@ -1958,7 +2085,7 @@ if(LS.get('na_fix_kova',1)){LS.set('na_fix_kova',0);const re=/\bkoyle\b/gi,f=s=>
   for(const t of tasks){const a=t.title+t.note;t.title=f(t.title);t.note=f(t.note);if(a!==t.title+t.note)c++}
   for(const e of diary){const a=e.text;e.text=f(e.text);if(a!==e.text)c++}
   if(c){save();saveDiary();setTimeout(()=>toastMsg(`✔ ${c} kayıtta "koyle" → "kova" düzeltildi`,3000),1200)}}
-checkServer();renderNStat();renderAll();checkReminders();syncAlarms();renderBackup();importNativeSummary();pollVoice();vBusy();startCallWatch();setTimeout(()=>retryAll(false),6000);
+checkServer();renderNStat();renderAll();checkReminders();syncAlarms();renderBackup();importNativeSummary();pollVoice();vBusy();startCallWatch();setTimeout(()=>retryAll(false),6000);setTimeout(processAIQueue,3000);renderSugg();setTimeout(()=>suggScan(false),8000);
 if(NATIVE_DIARY){pullResults();pullChunks();let st={};try{st=JSON.parse(Android.diaryState())}catch{}if(st.on){dr.on=true;dr.native=true;diaryUI(true);nativeTick()}}
 if(APP&&cfg.sumOn&&typeof Android.setSummary==='function')sumSettings();
 renderPerms().then(all=>{if(!all&&!LS.get('na_perm',0))setTimeout(()=>$('mPerm').classList.add('on'),900)});

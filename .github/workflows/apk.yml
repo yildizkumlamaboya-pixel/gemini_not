@@ -2,7 +2,7 @@ name: APK oluştur
 on:
   push:
     branches: [main]
-    paths: ['android/**', '.github/workflows/apk.yml']
+    paths: ['android/**', '.github/workflows/apk.yml', 'index.html', 'sw.js', 'manifest.json']
   workflow_dispatch:
 permissions:
   contents: write
@@ -31,6 +31,10 @@ jobs:
         env:
           KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: if [ -n "$KS_B64" ]; then echo "$KS_B64" | base64 -d > android/release.jks; fi
+      - name: Web dosyalarını APK'ya koy (internetsiz açılış)
+        run: |
+          mkdir -p android/app/src/main/assets/www
+          cp index.html sw.js manifest.json icon-192.png icon-512.png icon.svg android/app/src/main/assets/www/
       - name: APK derle
         working-directory: android
         env:
