@@ -137,6 +137,10 @@ nav button.act b{background:linear-gradient(135deg,rgba(37,99,235,.13),rgba(6,18
 .recbar.on{display:flex}
 .recbar i{width:9px;height:9px;border-radius:50%;background:#ef4444;animation:pul 1.4s ease-out infinite}
 .mono{font-family:var(--mono)}
+.pvedit .bd{display:grid;gap:6px}
+.pvedit input,.pvedit textarea,.pvedit select{padding:8px 10px;font-size:14px;min-height:0}
+.pvedit label{margin:0 0 3px}
+.out .item .bd{cursor:pointer}
 .vbusy{position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:35;background:#0f172a;color:#fff;font-size:13px;font-weight:600;padding:8px 14px;border-radius:20px;box-shadow:0 8px 24px rgba(15,23,42,.3);display:flex;gap:8px;align-items:center;white-space:nowrap}
 html,body{overscroll-behavior-y:none}
 .ptr{position:fixed;top:44px;left:50%;z-index:8;width:42px;height:42px;margin-left:-21px;border-radius:50%;background:#fff;color:var(--mut);display:grid;place-items:center;box-shadow:0 6px 20px rgba(15,23,42,.18);opacity:0;pointer-events:none;transition:transform .25s,opacity .25s}
@@ -649,14 +653,55 @@ $('qBtn').onclick=async()=>{
   }catch(e){toastMsg('⚠️ '+e.message)}
   busy($('qBtn'),false);
 };
+let pvEdit=null; // düzenlenen önizleme kartı: 't3' / 'n0'
 function renderPreview(){
-  const p=pending;if(!p){$('qPreview').innerHTML='';return}
+  const p=pending;if(!p){$('qPreview').innerHTML='';pvEdit=null;return}
+  const opt=(v,cur)=>`<option value="${v}" ${v===cur?'selected':''}>${PRI[v]}</option>`;
   let h='<div class="out">';
   if(!p.tasks.length&&!p.notes.length)h+='Bir şey çıkarılamadı.';
-  p.tasks.forEach((t,i)=>h+=`<div class="item"><div class="bd"><div class="t">✅ ${esc(t.title)}</div><div class="mut">${t.due?'📅 '+fmt(t.due):''} ${t.remind?' ⏰ '+fmt(t.remind):''} <span class="tag p-${t.priority}">${PRI[t.priority]||t.priority}</span>${t.repeat?' 🔁 '+t.repeat:''}</div>${t.note?`<div class="mut">${esc(t.note)}</div>`:''}</div><button class="sm ghost" onclick="pending.tasks.splice(${i},1);renderPreview()">✕</button></div>`);
-  p.notes.forEach((n,i)=>h+=`<div class="item"><div class="bd"><div class="t">📝 ${esc(n.title)}</div><div class="mut">${esc(n.body)}</div>${(n.tags||[]).map(t=>`<span class="tag">#${esc(t)}</span>`).join('')}</div><button class="sm ghost" onclick="pending.notes.splice(${i},1);renderPreview()">✕</button></div>`);
-  h+=`</div><div class="row" style="margin-top:8px"><button onclick="pending=null;renderPreview()">Vazgeç</button><button class="pri" onclick="commitPending()">Hepsini ekle</button></div>`;
+  p.tasks.forEach((t,i)=>{
+    if(pvEdit==='t'+i)h+=`<div class="item pvedit" data-k="t${i}"><div class="bd">
+      <input data-f="title" value="${esc(t.title)}">
+      <textarea data-f="note" rows="2" placeholder="Açıklama">${esc(t.note||'')}</textarea>
+      <div class="row"><div><label>Tarih</label><input type="datetime-local" data-f="due" value="${esc(t.due||'')}"></div><div><label>Hatırlat</label><input type="datetime-local" data-f="remind" value="${esc(t.remind||'')}"></div></div>
+      <div class="row" style="margin-top:6px"><select data-f="priority">${opt('yuksek',t.priority)}${opt('orta',t.priority)}${opt('dusuk',t.priority)}</select><button class="sm pri" style="flex:0 0 auto" onclick="pvSave()">Tamam</button></div></div></div>`;
+    else h+=`<div class="item"><div class="bd" onclick="pvEdit='t${i}';renderPreview()"><div class="t">✅ ${esc(t.title)}</div><div class="mut">${t.due?'📅 '+fmt(t.due):''} ${t.remind?' ⏰ '+fmt(t.remind):''} <span class="tag p-${t.priority}">${PRI[t.priority]||t.priority}</span>${t.repeat?' 🔁 '+t.repeat:''}</div>${t.note?`<div class="mut">${esc(t.note)}</div>`:''}</div><button class="sm ghost" onclick="pvEdit='t${i}';renderPreview()" title="Düzenle">✏️</button><button class="sm ghost" onclick="pending.tasks.splice(${i},1);pvEdit=null;renderPreview()">✕</button></div>`;
+  });
+  p.notes.forEach((n,i)=>{
+    if(pvEdit==='n'+i)h+=`<div class="item pvedit" data-k="n${i}"><div class="bd">
+      <input data-f="title" value="${esc(n.title)}">
+      <textarea data-f="body" rows="3">${esc(n.body||'')}</textarea>
+      <div class="row" style="margin-top:6px"><input data-f="tags" value="${esc((n.tags||[]).join(', '))}" placeholder="Etiketler"><button class="sm pri" style="flex:0 0 auto" onclick="pvSave()">Tamam</button></div></div></div>`;
+    else h+=`<div class="item"><div class="bd" onclick="pvEdit='n${i}';renderPreview()"><div class="t">📝 ${esc(n.title)}</div><div class="mut">${esc(n.body)}</div>${(n.tags||[]).map(t=>`<span class="tag">#${esc(t)}</span>`).join('')}</div><button class="sm ghost" onclick="pvEdit='n${i}';renderPreview()" title="Düzenle">✏️</button><button class="sm ghost" onclick="pending.notes.splice(${i},1);pvEdit=null;renderPreview()">✕</button></div>`;
+  });
+  h+=`</div>
+  <div class="row pvfix" style="margin-top:8px">
+    <input id="qFix" placeholder="Ne düzeltilsin?">
+    <button style="flex:0 0 46px" onclick="voice('fix')" title="Sesle düzelt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3.5"/></svg></button>
+    <button class="ai" style="flex:0 0 auto" id="qFixBtn" onclick="aiFix()">✨ Düzelt</button>
+  </div>
+  <div class="row" style="margin-top:8px"><button onclick="pending=null;renderPreview()">Vazgeç</button><button class="pri" onclick="pvSave(true);commitPending()">Hepsini ekle</button></div>`;
   $('qPreview').innerHTML=h;
+  $('qFix').onkeydown=e=>{if(e.key==='Enter')aiFix()};
+  const ed=$('qPreview').querySelector('.pvedit input');if(ed)ed.focus();
+}
+// Elle düzenlenen kartı kaydet
+function pvSave(silent){
+  const el=$('qPreview').querySelector('.pvedit');if(!el||!pending){pvEdit=null;return}
+  const k=el.dataset.k,obj=k[0]==='t'?pending.tasks[+k.slice(1)]:pending.notes[+k.slice(1)];
+  el.querySelectorAll('[data-f]').forEach(i=>{const f=i.dataset.f;obj[f]=f==='tags'?i.value.split(',').map(s=>s.trim().replace(/^#/,'')).filter(Boolean):i.value});
+  pvEdit=null;if(!silent)renderPreview();
+}
+// AI ile düzelt: kullanıcının söylediği/yazdığı düzeltmeyi uygular
+async function aiFix(text){
+  const fix=(text??$('qFix').value).trim();if(!fix||!pending){$('qFix')?.focus();return}
+  pvSave(true);const b=$('qFixBtn');busy(b,true,'');
+  try{
+    const cur={notes:pending.notes,tasks:pending.tasks};
+    const r=await gemini(`Mevcut sonuç:\n${JSON.stringify(cur)}\n\nKullanıcının düzeltmesi: ${fix}\n\nDüzeltmeyi uygula (isim, tarih, saat, öncelik, not/görev ayrımı vb.), değişmeyenleri aynen koru ve tam JSON'u döndür.`,{system:quickSys(),json:true});
+    pending={...pending,notes:r.notes||[],tasks:r.tasks||[]};toastMsg('✔ Düzeltildi',1500);
+  }catch(e){toastMsg('⚠️ '+esc(e.message))}
+  busy(b,false);renderPreview();
 }
 function commitPending(){
   const now=Date.now();
@@ -675,13 +720,13 @@ const NATIVE_VOICE=APP&&typeof Android.voiceStart==='function';
 function voicePrompt(mode){
   if(mode==='quick')return {prompt:'Bu ses kaydını Türkçe yazıya dök ve kurallara göre ayrıştır.',system:quickSys('\nAyrıca JSON\'a "transcript" alanı ekle: kaydın düzgün noktalamalı Türkçe metni.'),json:true};
   if(mode==='note')return {prompt:'Bu ses kaydını Türkçe yazıya dök. Noktalama ve paragrafları düzelt, anlamı değiştirme. Sadece metni ver.',system:'',json:false};
-  return {prompt:'Bu ses kaydını Türkçe yazıya dök. Sadece metni ver.',system:'',json:false};
+  return {prompt:'Bu ses kaydını Türkçe yazıya dök. Sadece metni ver.',system:'',json:false}; // chat, fix
 }
 let vJobs=LS.get('na_vjobs',{}); // bekleyen arka plan istekleri
 function vBusy(){const n=Object.keys(vJobs).length+(rec.busy||0);$('vBusy').classList.toggle('hidden',!n);$('vBusyT').textContent=n>1?`${n} sesli not işleniyor…`:'Ses işleniyor…'}
 async function voice(mode){
   rec.mode=mode;rec.cancel=false;
-  $('recTitle').textContent={quick:'Dinliyorum... not, görev veya hatırlatma söyle',note:'Dinliyorum... notunu söyle',chat:'Dinliyorum... asistana sor'}[mode];
+  $('recTitle').textContent={fix:'Dinliyorum... neyi düzelteyim?',quick:'Dinliyorum... not, görev veya hatırlatma söyle',note:'Dinliyorum... notunu söyle',chat:'Dinliyorum... asistana sor'}[mode];
   $('recDot').className='recdot';$('recDot').innerHTML=MIC;$('recBtns').classList.remove('hidden');
   $('recTime').textContent='0:00';
   if(NATIVE_VOICE){
@@ -724,6 +769,7 @@ function applyVoice(mode,text){
     const t=String(text).trim();
     if($('mNote').classList.contains('on')){const b=$('nBody');b.value=(b.value.trim()?b.value.trimEnd()+'\n\n':'')+t;if(!$('nTitle').value.trim())$('nTitle').value=t.split(/[.\n]/)[0].slice(0,50)}
     else{notes.push({id:uid(),title:t.split(/[.\n]/)[0].slice(0,50)||'Sesli not',body:t,tags:[],pinned:false,created:Date.now(),updated:Date.now(),src:'manual',via:'voice'});save();renderAll();toastMsg('✔ Sesli not kaydedildi')}
+  }else if(mode==='fix'){show('bugun');const t=String(text).trim();if(!pending){toastMsg('Düzeltilecek önizleme yok');return}$('qFix').value=t;aiFix(t);
   }else if(mode==='chat'){show('asistan');$('cIn').value=String(text).trim();speakNext=true;sendChat()}
 }
 var vPollT=null;
