@@ -232,7 +232,12 @@ public class BubbleService extends Service {
         }
 
         public void text(String t) {
-            showPanel(t + "\n■ bitir · ✕ iptal");
+            showPanel(rec.isOn() ? t + "\n■ kaydet · ✕ iptal" : t);
+        }
+
+        public void after(String summary) {
+            showPanel(summary);
+            hidePanel(3500);
         }
 
         public void done(String summary, boolean ok) {
@@ -285,7 +290,7 @@ public class BubbleService extends Service {
 
     static void recText(String t) {
         BubbleService s = inst;
-        if (s != null && s.box != null) s.showPanel(t + "\n■ kaydet · ✕ iptal");
+        if (s != null && s.box != null) s.showPanel(QuickRecService.recording ? t + "\n■ kaydet · ✕ iptal" : t);
     }
 
     static void recDone(String summary, boolean ok) {

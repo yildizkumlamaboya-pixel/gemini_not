@@ -40,6 +40,10 @@ class QuickRec {
         void text(String t);
 
         void done(String summary, boolean ok);
+
+        /** Not kaydedildikten sonra AI ayrımı bitince (görev/hatırlatma özeti). */
+        default void after(String summary) {
+        }
     }
 
     static final int RATE = 16000;
@@ -302,10 +306,39 @@ class QuickRec {
         return a >= 0 && b > a ? s.substring(a, b + 1) : s;
     }
 
-    /** Yazıya dök → AI ile not/görev/hatırlatmaya ayır → kaydet (uygulama açılınca listelere eklenir). */
+    /** AI sonucu: görevleri/notları dosyaya yazar, alarmları kurar, özet döndürür. */
+    String apply(JSONObject out, JSONObject r, long ts) throws Exception {
+        JSONArray tasks = r.optJSONArray("tasks"), notes = r.optJSONArray("notes");
+        if (tasks == null) tasks = new JSONArray();
+        if (notes == null) notes = new JSONArray();
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < tasks.length(); i++) {
+            JSONObject t = tasks.getJSONObject(i);
+            String id = "b" + ts + "_" + i;
+            t.put("id", id);
+            long w = parseLocal(t.optString("remind", null));
+            if (w > System.currentTimeMillis()) Alarms.set(svc, id, w, "⏰ " + t.optString("title"), t.optString("note", ""));
+            sb.append("✅ ").append(t.optString("title")).append(t.optString("remind", "").length() >= 16 ? " ⏰ " + t.optString("remind").substring(11, 16) : "").append("\n");
+        }
+        for (int i = 0; i < notes.length(); i++) sb.append("📝 ").append(notes.getJSONObject(i).optString("title")).append("\n");
+        out.remove("pending");
+        out.put("tasks", tasks).put("notes", notes);
+        return sb.length() > 0 ? "✔ Kaydedildi\n" + sb.toString().trim() : "✔ Not kaydedildi";
+    }
+
+    JSONObject ask(String sys, JSONArray parts, String model, String code) throws Exception {
+        JSONObject body = new JSONObject().put("contents", new JSONArray().put(new JSONObject().put("role", "user").put("parts", parts)))
+                .put("systemInstruction", new JSONObject().put("parts", new JSONArray().put(new JSONObject().put("text", sys.replace("{{NOW}}", nowCtx())))))
+                .put("generationConfig", new JSONObject().put("temperature", 0.1).put("responseMimeType", "application/json").put("thinkingConfig", new JSONObject().put("thinkingBudget", 0)));
+        return new JSONObject(jtext(Summary.post(svc, new JSONObject().put("model", model).put("body", body), code)));
+    }
+
+    /**
+     * Hızlı kayıt: Google tanıma metni varsa not HEMEN kaydedilir (bekletmez), görev/hatırlatma ayrımı arkada yapılır.
+     * Metin yoksa ses tek istekte hem yazıya dökülür hem ayrılır.
+     */
     void process() {
-        // Google tanımanın son cümleyi bitirmesini bekle
-        for (int i = 0; i < 30 && !sttEnded; i++) {
+        for (int i = 0; i < 12 && !sttEnded; i++) { // son cümle için en çok 1,2 sn bekle
             try {
                 Thread.sleep(100);
             } catch (Exception ignored) {
@@ -315,67 +348,62 @@ class QuickRec {
         String text = (said + " " + partial).trim();
         SharedPreferences pr = svc.getSharedPreferences("app", Context.MODE_PRIVATE);
         String code = pr.getString("qCode", ""), model = pr.getString("qModel", "gemini-flash-latest");
-        byte[] audio = pcm.toByteArray();
-        if (text.isEmpty() && heard && audio.length > RATE) { // Google tanıma yoksa sesi Gemini yazsın
-            try {
-                byte[] wav = new byte[44 + audio.length];
-                System.arraycopy(DiaryService.wavHeader(audio.length), 0, wav, 0, 44);
-                System.arraycopy(audio, 0, wav, 44, audio.length);
-                JSONObject body = new JSONObject().put("contents", new JSONArray().put(new JSONObject().put("role", "user").put("parts", new JSONArray()
-                                .put(new JSONObject().put("inlineData", new JSONObject().put("mimeType", "audio/wav").put("data", Base64.encodeToString(wav, Base64.NO_WRAP))))
-                                .put(new JSONObject().put("text", "Bu ses kaydını Türkçe olarak kelimesi kelimesine yazıya dök. Sadece metni ver. Konuşma yoksa yalnızca BOŞ yaz.")))))
-                        .put("generationConfig", new JSONObject().put("temperature", 0).put("thinkingConfig", new JSONObject().put("thinkingBudget", 0)));
-                text = Summary.post(svc, new JSONObject().put("model", model).put("body", body), code).trim();
-                if (text.matches("(?i)^BOŞ\\.?$")) text = "";
-            } catch (Exception ignored) {
-            }
-        }
-        if (text.isEmpty()) {
-            l.done(heard ? "⚠️ Ses yazıya dökülemedi (internet?)" : "🤫 Ses duyulmadı", false);
-            return;
-        }
+        String sys = pr.getString("qPrompt", "");
+        if (sys.isEmpty()) sys = "Kullanıcının metnini not ve görevlere ayır. {{NOW}} Sadece JSON: {\"notes\":[{\"title\":\"\",\"body\":\"\",\"tags\":[]}],\"tasks\":[{\"title\":\"\",\"note\":\"\",\"due\":null,\"remind\":null,\"priority\":\"orta\",\"repeat\":\"\"}]}";
         long ts = System.currentTimeMillis();
+        File d = new File(svc.getFilesDir(), "bubble");
+        d.mkdirs();
+        File f = new File(d, ts + ".json");
         JSONObject out = new JSONObject();
-        String summary;
         try {
-            out.put("ts", ts).put("transcript", text);
-            String sys = pr.getString("qPrompt", "");
-            JSONObject r = null;
-            if (!sys.isEmpty()) {
+            out.put("ts", ts);
+            if (!text.isEmpty()) {
+                // 1) hemen kaydet
+                out.put("transcript", text).put("pending", true);
+                Summary.write(f, out.toString());
+                l.done("✔ Kaydedildi\n“" + (text.length() > 120 ? text.substring(0, 120) + "…" : text) + "”", true);
+                // 2) arkada görev/hatırlatmaya ayır
                 try {
-                    JSONObject body = new JSONObject().put("contents", new JSONArray().put(new JSONObject().put("role", "user").put("parts", new JSONArray().put(new JSONObject().put("text", text)))))
-                            .put("systemInstruction", new JSONObject().put("parts", new JSONArray().put(new JSONObject().put("text", sys.replace("{{NOW}}", nowCtx())))))
-                            .put("generationConfig", new JSONObject().put("temperature", 0.2).put("responseMimeType", "application/json").put("thinkingConfig", new JSONObject().put("thinkingBudget", 0)));
-                    r = new JSONObject(jtext(Summary.post(svc, new JSONObject().put("model", model).put("body", body), code)));
-                } catch (Exception ignored) {
+                    JSONObject r = ask(sys, new JSONArray().put(new JSONObject().put("text", text)), model, code);
+                    if (f.exists()) { // uygulama henüz almadıysa sonucu ekle
+                        String sum = apply(out, r, ts);
+                        Summary.write(f, out.toString());
+                        l.after(sum);
+                    }
+                } catch (Exception ignored) { // internet yok: uygulama sonra ayırır
                 }
+                return;
             }
-            if (r == null) { // internet yok: not olarak sakla, uygulama sonra AI ile ayırır
-                out.put("pending", true);
-                summary = "📝 Not kaydedildi (internet gelince görevlere ayrılacak)";
-            } else {
-                JSONArray tasks = r.optJSONArray("tasks"), notes = r.optJSONArray("notes");
-                if (tasks == null) tasks = new JSONArray();
-                if (notes == null) notes = new JSONArray();
-                StringBuilder sb = new StringBuilder();
-                for (int i = 0; i < tasks.length(); i++) {
-                    JSONObject t = tasks.getJSONObject(i);
-                    String id = "b" + ts + "_" + i;
-                    t.put("id", id);
-                    long w = parseLocal(t.optString("remind", null));
-                    if (w > System.currentTimeMillis()) Alarms.set(svc, id, w, "⏰ " + t.optString("title"), t.optString("note", ""));
-                    sb.append("✅ ").append(t.optString("title")).append("\n");
-                }
-                for (int i = 0; i < notes.length(); i++) sb.append("📝 ").append(notes.getJSONObject(i).optString("title")).append("\n");
-                out.put("tasks", tasks).put("notes", notes);
-                summary = sb.length() > 0 ? "✔ Kaydedildi\n" + sb.toString().trim() : "✔ Not kaydedildi";
+            if (!heard || pcm.size() < RATE) {
+                l.done("🤫 Ses duyulmadı", false);
+                return;
             }
-            File d = new File(svc.getFilesDir(), "bubble");
-            d.mkdirs();
-            Summary.write(new File(d, ts + ".json"), out.toString());
+            // Google tanıma yok: ses tek istekte yazıya dökülür ve ayrılır
+            l.text("⏳ Yazıya dökülüyor…");
+            byte[] audio = pcm.toByteArray();
+            byte[] wav = new byte[44 + audio.length];
+            System.arraycopy(DiaryService.wavHeader(audio.length), 0, wav, 0, 44);
+            System.arraycopy(audio, 0, wav, 44, audio.length);
+            JSONArray parts = new JSONArray().put(new JSONObject().put("inlineData", new JSONObject().put("mimeType", "audio/wav").put("data", Base64.encodeToString(wav, Base64.NO_WRAP))))
+                    .put(new JSONObject().put("text", "Bu ses kaydını kelimesi kelimesine Türkçe yazıya dök (transcript), sonra not ve görevlere ayır."));
+            JSONObject r;
+            try {
+                r = ask(sys + "\nJSON'un İLK alanı \"transcript\" olsun: kaydın kelimesi kelimesine Türkçe metni. Konuşma yoksa transcript boş olsun.", parts, model, code);
+            } catch (Exception e) {
+                l.done("⚠️ Yazıya dökülemedi (internet?)", false);
+                return;
+            }
+            String tr = r.optString("transcript", "").trim();
+            if (tr.isEmpty()) {
+                l.done("🤫 Konuşma anlaşılmadı", false);
+                return;
+            }
+            out.put("transcript", tr);
+            String sum = apply(out, r, ts);
+            Summary.write(f, out.toString());
+            l.done(sum, true);
         } catch (Exception e) {
-            summary = "⚠️ Kaydedilemedi";
+            l.done("⚠️ Kaydedilemedi", false);
         }
-        l.done(summary, true);
     }
 }

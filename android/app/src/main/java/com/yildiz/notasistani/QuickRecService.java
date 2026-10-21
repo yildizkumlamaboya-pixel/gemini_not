@@ -60,6 +60,14 @@ public class QuickRecService extends Service {
                 }
             }
 
+            public void after(String summary) {
+                BubbleService.recDone(summary, true);
+                try {
+                    Notif.show(QuickRecService.this, 4242, "Sesli not", summary.replace("✔ Kaydedildi\n", "✔ "));
+                } catch (Exception ignored) {
+                }
+            }
+
             public void done(String summary, boolean ok) {
                 BubbleService.recDone(summary, ok);
                 recording = false;
