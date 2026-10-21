@@ -1336,12 +1336,13 @@ function pullResults(st){
     const key='r_'+r.ts;
     if(diary.some(e=>e.parts?.includes(key))){Android.diaryAck(r.name);continue} // zaten iyileştirilmiş
     if(!diary.some(e=>e.chunk===key)){
-      if(r.text){diary.push({id:'d'+uid(),ts:r.ts,dur:Math.round((r.dur||0)/1000),text:r.text,chunk:key});added++}
+      if(r.text){const e={id:'d'+uid(),ts:r.ts,dur:Math.round((r.dur||0)/1000),text:r.text,chunk:key};if(r.stt)e.stt=true;diary.push(e);added++}
       else if(r.err){diary.push({id:'d'+uid(),ts:r.ts,dur:Math.round((r.dur||0)/1000),text:'',err:r.err,nfile:r.file,chunk:key});added++}
     }
     Android.diaryAck(r.name);
   }
-  if(st){dr.npending=st.pending||0;dr.nrefine=st.refining||0}else{try{const s=JSON.parse(Android.diaryState());dr.npending=s.pending||0;dr.nrefine=s.refining||0}catch{}}
+  if(!st){try{st=JSON.parse(Android.diaryState())}catch{st={}}}
+  dr.npending=st.pending||0;dr.nrefine=st.refining||0;const sm=st.stt||'';if(sm!==dr.sttMode){dr.sttMode=sm;diaryStatus()}
   if(added)saveDiary();
   if(added||dr.npending!==dr.lastNP||dr.nrefine!==dr.lastNR){dr.lastNP=dr.npending;dr.lastNR=dr.nrefine;renderDiary(added>0);diaryStatus()}
 }
@@ -1380,7 +1381,7 @@ function wakeOff(){if(APP){try{Android.keepScreenOn(false)}catch{}dr.wake=null;r
 document.addEventListener('visibilitychange',()=>{if(document.hidden)return;setTimeout(()=>retryAll(false),3000);if(dr.on&&!dr.native&&!dr.wake)wakeOn();if(NATIVE_DIARY){pullResults();pullChunks();let st={};try{st=JSON.parse(Android.diaryState())}catch{}if(st.on&&!dr.on){dr.on=true;dr.native=true;diaryUI(true);nativeTick()}}});
 function diaryStatus(){
   const q=dr.queue.length+(dr.inflight?.length||0)+(dr.npending||0),w=dr.pauseUntil>Date.now()?' · kota için kısa bekleme':'';
-  $('dStat').textContent=dr.on?`Kaydediliyor${dr.native?' · ekran kapansa da sürer':''}${q?` · ${q} parça işleniyor`:''}${dr.nrefine?' · ✓ iyileştiriliyor':''}${w}`
+  $('dStat').textContent=dr.on?`Kaydediliyor${dr.native?' · ekran kapansa da sürer':''}${dr.sttMode?' · Google tanıma':''}${q?` · ${q} parça işleniyor`:''}${dr.nrefine?' · ✓ iyileştiriliyor':''}${w}`
     :q?`${q} parça yazıya dökülüyor${w}...`:'Kaydı başlatmak için dokun';
 }
 function enqueue(blob,start){dr.queue.push({blob,start,dur:CHUNK});diaryStatus();processQueue()}
@@ -1455,7 +1456,7 @@ async function retryAll(manual){
   for(const e of fails){
     let blob=null;
     try{
-      if(e.nfile&&APP){const b64=Android.readChunk(e.nfile);if(b64){const bin=atob(b64),u8=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u8[i]=bin.charCodeAt(i);blob=new Blob([u8],{type:'audio/aac'})}}
+      if(e.nfile&&APP){const b64=Android.readChunk(e.nfile);if(b64){const bin=atob(b64),u8=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u8[i]=bin.charCodeAt(i);blob=new Blob([u8],{type:/\.wav$/.test(e.nfile)?'audio/wav':'audio/aac'})}}
       else if(e.audio)blob=await DB.get(e.audio);
     }catch{}
     if(!blob)continue;
@@ -1469,7 +1470,7 @@ async function retryEntry(id){
   const e=diary.find(x=>x.id===id);if(!e||!(e.audio||e.nfile))return;
   dr.retrying=dr.retrying||new Set();dr.retrying.add(id);renderDiary();
   try{
-    if(e.nfile){const b64=Android.readChunk(e.nfile);if(!b64)throw new Error('Ses dosyası bulunamadı');e.text=await transcribe(b64,'audio/aac')||'(konuşma yok)';Android.deleteChunk(e.nfile);delete e.nfile}
+    if(e.nfile){const b64=Android.readChunk(e.nfile);if(!b64)throw new Error('Ses dosyası bulunamadı');e.text=await transcribe(b64,/\.wav$/.test(e.nfile)?'audio/wav':'audio/aac')||'(konuşma yok)';Android.deleteChunk(e.nfile);delete e.nfile}
     else{const b=await DB.get(e.audio);const w=await toWav16k(b,true);e.text=await transcribe(w.data)||'(konuşma yok)';DB.del(e.audio).catch(()=>{});delete e.audio}
     delete e.err;
   }catch(err){e.err=err.message}
@@ -1485,7 +1486,7 @@ function renderDiary(scroll){
   const mins=Math.round(list.reduce((s,e)=>s+(e.dur||0),0)/60);
   {const nf=diary.filter(e=>e.err&&!e.text&&(e.audio||e.nfile)&&!dr.retrying?.has(e.id)).length,b=$('dRetryAll');b.classList.toggle('hidden',!nf);b.textContent=`↻ Hepsini yazıya dök (${nf})`}
   $('dCount').textContent=list.length?(q?`"${q}" geçen ${list.length} kayıt (tüm günler)`:`${list.length} kayıt · ~${mins} dk konuşma`):'';
-  $('dList').innerHTML=list.length?list.map(e=>`<div class="dent${e.kind==='call'?' call':''}${e.chunk?.startsWith('r_')&&!e.edited&&Date.now()-e.ts<15*60e3?' draft':''}"><div class="tm">${q?stampDate(e.ts):hm(e.ts)}${e.refined?' <span class="tag ok-tag" title="Güçlü modelle iyileştirildi">✓</span>':''}${e.kind==='call'?` <span class="tag">📞 ${esc(e.who||'Telefon')}</span>`:''}${e.dur?` <span class="mut" style="font-weight:500">${Math.round(e.dur)} sn</span>`:''}<span style="flex:1"></span>${(e.audio||e.nfile)&&!dr.retrying?.has(e.id)?`<button class="sm" onclick="retryEntry('${e.id}')">↻ Yazıya dök</button>`:''}<button class="sm ghost" onclick="editEntry('${e.id}')" title="Düzenle">✏️</button><button class="sm ghost" onclick="delEntry('${e.id}')">✕</button></div>
+  $('dList').innerHTML=list.length?list.map(e=>`<div class="dent${e.kind==='call'?' call':''}${e.chunk?.startsWith('r_')&&!e.edited&&!e.stt&&Date.now()-e.ts<15*60e3?' draft':''}"><div class="tm">${q?stampDate(e.ts):hm(e.ts)}${e.refined?' <span class="tag ok-tag" title="Güçlü modelle iyileştirildi">✓</span>':''}${e.kind==='call'?` <span class="tag">📞 ${esc(e.who||'Telefon')}</span>`:''}${e.dur?` <span class="mut" style="font-weight:500">${Math.round(e.dur)} sn</span>`:''}<span style="flex:1"></span>${(e.audio||e.nfile)&&!dr.retrying?.has(e.id)?`<button class="sm" onclick="retryEntry('${e.id}')">↻ Yazıya dök</button>`:''}<button class="sm ghost" onclick="editEntry('${e.id}')" title="Düzenle">✏️</button><button class="sm ghost" onclick="delEntry('${e.id}')">✕</button></div>
     <div class="tx">${dEdit===e.id?`<textarea rows="4">${esc(e.text)}</textarea><div class="row" style="margin-top:6px"><button class="sm" onclick="dEdit=null;renderDiary()">Vazgeç</button><button class="sm pri" onclick="saveEntry('${e.id}')">Kaydet</button></div>`:dr.retrying?.has(e.id)?'<span class="pend"><span class="spin"></span> Yazıya dökülüyor...</span>':e.text?hl(e.text,q):`<span class="pend">⚠️ ${esc(e.err||'Yazıya dökülemedi')} — ses saklandı, ↻ ile tekrar dene.</span>`}</div></div>`).join('')
     :(live?'':`<div class="empty">${q?'Eşleşen kayıt yok':'Bu gün için kayıt yok'}</div>`);
   if(live){

@@ -858,7 +858,7 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public String diaryState() {
             try {
-                return new JSONObject().put("on", DiaryService.running).put("since", DiaryService.since).put("level", DiaryService.level).put("error", DiaryService.error).put("pending", DiaryService.pending.get()).put("refining", DiaryService.refining.get()).toString();
+                return new JSONObject().put("on", DiaryService.running).put("since", DiaryService.since).put("level", DiaryService.level).put("error", DiaryService.error).put("pending", Math.max(0, DiaryService.pending.get() - DiaryService.waitN)).put("stt", DiaryService.sttMode).put("refining", DiaryService.refining.get()).toString();
             } catch (Exception e) {
                 return "{}";
             }
@@ -899,7 +899,7 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public String readChunk(String name) {
-            if (!name.matches("[cf]_\\d+_\\d+\\.(m4a|aac)")) return null;
+            if (!name.matches("[cf]_\\d+_\\d+\\.(m4a|aac|wav)")) return null;
             try (InputStream is = new java.io.FileInputStream(new File(DiaryService.dir(MainActivity.this), name))) {
                 ByteArrayOutputStream bo = new ByteArrayOutputStream();
                 byte[] b = new byte[16384];
@@ -913,7 +913,7 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public void deleteChunk(String name) {
-            if (name.matches("[cf]_\\d+_\\d+\\.(m4a|aac)")) new File(DiaryService.dir(MainActivity.this), name).delete();
+            if (name.matches("[cf]_\\d+_\\d+\\.(m4a|aac|wav)")) new File(DiaryService.dir(MainActivity.this), name).delete();
         }
 
         // --- sesli not (arka planda kayıt + Gemini) ---
