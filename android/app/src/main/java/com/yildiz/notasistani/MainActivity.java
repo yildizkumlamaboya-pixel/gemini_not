@@ -1062,6 +1062,11 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
+        public void diaryCancelPending() {
+            DiaryService.cancelPending(MainActivity.this);
+        }
+
+        @JavascriptInterface
         public String diaryState() {
             try {
                 return new JSONObject().put("on", DiaryService.running).put("since", DiaryService.since).put("level", DiaryService.level).put("error", DiaryService.error).put("pending", Math.max(0, DiaryService.pending.get() - DiaryService.waitN)).put("stt", DiaryService.sttMode).put("refining", DiaryService.refining.get()).toString();

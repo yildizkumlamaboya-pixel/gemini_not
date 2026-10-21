@@ -102,6 +102,8 @@ nav button.act b{background:linear-gradient(135deg,rgba(37,99,235,.13),rgba(6,18
 .reclive{margin-top:12px;max-height:34vh;overflow:auto;text-align:left;font-size:16px;line-height:1.5;background:#f8fafc;border:1px solid var(--line);border-radius:14px;padding:12px;white-space:pre-wrap}
 .sugg{border-color:rgba(99,102,241,.35);background:linear-gradient(180deg,rgba(99,102,241,.06),#fff 60%)}
 .sugg .q{font-style:italic;color:var(--mut);font-size:13px;margin-top:2px}
+.dman{margin:4px 0 8px}.dgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}.dgrid button{white-space:nowrap}
+#dOut{flex-wrap:wrap;gap:6px}#dOut button{flex:0 0 auto}#dOut:empty{display:none}.dman summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--mut)}
 .mic.rec{background:var(--bad);border-color:var(--bad);color:#fff}
 .empty{text-align:center;color:var(--mut);padding:22px 0;font-size:14px}
 .stat{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
@@ -261,6 +263,7 @@ details.card[open] summary{margin-bottom:6px}
       <button data-f="geciken" data-l="Geciken">Geciken</button>
       <button data-f="acik" data-l="Tümü">Tümü</button>
       <button data-f="biten" data-l="Biten">Biten</button>
+      <button data-f="gunluk" data-l="🎙 Günlük">🎙 Günlük</button>
     </div>
     <div id="planOut"></div>
     <div id="taskList"></div>
@@ -319,6 +322,16 @@ details.card[open] summary{margin-bottom:6px}
       <button class="sm ai" onclick="show('asistan');$('cIn').focus()">✨ Soru sor</button>
     </div>
     <div id="dqOut"></div>
+    <div class="row" id="dOut" style="margin-bottom:6px"></div>
+    <div class="row hidden" id="dCancelRow" style="margin-bottom:6px"><button class="sm" style="color:var(--bad);border-color:var(--bad)" onclick="cancelTranscribe()">⏹ Yazmayı iptal et</button><span class="mut" id="dCancelT" style="font-size:13px"></span></div>
+    <details class="dman"><summary>🗑 Silme seçenekleri</summary>
+      <div class="dgrid">
+        <button class="sm" onclick="diaryDelDay()">Bu günü sil</button>
+        <button class="sm" onclick="diaryDelAll()">Tüm günlüğü sil</button>
+        <button class="sm" onclick="diaryDelOut()">Çıkan not/görevleri sil</button>
+        <button class="sm" style="color:var(--bad);border-color:var(--bad)" onclick="diaryDelEverything()">Hepsini sil</button>
+      </div>
+    </details>
     <div class="row" style="align-items:center"><div class="mut" id="dCount" style="flex:1"></div><button class="sm hidden" id="dRetryAll" onclick="retryAll(true)"></button></div>
     <div id="dList"></div>
   </div>
@@ -761,7 +774,7 @@ function renderSugg(){
 }
 function suggAdd(id,quiet){
   const g=sugg.find(x=>x.id===id);if(!g)return;
-  tasks.push({id:uid(),title:g.title,note:[g.note,g.quote?`Konuşmadan: “${g.quote}”`:''].filter(Boolean).join('\n'),due:g.due||'',remind:g.remind||'',priority:g.priority||'orta',repeat:'',done:false,notified:false,created:Date.now(),src:'ai'});
+  tasks.push({id:uid(),title:g.title,note:[g.note,g.quote?`Konuşmadan: “${g.quote}”`:''].filter(Boolean).join('\n'),due:g.due||'',remind:g.remind||'',priority:g.priority||'orta',repeat:'',done:false,notified:false,created:Date.now(),src:'ai',from:'gunluk'});
   sugg=sugg.filter(x=>x.id!==id);save();saveSugg();renderAll();if(!quiet)toastMsg('✔ Görev eklendi');
 }
 function suggAddAll(){const n=sugg.length;[...sugg].forEach(g=>suggAdd(g.id,true));toastMsg(`✔ ${n} görev eklendi`)}
@@ -1056,9 +1069,11 @@ async function noteAI(mode){
   }catch(e){out.innerHTML=`<div class="out">⚠️ ${esc(e.message)}</div>`}
 }
 function addNoteTasks(){(window._nt||[]).forEach(t=>tasks.push({id:uid(),title:t.title,note:t.note||'',due:t.due||'',remind:t.remind||'',priority:t.priority||'orta',repeat:'',done:false,notified:false,created:Date.now()}));save();renderAll();$('nAIOut').innerHTML='<div class="out">✔ Görevlere eklendi</div>'}
+const fromG=x=>x.from==='gunluk'; // sesli günlükten çıkan not/görev (ayrı tutulur)
+try{let ch=0;for(const n of LS.get('na_notes',[]))if(n.kind==='summary'&&/^Günlük özeti/.test(n.title||'')&&!n.from)ch++;if(ch)setTimeout(()=>{notes.forEach(n=>{if(n.kind==='summary'&&/^Günlük özeti/.test(n.title||''))n.from='gunluk'});save();renderAll()},0)}catch{}
 const isSum=n=>n.kind==='summary'||(n.tags||[]).includes('özet')||/^Gün(ün|lük) özeti/.test(n.title||'');
 const isAI=n=>n.src==='ai'||isSum(n);
-const NF={all:['Tümü',()=>true],ai:['✨ AI',isAI],mine:['✍️ Benim',n=>!isAI(n)],photo:['📷 Fotoğraflı',n=>n.photos?.length>0],voice:['🎤 Sesli',n=>n.via==='voice'],sum:['📋 Özetler',isSum],pin:['📌 Sabit',n=>n.pinned],today:['Bugün',n=>dayKey(n.updated)===dayKey(Date.now())]};
+const NF={all:['Tümü',()=>true],gunluk:['🎙 Günlük',fromG],ai:['✨ AI',isAI],mine:['✍️ Benim',n=>!isAI(n)],photo:['📷 Fotoğraflı',n=>n.photos?.length>0],voice:['🎤 Sesli',n=>n.via==='voice'],sum:['📋 Özetler',isSum],pin:['📌 Sabit',n=>n.pinned],today:['Bugün',n=>dayKey(n.updated)===dayKey(Date.now())]};
 function setNF(k){nF=k;LS.set('na_nf',k);renderNotes()}
 function renderNotes(){
   const q=$('nSearch').value.toLocaleLowerCase('tr');
@@ -1066,7 +1081,7 @@ function renderNotes(){
   $('nFilter').innerHTML=Object.entries(NF).map(([k,[l,f]])=>{const c=k==='all'?notes.length:notes.filter(f).length;return (c||k==='all'||k===nF)?`<button class="${k===nF?'act':''}" onclick="setNF('${k}')">${l}${c?` <span class="cnt">${c}</span>`:''}</button>`:''}).join('');
   const tags=[...new Set(notes.flatMap(n=>n.tags))];
   $('tagChips').innerHTML=tags.map(t=>`<button class="sm ${tagF===t?'act':''}" onclick="tagF=tagF==='${esc(t)}'?'':'${esc(t)}';renderNotes()">#${esc(t)}</button>`).join('');
-  let list=notes.filter(n=>NF[nF][1](n)&&(!tagF||n.tags.includes(tagF))&&(!q||(n.title+' '+n.body+' '+n.tags.join(' ')+' '+(n.photos||[]).map(p=>[p.addr,p.tpl,p.title,...Object.values(p.fields||{})].join(' ')).join(' ')).toLocaleLowerCase('tr').includes(q)));
+  let list=notes.filter(n=>NF[nF][1](n)&&(nF==='gunluk'||!fromG(n))&&(!tagF||n.tags.includes(tagF))&&(!q||(n.title+' '+n.body+' '+n.tags.join(' ')+' '+(n.photos||[]).map(p=>[p.addr,p.tpl,p.title,...Object.values(p.fields||{})].join(' ')).join(' ')).toLocaleLowerCase('tr').includes(q)));
   list.sort((a,b)=>(b.pinned-a.pinned)||(b.updated-a.updated));
   $('noteList').innerHTML=list.length?list.map(n=>`<div class="item note" onclick="openNote('${n.id}')"><button class="sm ghost" style="order:2" onclick="event.stopPropagation();openNote('${n.id}')" title="Düzenle">✏️</button><div class="bd"><div class="t">${n.pinned?'<span class="pin">📌</span> ':''}${esc(n.title)}${n.aiPending?' <span class="tag">📴 AI bekliyor</span>':''}</div><div class="prev">${esc(n.body)}</div>${n.photos?.length?`<div class="nthumbs">${n.photos.slice(0,4).map(p=>`<img data-pid="${p.id}" alt="">`).join('')}${n.photos.length>4?`<span class="mut" style="align-self:center">+${n.photos.length-4}</span>`:''}</div>${n.photos[0].addr?`<div class="ploc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>${esc(n.photos[0].addr)}</div>`:''}`:''}<div>${isAI(n)?`<span class="tag ai-tag">✨ AI${n.via==='voice'?' · 🎤':''}</span>`:''}${n.tags.map(t=>`<span class="tag">#${esc(t)}</span>`).join('')}<span class="mut" style="font-size:11px"> ${fmt(toLocal(new Date(n.updated)))}</span></div></div></div>`).join(''):`<div class="empty">${nF==='all'&&!tagF&&!q?'Not yok':'Bu filtrede not yok'}</div>`;
   hydrate($('noteList'));
@@ -1504,8 +1519,10 @@ async function processBatch(batch){
   const wav=wavB64(all);
   const e={id:'d'+uid(),ts:used[0].start,dur:Math.round(n/16000),text:'',chunk:names[0]||''};
   if(names.length>1)e.parts=names;
+  const gen=dr.gen||0;
   try{e.text=await transcribe(wav)}
   catch(err){
+    if((dr.gen||0)!==gen)return;
     if(/kota|yoğun|429|quota|internet|ulaşılamadı/i.test(err.message)&&(used[0].tries||0)<6){ // kota/yoğunluk/bağlantı: bekle, sonra aynı paketi tekrar dene
       used.forEach(j=>j.tries=(j.tries||0)+1);dr.pauseUntil=Date.now()+15000*used[0].tries;dr.queue.unshift(...used);return}
     unmark(used);
@@ -1513,6 +1530,7 @@ async function processBatch(batch){
     const aid='a'+uid();try{await DB.put(aid,await (await fetch('data:audio/wav;base64,'+wav)).blob());e.audio=aid}catch{}
     e.err=err.message;e.text='';
   }
+  if((dr.gen||0)!==gen)return; // iptal edildi
   dr.pauseUntil=0;unmark(used);dropOld(used);
   if(e.text||e.err){diary.push(e);saveDiary();renderDiary(true)}
   del(used);
@@ -1563,9 +1581,39 @@ async function retryEntry(id){
   }catch(err){e.err=err.message}
   dr.retrying.delete(id);saveDiary();renderDiary();
 }
+// ---- Günlükten çıkanlar ve silme / iptal ----
+function renderDiaryOut(){
+  const nn=notes.filter(fromG).length,nt=tasks.filter(t=>fromG(t)&&!t.done).length;
+  $('dOut').innerHTML=(nn||nt||sugg.length)?`<span class="mut" style="font-size:13px;align-self:center">Günlükten çıkanlar:</span>`+
+    (nt?`<button class="sm" onclick="tF='gunluk';show('bugun');renderAll()">✅ ${nt} görev</button>`:'')+
+    (nn?`<button class="sm" onclick="nF='gunluk';show('notlar');renderAll()">📝 ${nn} not</button>`:'')+
+    (sugg.length?`<button class="sm" onclick="show('bugun')">🤖 ${sugg.length} öneri</button>`:''):'';
+  const q=(dr.queue?.length||0)+(dr.inflight?.length||0)+(dr.npending||0)+(dr.retrying?.size||0);
+  $('dCancelRow').classList.toggle('hidden',!q);$('dCancelT').textContent=q?`${q} parça yazıya dökülmeyi bekliyor`:'';
+}
+function cancelTranscribe(){
+  if(!confirm('Bekleyen yazıya dökme işleri iptal edilsin mi? Bu parçaların sesi silinir, yazıya geçmez.'))return;
+  dr.gen=(dr.gen||0)+1; // çalışan istekler bitince sonuç yazılmaz
+  for(const j of [...(dr.queue||[]),...(dr.inflight||[])])if(j.native)try{Android.deleteChunk(j.native)}catch{}
+  dr.queue=[];dr.inflight=[];dr.retrying?.clear();dr.pauseUntil=0;
+  if(NATIVE_DIARY)try{Android.diaryCancelPending()}catch{}
+  dr.npending=0;diaryStatus();renderDiary();toastMsg('⏹ Yazıya dökme iptal edildi');
+}
+function dropEntries(list){const ids=new Set(list.map(e=>e.id));list.forEach(e=>{if(e.audio)DB.del(e.audio).catch(()=>{});if(e.nfile)try{Android.deleteChunk(e.nfile)}catch{}});diary=diary.filter(e=>!ids.has(e.id));saveDiary();renderDiary();return ids.size}
+function diaryDelDay(){const day=$('dDate').value,l=diary.filter(e=>dayKey(e.ts)===day);if(!l.length){toastMsg('Bu günde kayıt yok');return}
+  if(!confirm(`${day.split('-').reverse().join('.')} tarihli ${l.length} günlük kaydı silinsin mi?`))return;toastMsg(`🗑 ${dropEntries(l)} kayıt silindi`)}
+function diaryDelAll(){if(!diary.length){toastMsg('Günlük boş');return}if(!confirm(`Tüm günlük (${diary.length} kayıt, telefon görüşmeleri dahil) silinsin mi? Geri alınamaz.`))return;toastMsg(`🗑 ${dropEntries([...diary])} kayıt silindi`)}
+function diaryDelOut(quiet){const nn=notes.filter(fromG).length,nt=tasks.filter(fromG).length;
+  if(!quiet){if(!nn&&!nt&&!sugg.length){toastMsg('Günlükten çıkan not/görev yok');return}if(!confirm(`Günlükten çıkan ${nn} not, ${nt} görev ve ${sugg.length} öneri silinsin mi? (Diğer not ve görevlerine dokunulmaz)`))return}
+  notes=notes.filter(n=>!fromG(n));tasks=tasks.filter(t=>!fromG(t));sugg=[];saveSugg();save();renderAll();renderDiaryOut();if(!quiet)toastMsg('🗑 Silindi')}
+function diaryDelEverything(){if(!confirm('Tüm günlük kayıtları, günlükten çıkan not/görevler ve bekleyen yazıya dökme işleri silinsin mi? Geri alınamaz.'))return;
+  dr.gen=(dr.gen||0)+1;for(const j of [...(dr.queue||[]),...(dr.inflight||[])])if(j.native)try{Android.deleteChunk(j.native)}catch{}
+  dr.queue=[];dr.inflight=[];dr.retrying?.clear();if(NATIVE_DIARY)try{Android.diaryCancelPending()}catch{}
+  dropEntries([...diary]);diaryDelOut(true);toastMsg('🗑 Günlük ve günlükten çıkanların hepsi silindi')}
 function delEntry(id){if(!confirm('Bu kayıt silinsin mi?'))return;const e=diary.find(x=>x.id===id);if(e?.audio)DB.del(e.audio).catch(()=>{});diary=diary.filter(x=>x.id!==id);saveDiary();renderDiary()}
 function hl(text,q){const s=esc(text);if(!q)return s;const re=new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi');return s.replace(re,m=>`<mark>${m}</mark>`)}
 function renderDiary(scroll){
+  renderDiaryOut();
   const q=$('dSearch').value.trim(),ql=q.toLocaleLowerCase('tr'),day=$('dDate').value;
   const live=!q&&day===dayKey(Date.now())&&(dr.on||dr.inflight?.length||dr.queue?.length||dr.npending);
   let list=q?diary.filter(e=>e.text.toLocaleLowerCase('tr').includes(ql)):diary.filter(e=>dayKey(e.ts)===day);
@@ -1601,11 +1649,12 @@ async function diaryAI(mode){
       const r=await gemini(`Bu konuşmalardan yapılacak işleri çıkar:\n${ctx}`,{json:true,system:`${nowCtx()} Kayıt tarihi: ${day}. Sadece JSON: {"tasks":[{"title":"","note":"","due":null,"remind":null,"priority":"orta"}]}. Tarih yoksa null.`});
       const ts=r.tasks||[];if(!ts.length){$('dqOut').innerHTML='<div class="out">Yapılacak iş bulunamadı.</div>';return}
       window._dt=ts;
-      $('dqOut').innerHTML=`<div class="out">${ts.map(t=>`✅ ${esc(t.title)}${t.due?' — '+fmt(t.due):''}`).join('\n')}</div><button class="sm pri" style="margin-top:8px" onclick="pending={tasks:window._dt,notes:[]};commitPending();$('dqOut').innerHTML='<div class=out>✔ Görevlere eklendi</div>'">Görevlere ekle (${ts.length})</button>`;
+      $('dqOut').innerHTML=`<div class="out">${ts.map(t=>`✅ ${esc(t.title)}${t.due?' — '+fmt(t.due):''}`).join('\n')}</div><button class="sm pri" style="margin-top:8px" onclick="diaryTasksAdd()">Görevlere ekle (${ts.length})</button>`;
     }
   }catch(e){$('dqOut').innerHTML=`<div class="out">⚠️ ${esc(e.message)}</div>`}
 }
-function saveDiaryNote(){const s=window._dsum;if(!s)return;notes.push({id:uid(),src:'ai',kind:'summary',title:'Günlük özeti · '+s.day.split('-').reverse().join('.'),body:s.r,tags:['günlük'],pinned:false,created:Date.now(),updated:Date.now()});save();renderAll();toastMsg('✔ Not olarak kaydedildi')}
+function diaryTasksAdd(){const now=Date.now(),ts=window._dt||[];ts.forEach(t=>tasks.push({id:uid(),title:t.title,note:t.note||'',due:t.due||'',remind:t.remind||'',priority:t.priority||'orta',repeat:'',done:false,notified:false,created:now,src:'ai',from:'gunluk'}));save();renderAll();renderDiaryOut();$('dqOut').innerHTML=`<div class="out">✔ ${ts.length} görev eklendi — Ana sayfa › 🎙 Günlük</div>`}
+function saveDiaryNote(){const s=window._dsum;if(!s)return;notes.push({id:uid(),src:'ai',from:'gunluk',kind:'summary',title:'Günlük özeti · '+s.day.split('-').reverse().join('.'),body:s.r,tags:['günlük'],pinned:false,created:Date.now(),updated:Date.now()});save();renderAll();toastMsg('✔ Not olarak kaydedildi')}
 window.addEventListener('beforeunload',e=>{if(dr.on){e.preventDefault();e.returnValue=''}});
 
 // ================= GÖREVLER =================
@@ -1645,6 +1694,7 @@ const sortT=(a,b)=>(a.due||'9999').localeCompare(b.due||'9999')||({yuksek:0,orta
 function renderTasks(){
   const n=new Date(),wk=new Date(n);wk.setDate(n.getDate()+7);
   let l=tasks.filter(t=>{
+    if(tF==='gunluk')return fromG(t);if(fromG(t))return false;
     if(tF==='biten')return t.done; if(tF==='acik')return true; if(t.done)return false;
     if(tF==='bugun')return t.due&&new Date(t.due)<=new Date(n.getFullYear(),n.getMonth(),n.getDate(),23,59);
     if(tF==='hafta')return t.due&&new Date(t.due)<=wk;
@@ -1652,16 +1702,16 @@ function renderTasks(){
     return true});
   l.sort(tF==='biten'?(a,b)=>(b.doneAt||0)-(a.doneAt||0):sortT);
   // Tümü: önce açık işler, altında bitenler (en son biten üstte)
-  if(tF==='acik'){const o=l.filter(t=>!t.done),d=l.filter(t=>t.done).sort((a,b)=>(b.doneAt||0)-(a.doneAt||0));l=[...o,...d];
+  if(tF==='acik'||tF==='gunluk'){const o=l.filter(t=>!t.done),d=l.filter(t=>t.done).sort((a,b)=>(b.doneAt||0)-(a.doneAt||0));l=[...o,...d];
     if(o.length&&d.length){$('taskList').innerHTML=o.map(taskRow).join('')+`<div class="donesep">Bitenler · ${d.length}</div>`+d.map(taskRow).join('');return}}
-  $('taskList').innerHTML=l.length?l.map(taskRow).join(''):`<div class="empty">${tF==='bugun'?'Bugün için görev yok':tF==='geciken'?'Geciken iş yok 🎉':tF==='biten'?'Tamamlanan görev yok':'Görev yok'}</div>`;
+  $('taskList').innerHTML=l.length?l.map(taskRow).join(''):`<div class="empty">${tF==='bugun'?'Bugün için görev yok':tF==='geciken'?'Geciken iş yok 🎉':tF==='biten'?'Tamamlanan görev yok':tF==='gunluk'?'Günlükten çıkan görev yok':'Görev yok'}</div>`;
 }
 $('tFilter').onclick=e=>{const b=e.target.closest('button');if(!b)return;tF=b.dataset.f;renderToday();renderTasks()};
 
 // ================= BUGÜN =================
 function renderToday(){
   const n=new Date(),end=new Date(n.getFullYear(),n.getMonth(),n.getDate(),23,59),wk=new Date(+n+7*864e5),open=tasks.filter(t=>!t.done);
-  const c={acik:tasks.length,bugun:open.filter(t=>t.due&&new Date(t.due)<=end).length,hafta:open.filter(t=>t.due&&new Date(t.due)<=wk).length,geciken:open.filter(t=>t.due&&new Date(t.due)<n).length,biten:0};
+  const c={gunluk:tasks.filter(t=>fromG(t)&&!t.done).length,acik:tasks.filter(t=>!fromG(t)).length,bugun:open.filter(t=>t.due&&new Date(t.due)<=end).length,hafta:open.filter(t=>t.due&&new Date(t.due)<=wk).length,geciken:open.filter(t=>t.due&&new Date(t.due)<n).length,biten:0};
   [...$('tFilter').children].forEach(b=>{const k=b.dataset.f;b.innerHTML=b.dataset.l+(c[k]?` <span class="cnt${k==='geciken'?' bad':''}">${c[k]}</span>`:'');b.classList.toggle('act',k===tF)});
 }
 

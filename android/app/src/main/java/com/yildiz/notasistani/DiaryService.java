@@ -61,7 +61,9 @@ public class DiaryService extends Service {
     static volatile int level = 0;
     static volatile String error = "";
     static volatile String sttMode = "";
-    static volatile int waitN = 0; // Google tanımayı bekleyen parça sayısı // "google", "cihaz", "" (yok)
+    static volatile int waitN = 0;
+    static volatile DiaryService inst;
+    static volatile int gen = 0; // "yazmayı iptal et" ile artar: önceki işlerin sonucu yazılmaz // Google tanımayı bekleyen parça sayısı // "google", "cihaz", "" (yok)
 
     ExecutorService pool, refinePool;
     String prompt, code, model, refinePrompt, refineModel;
@@ -100,6 +102,7 @@ public class DiaryService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (h == null) h = new Handler(Looper.getMainLooper());
+        inst = this;
         if (intent != null && STOP.equals(intent.getAction())) {
             if (running) stopAll();
             else if (pool == null || pool.isTerminated()) stopSelf();
@@ -515,7 +518,28 @@ public class DiaryService extends Service {
         }
     }
 
+    /** Bekleyen tüm yazıya dökme işlerini iptal eder, sesleri siler. */
+    static void cancelPending(android.content.Context c) {
+        gen++;
+        DiaryService s = inst;
+        if (s != null) {
+            synchronized (s.wq) {
+                s.wq.clear();
+            }
+            s.waiting.clear();
+            synchronized (s.qbuf) {
+                s.qbuf.clear();
+                s.qtext.clear();
+            }
+        }
+        waitN = 0;
+        pending.set(0);
+        File[] fs = dir(c).listFiles();
+        if (fs != null) for (File f : fs) if (f.getName().matches("[wq]_\\d+_\\d+\\.(wav|aac)")) f.delete();
+    }
+
     void transcribe(File f, long start, long dur) {
+        final int g = gen;
         String text = null, err = null;
         try {
             String prev = lastText;
@@ -537,6 +561,10 @@ public class DiaryService extends Service {
             }
         } catch (Exception e) {
             err = e.getMessage();
+        }
+        if (g != gen) { // iptal edildi
+            f.delete();
+            return;
         }
         try {
             if (text != null) {
