@@ -99,6 +99,7 @@ nav button.act b{background:linear-gradient(135deg,rgba(37,99,235,.13),rgba(6,18
 .spin{display:inline-block;width:14px;height:14px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:s .7s linear infinite;vertical-align:-2px}
 @keyframes s{to{transform:rotate(360deg)}}
 .hidden{display:none!important}
+.reclive{margin-top:12px;max-height:34vh;overflow:auto;text-align:left;font-size:16px;line-height:1.5;background:#f8fafc;border:1px solid var(--line);border-radius:14px;padding:12px;white-space:pre-wrap}
 .mic.rec{background:var(--bad);border-color:var(--bad);color:#fff}
 .empty{text-align:center;color:var(--mut);padding:22px 0;font-size:14px}
 .stat{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
@@ -504,6 +505,7 @@ details.card[open] summary{margin-bottom:6px}
   <div class="recdot" id="recDot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3.5"/></svg></div>
   <div class="rectime" id="recTime">0:00</div>
   <div class="mut" id="recHint">En fazla 90 saniye</div>
+  <div id="recLive" class="reclive hidden"></div>
   <div class="row" style="margin-top:14px" id="recBtns">
     <button onclick="recCancel()">İptal</button>
     <button class="pri" onclick="recFinish()">✔ Bitir</button>
@@ -597,23 +599,16 @@ function vocabRules(){return vocab.flatMap(v=>String(v.from||'').split(',').map(
 function applyVocab(s){if(typeof s!=='string'||!s)return s;for(const[re,w]of vocabRules())s=s.replace(re,w);return s}
 function vocabDeep(o){if(typeof o==='string')return applyVocab(o);if(Array.isArray(o))return o.map(vocabDeep);if(o&&typeof o==='object'){const r={};for(const k in o)r[k]=vocabDeep(o[k]);return r}return o}
 // Kayıtlardan özel isimleri topla (fotoğraf "Firma" alanları + sık geçen büyük harfli kelimeler)
-const FIRMS=['Hipermak','Omkon','Acar Metal','Delta Boya','Minimar','Unicraft','Yıldız Kumlama Boya'];
 function knownTerms(){
   const t=new Map(),add=(w,n=1)=>{w=String(w||'').trim();if(w.length>=3)t.set(w,(t.get(w)||0)+n)};
   for(const v of vocab)add(v.w,99);
-  for(const w of FIRMS)add(w,60); // sık geçen müşteri/tedarikçi firmalar
   for(const n of notes)for(const p of n.photos||[])for(const[k,v]of Object.entries(p.fields||{}))if(/firma|müşteri|musteri/i.test(k))add(v,5);
   const SKIP=new Set(['Konuşmacı','Bugün','Yarın','Dün','Firma','Görev','Not','Günün','Günlük','Fotoğraflı','Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi','Pazar']);
   for(const s of[...notes.map(n=>n.title),...tasks.map(x=>x.title)])
     for(const m of String(s||'').matchAll(/(?:^|\s)([A-ZÇĞİÖŞÜ][a-zçğıöşü]{2,}(?:\s[A-ZÇĞİÖŞÜ][a-zçğıöşü]{2,})?)/g))if(!SKIP.has(m[1].split(' ')[0]))add(m[1].replace(/'.*$/,''));
   return [...t.entries()].filter(([w,c])=>c>=2).sort((a,b)=>b[1]-a[1]).slice(0,60).map(x=>x[0]);
 }
-function vocabHint(){
-  const terms=knownTerms(),fx=vocab.filter(v=>v.from).map(v=>`"${v.from.split(',')[0].trim()}" gibi duyulan kelime aslında "${v.w}"`).join('; ');
-  return `\nBAĞLAM: Konuşan kişi Yıldız Kumlama Boya firmasının sahibi. Konuşmalarda kumlama, boya, elektrostatik toz boya, RAL kodları, astar, son kat, kat, kova, teneke, galon, litre, kilo, tiner, vernik, epoksi, poliüretan, sertleştirici, macun, zımpara, kompresör, tabanca, kabin, fırın, palet, parça, sevkiyat, sevkiyat görseli, fotoğraf, görsel, irsaliye, fatura, teklif, müşteri ve tedarikçi firma adları geçer. Miktarlar genelde "5 kova", "2 kat", "20 litre" gibi söylenir.`+
-    (terms.length?`\nBİLİNEN ÖZEL İSİMLER (doğru yazımları): ${terms.join(', ')}. Ses bunlardan birine benziyorsa bu yazımı kullan.`:'')+(fx?`\nDİKKAT: ${fx}.`:'')+
-    `\nYAZIM KURALLARI: Duyduğunu Türkçe ve doğru yazımla yaz. Emin olmadığın özel isimleri ünlü yer, ülke veya marka adlarına (ör. Hong Kong, Amazon, Apple) çevirme; iş bağlamında bunlar çoğunlukla firma veya kişi adıdır, sese en yakın Türkçe yazımı kullan. Sayıları rakamla yaz (20 parça, 450 TL, RAL 7016).`;
-}
+function vocabHint(){return ''} // kelime tanıtma/ipucu yok: ses olduğu gibi tanınır
 const save=()=>{LS.set('na_notes',notes);LS.set('na_tasks',tasks);LS.set('na_chat',chat.filter(m=>!m.typing).slice(-40));syncAlarms();afterChange()};
 // Uygulamada: hatırlatmaları Android alarmına kur (uygulama kapalıyken de bildirim gelir)
 function syncAlarms(){
@@ -799,11 +794,34 @@ function voicePrompt(mode){
 }
 let vJobs=LS.get('na_vjobs',{}); // bekleyen arka plan istekleri
 function vBusy(){const n=Object.keys(vJobs).length+(rec.busy||0);$('vBusy').classList.toggle('hidden',!n);$('vBusyT').textContent=n>1?`${n} sesli not işleniyor…`:'Ses işleniyor…'}
+// Uygulamada: Google konuşma tanıma (Gemini uygulamasıyla aynı servis) — canlı yazı, bitince işlenir
+const HAS_STT=()=>{try{return APP&&!!Android.sttAvailable&&Android.sttAvailable()}catch{return false}};
+function sttVoice(mode){
+  if(!Android.sttStart()){toastMsg('🎤 Mikrofon izni gerekli');return}
+  rec.stt=true;rec.sttText='';$('recLive').textContent='';$('recLive').classList.remove('hidden');
+  $('recHint').textContent='Konuştukça yazıya geçer · bitince ✔ Bitir';$('mRec').classList.add('on');
+  clearInterval(rec.tick);rec.t0=Date.now();
+  rec.tick=setInterval(()=>{const s=Math.floor((Date.now()-rec.t0)/1000);$('recTime').textContent=`${Math.floor(s/60)}:${pad(s%60)}`},250);
+}
+window.onStt=(type,text)=>{
+  if(!rec.stt)return;
+  if(type==='partial'){rec.sttText=text;$('recLive').textContent=text;$('recLive').scrollTop=1e6}
+  else if(type==='error'){ // Google tanıma çalışmazsa eski yönteme (Gemini'ye ses gönderme) geç
+    rec.stt=false;clearInterval(rec.tick);$('recLive').classList.add('hidden');rec.noStt=true;voice(rec.mode);rec.noStt=false}
+  else if(type==='done'){
+    rec.stt=false;clearInterval(rec.tick);$('mRec').classList.remove('on');$('recLive').classList.add('hidden');
+    const t=(text||rec.sttText||'').trim();if(rec.cancel)return;
+    if(!t){toastMsg('Ses anlaşılamadı, tekrar dene');return}
+    if(rec.mode==='quick'){show('bugun');$('qText').value=t;$('qText').dispatchEvent(new Event('input'));$('qBtn').click()}
+    else{try{applyVoice(rec.mode,t)}catch(e){toastMsg('⚠️ '+e.message)}}
+  }
+};
 async function voice(mode){
-  rec.mode=mode;rec.cancel=false;
+  rec.mode=mode;rec.cancel=false;$('recLive').classList.add('hidden');
   $('recTitle').textContent={fix:'Dinliyorum... neyi düzelteyim?',quick:'Dinliyorum... not, görev veya hatırlatma söyle',note:'Dinliyorum... notunu söyle',chat:'Dinliyorum... asistana sor'}[mode];
   $('recDot').className='recdot';$('recDot').innerHTML=MIC;$('recBtns').classList.remove('hidden');
   $('recTime').textContent='0:00';
+  if(!rec.noStt&&HAS_STT()){sttVoice(mode);return}
   if(NATIVE_VOICE){
     const id='v'+uid(),vp=voicePrompt(mode);
     if(!Android.voiceStart(id,vp.prompt,vp.system,vp.json,cfg.code||'',cfg.model||'gemini-flash-latest')){toastMsg('🎤 Mikrofon izni gerekli');return}
@@ -825,10 +843,12 @@ async function voice(mode){
   rec.tick=setInterval(()=>{const s=Math.floor((Date.now()-rec.t0)/1000);$('recTime').textContent=`${Math.floor(s/60)}:${pad(s%60)}`;if(s>=90)recFinish()},250);
 }
 function recFinish(){
+  if(rec.stt){Android.sttStop();$('recHint').textContent='Tamamlanıyor…';return}
   if(rec.native){Android.voiceStop();clearInterval(rec.tick);rec.native=null;$('mRec').classList.remove('on');LS.set('na_vjobs',vJobs);vBusy();pollVoice();return}
   if(rec.mr?.state==='recording')rec.mr.stop();
 }
 function recCancel(){
+  if(rec.stt){rec.cancel=true;rec.stt=false;Android.sttCancel();clearInterval(rec.tick);$('mRec').classList.remove('on');return}
   if(rec.native){Android.voiceCancel();delete vJobs[rec.native];rec.native=null;clearInterval(rec.tick);$('mRec').classList.remove('on');return}
   rec.cancel=true;recFinish();closeRec();
 }

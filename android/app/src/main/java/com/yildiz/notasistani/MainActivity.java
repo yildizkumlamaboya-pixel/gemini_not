@@ -30,6 +30,10 @@ import android.widget.Toast;
 import androidx.core.content.FileProvider;
 import androidx.documentfile.provider.DocumentFile;
 import android.speech.tts.TextToSpeech;
+import android.speech.RecognitionListener;
+import android.speech.RecognizerIntent;
+import android.speech.SpeechRecognizer;
+import android.content.ComponentName;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.util.HashMap;
@@ -65,6 +69,10 @@ public class MainActivity extends Activity {
     String geoOrigin;
     SharedPreferences prefs;
     TextToSpeech tts;
+    // Google konuşma tanıma (Gemini / Google uygulamasının kullandığı tanıma servisi)
+    SpeechRecognizer sr;
+    final StringBuilder sttAcc = new StringBuilder();
+    volatile boolean sttOn = false, sttDone = true;
     boolean ttsReady;
     String ttsPending;
     final Map<String, DocumentFile> dirCache = new HashMap<>();
@@ -427,11 +435,164 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         if (tts != null) tts.shutdown();
+        sttRelease();
         super.onDestroy();
+    }
+
+
+    // ---------- Konuşma tanıma ----------
+    static final ComponentName GOOGLE_STT = new ComponentName("com.google.android.googlequicksearchbox", "com.google.android.voicesearch.serviceapi.GoogleRecognitionService");
+
+    boolean hasGoogleStt() {
+        try {
+            getPackageManager().getServiceInfo(GOOGLE_STT, 0);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    void sttEmit(String type, String text) {
+        final String js = "window.onStt&&window.onStt(" + JSONObject.quote(type) + "," + JSONObject.quote(text == null ? "" : text) + ")";
+        web.post(() -> web.evaluateJavascript(js, null));
+    }
+
+    String sttJoin(String extra) {
+        String a = sttAcc.toString().trim();
+        if (extra == null || extra.trim().isEmpty()) return a;
+        return a.isEmpty() ? extra.trim() : a + " " + extra.trim();
+    }
+
+    void sttFinish() {
+        if (sttDone) return;
+        sttDone = true;
+        sttOn = false;
+        sttEmit("done", sttAcc.toString().trim());
+        sttRelease();
+    }
+
+    void sttRelease() {
+        try {
+            if (sr != null) sr.destroy();
+        } catch (Exception ignored) {
+        }
+        sr = null;
+    }
+
+    void sttListen() {
+        if (sr == null) {
+            sr = hasGoogleStt() ? SpeechRecognizer.createSpeechRecognizer(this, GOOGLE_STT) : SpeechRecognizer.createSpeechRecognizer(this);
+            sr.setRecognitionListener(new RecognitionListener() {
+                public void onReadyForSpeech(Bundle b) { sttEmit("ready", ""); }
+                public void onBeginningOfSpeech() {}
+                public void onRmsChanged(float v) {}
+                public void onBufferReceived(byte[] b) {}
+                public void onEndOfSpeech() {}
+                public void onEvent(int t, Bundle b) {}
+
+                public void onPartialResults(Bundle b) {
+                    ArrayList<String> r = b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                    if (r != null && !r.isEmpty()) sttEmit("partial", sttJoin(r.get(0)));
+                }
+
+                public void onResults(Bundle b) {
+                    ArrayList<String> r = b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                    if (r != null && !r.isEmpty() && !r.get(0).trim().isEmpty()) {
+                        String t = sttJoin(r.get(0));
+                        sttAcc.setLength(0);
+                        sttAcc.append(t);
+                        sttEmit("partial", t);
+                    }
+                    if (sttOn) sttListen(); // duraklamadan sonra dinlemeye devam et
+                    else sttFinish();
+                }
+
+                public void onError(int e) {
+                    if (sttOn && (e == SpeechRecognizer.ERROR_NO_MATCH || e == SpeechRecognizer.ERROR_SPEECH_TIMEOUT || e == SpeechRecognizer.ERROR_RECOGNIZER_BUSY)) {
+                        if (e == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) sttRelease();
+                        web.postDelayed(MainActivity.this::sttListen, 150);
+                        return;
+                    }
+                    if (sttOn && sttAcc.length() == 0 && e != SpeechRecognizer.ERROR_CLIENT) {
+                        sttDone = true;
+                        sttOn = false;
+                        sttRelease();
+                        sttEmit("error", String.valueOf(e));
+                        return;
+                    }
+                    sttFinish();
+                }
+            });
+        }
+        Intent i = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+        i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+        i.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "tr-TR");
+        i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "tr-TR");
+        i.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
+        i.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
+        i.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, getPackageName());
+        i.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 4000L);
+        i.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 3000L);
+        i.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 20000L);
+        try {
+            sr.startListening(i);
+        } catch (Exception e) {
+            sttDone = true;
+            sttOn = false;
+            sttRelease();
+            sttEmit("error", "start");
+        }
     }
 
     // ---------- JS köprüsü ----------
     class Bridge {
+        @JavascriptInterface
+        public boolean sttAvailable() {
+            return SpeechRecognizer.isRecognitionAvailable(MainActivity.this) || hasGoogleStt();
+        }
+
+        @JavascriptInterface
+        public boolean sttStart() {
+            if (checkSelfPermission(MIC) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(new String[]{MIC}, 77);
+                return false;
+            }
+            runOnUiThread(() -> {
+                sttRelease();
+                sttAcc.setLength(0);
+                sttOn = true;
+                sttDone = false;
+                sttListen();
+            });
+            return true;
+        }
+
+        @JavascriptInterface
+        public void sttStop() {
+            runOnUiThread(() -> {
+                sttOn = false;
+                if (sr != null) {
+                    try {
+                        sr.stopListening();
+                    } catch (Exception ignored) {
+                    }
+                    web.postDelayed(MainActivity.this::sttFinish, 2500); // son sonuç gelmezse yine de bitir
+                } else sttFinish();
+            });
+        }
+
+        @JavascriptInterface
+        public void sttCancel() {
+            runOnUiThread(() -> {
+                sttOn = false;
+                sttDone = true;
+                try {
+                    if (sr != null) sr.cancel();
+                } catch (Exception ignored) {
+                }
+                sttRelease();
+            });
+        }
         @JavascriptInterface
         public String permStatus() {
             return permJson();
