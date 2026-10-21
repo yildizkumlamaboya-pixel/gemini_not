@@ -104,6 +104,10 @@ nav button.act b{background:linear-gradient(135deg,rgba(37,99,235,.13),rgba(6,18
 .sugg .q{font-style:italic;color:var(--mut);font-size:13px;margin-top:2px}
 .dman{margin:4px 0 8px}.dgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}.dgrid button{white-space:nowrap}
 #dOut{flex-wrap:wrap;gap:6px}#dOut button{flex:0 0 auto}#dOut:empty{display:none}.dman summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--mut)}
+.vbody{white-space:pre-wrap;font-size:16px;line-height:1.55;word-break:break-word}
+.vphotos{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:10px}.vphotos:empty{display:none}
+.vphotos img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px;cursor:pointer}
+.item.lp{transform:scale(.98);background:rgba(37,99,235,.06)}
 .mic.rec{background:var(--bad);border-color:var(--bad);color:#fff}
 .empty{text-align:center;color:var(--mut);padding:22px 0;font-size:14px}
 .stat{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
@@ -452,6 +456,21 @@ details.card[open] summary{margin-bottom:6px}
 </nav>
 
 <!-- NOT DÜZENLE -->
+<div class="modal" id="mView"><div class="sheet">
+  <div class="row" style="align-items:flex-start;margin-bottom:6px"><h2 id="vTitle" style="flex:1;margin:0;font-size:20px;line-height:1.3"></h2><button class="sm ghost" style="flex:0 0 auto" onclick="closeM('mView')">✕</button></div>
+  <div id="vMeta" class="mut" style="margin-bottom:10px"></div>
+  <div id="vBody" class="vbody"></div>
+  <div id="vPhotos" class="vphotos"></div>
+  <div id="vTags" style="margin-top:8px"></div>
+  <div class="row" id="vAct" style="margin-top:14px"></div>
+  <div class="mut" style="font-size:12px;margin-top:10px;text-align:center">Düzenlemek veya silmek için listede üzerine basılı tut</div>
+</div></div>
+<div class="modal" id="mAct"><div class="sheet">
+  <div id="aTitle" style="font-weight:700;margin-bottom:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
+  <button id="aEdit" style="width:100%;margin-bottom:8px">✏️ Düzenle</button>
+  <button id="aDel" style="width:100%;margin-bottom:8px;color:var(--bad);border-color:var(--bad)">🗑 Sil</button>
+  <button class="ghost" style="width:100%" onclick="closeM('mAct')">Vazgeç</button>
+</div></div>
 <div class="modal" id="mNote"><div class="sheet">
   <div class="row"><h3 style="margin:0">Not</h3><button class="sm ghost" style="flex:0 0 auto" onclick="closeNote()">✕</button></div>
   <label>Başlık</label><input id="nTitle">
@@ -890,7 +909,7 @@ function commitPending(){
 
 // ================= SESLİ GİRİŞ (Gemini ses) =================
 const MIC='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3.5"/></svg>';
-$('micBtn').onclick=()=>voice('quick');
+$('micBtn').onclick=()=>{if(rec.stt){recFinish();return}voice('quick')}; // kırmızıyken tekrar basınca kaydet
 let rec={mr:null,stream:null,chunks:[],mode:'',t0:0,tick:null,cancel:false,native:null};
 const NATIVE_VOICE=APP&&typeof Android.voiceStart==='function';
 // Her sesli mod için Gemini isteği (yazıya dökme + ayrıştırma tek adımda)
@@ -906,17 +925,21 @@ const HAS_STT=()=>{try{return APP&&!!Android.sttAvailable&&Android.sttAvailable(
 function sttVoice(mode){
   if(!Android.sttStart()){toastMsg('🎤 Mikrofon izni gerekli');return}
   rec.stt=true;rec.sttText='';$('recLive').textContent='';$('recLive').classList.remove('hidden');
-  $('recHint').textContent='Konuştukça yazıya geçer · bitince ✔ Bitir';$('mRec').classList.add('on');
+  $('recHint').textContent='Konuştukça yazıya geçer · susunca kendiliğinden kaydedilir';$('mRec').classList.add('on');
   clearInterval(rec.tick);rec.t0=Date.now();
-  rec.tick=setInterval(()=>{const s=Math.floor((Date.now()-rec.t0)/1000);$('recTime').textContent=`${Math.floor(s/60)}:${pad(s%60)}`},250);
+  $('micBtn').classList.add('rec');rec.lastP=Date.now();
+  rec.tick=setInterval(()=>{const s=Math.floor((Date.now()-rec.t0)/1000);$('recTime').textContent=`${Math.floor(s/60)}:${pad(s%60)}`;
+    // susunca kendiliğinden kaydet; hiç konuşulmazsa kapat
+    if(rec.stt&&rec.sttText&&Date.now()-rec.lastP>3000)recFinish();
+    else if(rec.stt&&!rec.sttText&&Date.now()-rec.t0>10000){recCancel();toastMsg('🤫 Ses duyulmadı')}},250);
 }
 window.onStt=(type,text)=>{
   if(!rec.stt)return;
-  if(type==='partial'){rec.sttText=text;$('recLive').textContent=text;$('recLive').scrollTop=1e6}
+  if(type==='partial'){if(text!==rec.sttText)rec.lastP=Date.now();rec.sttText=text;$('recLive').textContent=text;$('recLive').scrollTop=1e6}
   else if(type==='error'){ // Google tanıma çalışmazsa eski yönteme (Gemini'ye ses gönderme) geç
-    rec.stt=false;clearInterval(rec.tick);$('recLive').classList.add('hidden');rec.noStt=true;voice(rec.mode);rec.noStt=false}
+    rec.stt=false;clearInterval(rec.tick);$('micBtn').classList.remove('rec');$('recLive').classList.add('hidden');rec.noStt=true;voice(rec.mode);rec.noStt=false}
   else if(type==='done'){
-    rec.stt=false;clearInterval(rec.tick);$('mRec').classList.remove('on');$('recLive').classList.add('hidden');
+    rec.stt=false;$('micBtn').classList.remove('rec');clearInterval(rec.tick);$('mRec').classList.remove('on');$('recLive').classList.add('hidden');
     const t=(text||rec.sttText||'').trim();if(rec.cancel)return;
     if(!t){toastMsg('Ses anlaşılamadı, tekrar dene');return}
     if(rec.mode==='quick'){show('bugun');$('qText').value=t;$('qText').dispatchEvent(new Event('input'));$('qBtn').click()}
@@ -950,12 +973,12 @@ async function voice(mode){
   rec.tick=setInterval(()=>{const s=Math.floor((Date.now()-rec.t0)/1000);$('recTime').textContent=`${Math.floor(s/60)}:${pad(s%60)}`;if(s>=90)recFinish()},250);
 }
 function recFinish(){
-  if(rec.stt){Android.sttStop();$('recHint').textContent='Tamamlanıyor…';return}
+  if(rec.stt){Android.sttStop();clearInterval(rec.tick);$('recHint').textContent='Tamamlanıyor…';return}
   if(rec.native){Android.voiceStop();clearInterval(rec.tick);rec.native=null;$('mRec').classList.remove('on');LS.set('na_vjobs',vJobs);vBusy();pollVoice();return}
   if(rec.mr?.state==='recording')rec.mr.stop();
 }
 function recCancel(){
-  if(rec.stt){rec.cancel=true;rec.stt=false;Android.sttCancel();clearInterval(rec.tick);$('mRec').classList.remove('on');return}
+  if(rec.stt){rec.cancel=true;rec.stt=false;$('micBtn').classList.remove('rec');Android.sttCancel();clearInterval(rec.tick);$('mRec').classList.remove('on');return}
   if(rec.native){Android.voiceCancel();delete vJobs[rec.native];rec.native=null;clearInterval(rec.tick);$('mRec').classList.remove('on');return}
   rec.cancel=true;recFinish();closeRec();
 }
@@ -1091,7 +1114,7 @@ function renderNotes(){
   $('tagChips').innerHTML=tags.map(t=>`<button class="sm ${tagF===t?'act':''}" onclick="tagF=tagF==='${esc(t)}'?'':'${esc(t)}';renderNotes()">#${esc(t)}</button>`).join('');
   let list=notes.filter(n=>NF[nF][1](n)&&(nF==='gunluk'||!fromG(n))&&(!tagF||n.tags.includes(tagF))&&(!q||(n.title+' '+n.body+' '+n.tags.join(' ')+' '+(n.photos||[]).map(p=>[p.addr,p.tpl,p.title,...Object.values(p.fields||{})].join(' ')).join(' ')).toLocaleLowerCase('tr').includes(q)));
   list.sort((a,b)=>(b.pinned-a.pinned)||(b.updated-a.updated));
-  $('noteList').innerHTML=list.length?list.map(n=>`<div class="item note" onclick="openNote('${n.id}')"><button class="sm ghost" style="order:2" onclick="event.stopPropagation();openNote('${n.id}')" title="Düzenle">✏️</button><div class="bd"><div class="t">${n.pinned?'<span class="pin">📌</span> ':''}${esc(n.title)}${n.aiPending?' <span class="tag">📴 AI bekliyor</span>':''}</div><div class="prev">${esc(n.body)}</div>${n.photos?.length?`<div class="nthumbs">${n.photos.slice(0,4).map(p=>`<img data-pid="${p.id}" alt="">`).join('')}${n.photos.length>4?`<span class="mut" style="align-self:center">+${n.photos.length-4}</span>`:''}</div>${n.photos[0].addr?`<div class="ploc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>${esc(n.photos[0].addr)}</div>`:''}`:''}<div>${isAI(n)?`<span class="tag ai-tag">✨ AI${n.via==='voice'?' · 🎤':''}</span>`:''}${n.tags.map(t=>`<span class="tag">#${esc(t)}</span>`).join('')}<span class="mut" style="font-size:11px"> ${fmt(toLocal(new Date(n.updated)))}</span></div></div></div>`).join(''):`<div class="empty">${nF==='all'&&!tagF&&!q?'Not yok':'Bu filtrede not yok'}</div>`;
+  $('noteList').innerHTML=list.length?list.map(n=>`<div class="item note" data-nid="${n.id}"><div class="bd"><div class="t">${n.pinned?'<span class="pin">📌</span> ':''}${esc(n.title)}${n.aiPending?' <span class="tag">📴 AI bekliyor</span>':''}</div><div class="prev">${esc(n.body)}</div>${n.photos?.length?`<div class="nthumbs">${n.photos.slice(0,4).map(p=>`<img data-pid="${p.id}" alt="">`).join('')}${n.photos.length>4?`<span class="mut" style="align-self:center">+${n.photos.length-4}</span>`:''}</div>${n.photos[0].addr?`<div class="ploc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>${esc(n.photos[0].addr)}</div>`:''}`:''}<div>${isAI(n)?`<span class="tag ai-tag">✨ AI${n.via==='voice'?' · 🎤':''}</span>`:''}${n.tags.map(t=>`<span class="tag">#${esc(t)}</span>`).join('')}<span class="mut" style="font-size:11px"> ${fmt(toLocal(new Date(n.updated)))}</span></div></div></div>`).join(''):`<div class="empty">${nF==='all'&&!tagF&&!q?'Not yok':'Bu filtrede not yok'}</div>`;
   hydrate($('noteList'));
 }
 $('nSearch').oninput=renderNotes;
@@ -1694,9 +1717,9 @@ function toggle(id){
 function taskRow(t){
   const late=!t.done&&t.due&&new Date(t.due)<new Date();
   return `<div class="item ${t.done?'done':''}"><div class="chk ${t.done?'on':''}" onclick="toggle('${t.id}')">${t.done?'✓':''}</div>
-  <div class="bd" onclick="openTask('${t.id}')" style="cursor:pointer"><div class="t">${esc(t.title)}</div>
+  <div class="bd" data-tid="${t.id}" style="cursor:pointer"><div class="t">${esc(t.title)}</div>
   <div class="mut">${t.due?`<span class="${late?'late':''}">📅 ${fmt(t.due)}</span>`:''}${t.remind&&!t.done?` ⏰ ${fmt(t.remind)}`:''}${t.repeat?' 🔁':''} <span class="tag p-${t.priority}">${PRI[t.priority]}</span></div>
-  ${t.note?`<div class="mut">${esc(t.note)}</div>`:''}</div><button class="sm ghost" onclick="openTask('${t.id}')" title="Düzenle">✏️</button></div>`;
+  ${t.note?`<div class="mut">${esc(t.note)}</div>`:''}</div></div>`;
 }
 const sortT=(a,b)=>(a.due||'9999').localeCompare(b.due||'9999')||({yuksek:0,orta:1,dusuk:2}[a.priority]-{yuksek:0,orta:1,dusuk:2}[b.priority]);
 function renderTasks(){
@@ -1823,7 +1846,10 @@ window.onNativePerms=async()=>{renderNStat();const all=await renderPerms();if(al
 window.nativeBack=()=>{for(const id of['mTplEd','mTpls'])if($(id).classList.contains('on')){closeM(id);return true}
   if(!$('cam').classList.contains('hidden')){closeCam();return true}
   const m=[...document.querySelectorAll('.modal.on')].pop();if(m){if(m.id==='mNote')closeNote();else if(m.id==='mRec')recCancel();else m.classList.remove('on');return true}
-  const cur=document.querySelector('main>section:not(.hidden)');if(cur&&cur.id!=='v-bugun'){show('bugun');return true}return false};
+  const cur=document.querySelector('main>section:not(.hidden)');if(cur&&cur.id!=='v-bugun'){show('bugun');return true}
+  if(pending){pvCancel();return true} // önizleme açıksa kapat
+  if(window.scrollY>200){window.scrollTo({top:0,behavior:'smooth'});return true}
+  return false};
 
 // ================= OTOMATİK YEDEK (seçilen klasöre) =================
 function HAS_FOLDER(){return typeof window.Android!=='undefined'&&typeof Android.pickFolder==='function'}
@@ -2163,6 +2189,55 @@ function toastMsg(h,ms=3500){const t=$('toast');t.innerHTML=h;t.classList.add('o
 function hideToast(){$('toast').classList.remove('on')}
 $('toast').onclick=e=>{if(e.target===$('toast'))hideToast()};
 function closeM(id){$(id).classList.remove('on')}
+// ---- Görüntüleme (dokun) ve Düzenle/Sil menüsü (basılı tut) ----
+function viewNote(id){
+  const n=notes.find(x=>x.id===id);if(!n)return;
+  $('vTitle').textContent=n.title||'Not';
+  $('vMeta').innerHTML=`📝 ${fmt(toLocal(new Date(n.created||n.updated)))}${n.updated&&n.updated!==n.created?' · düzenlendi '+fmt(toLocal(new Date(n.updated))):''}${isAI(n)?' · <span class="tag ai-tag">✨ AI'+(n.via==='voice'?' · 🎤':'')+'</span>':''}${n.pinned?' · 📌':''}`;
+  $('vBody').textContent=n.body||'';
+  edPhotos=[...(n.photos||[])];$('vPhotos').innerHTML=edPhotos.map((p,i)=>`<img data-pid="${p.id}" onclick="viewPhoto(${i})" alt="">`).join('');hydrate($('vPhotos'));
+  $('vTags').innerHTML=(n.tags||[]).map(t=>`<span class="tag">#${esc(t)}</span>`).join('');
+  $('vAct').innerHTML=`<button onclick="shareItem('n','${n.id}')">📤 Paylaş</button>`;
+  $('mView').classList.add('on');
+}
+function viewTask(id){
+  const t=tasks.find(x=>x.id===id);if(!t)return;
+  $('vTitle').textContent=(t.done?'✓ ':'')+t.title;
+  const late=!t.done&&t.due&&new Date(t.due)<new Date();
+  $('vMeta').innerHTML=[t.due?`<span class="${late?'late':''}">📅 ${fmt(t.due)}</span>`:'',t.remind?`⏰ ${fmt(t.remind)}`:'',`<span class="tag p-${t.priority}">${PRI[t.priority]||''}</span>`,t.repeat?'🔁 '+t.repeat:'',t.done&&t.doneAt?'✓ bitti '+fmt(toLocal(new Date(t.doneAt))):''].filter(Boolean).join(' · ');
+  $('vBody').textContent=t.note||'';$('vPhotos').innerHTML='';$('vTags').innerHTML='';
+  $('vAct').innerHTML=`<button class="${t.done?'':'pri'}" onclick="toggle('${t.id}');viewTask('${t.id}')">${t.done?'↺ Geri al':'✓ Tamamlandı'}</button><button onclick="shareItem('t','${t.id}')">📤 Paylaş</button>`;
+  $('mView').classList.add('on');
+}
+function shareItem(k,id){
+  const x=(k==='n'?notes:tasks).find(y=>y.id===id);if(!x)return;
+  const txt=k==='n'?`${x.title}\n\n${x.body||''}`.trim():`✅ ${x.title}${x.due?'\n📅 '+fmt(x.due):''}${x.note?'\n'+x.note:''}`;
+  if(APP&&typeof Android.shareText==='function'){Android.shareText(txt);return}
+  if(navigator.share)navigator.share({text:txt}).catch(()=>{});else{navigator.clipboard?.writeText(txt);toastMsg('📋 Kopyalandı')}
+}
+function itemMenu(k,id){
+  const x=(k==='n'?notes:tasks).find(y=>y.id===id);if(!x)return;
+  try{navigator.vibrate?.(25)}catch{}
+  $('aTitle').textContent=x.title||'';
+  $('aEdit').onclick=()=>{closeM('mAct');k==='n'?openNote(id):openTask(id)};
+  $('aDel').onclick=()=>{closeM('mAct');if(!confirm((k==='n'?'Not':'Görev')+' silinsin mi?'))return;
+    if(k==='n'){(x.photos||[]).forEach(p=>DB.del(p.id).catch(()=>{}));notes=notes.filter(y=>y.id!==id)}else tasks=tasks.filter(y=>y.id!==id);
+    save();renderAll();toastMsg('🗑 Silindi')};
+  $('mAct').classList.add('on');
+}
+// Listelerde: kısa dokunuş = görüntüle, basılı tutma = menü
+(function(){
+  let tm=null,el=null,sx=0,sy=0,fired=false;
+  const target=e=>e.target.closest('[data-nid],[data-tid]');
+  document.addEventListener('pointerdown',e=>{const t=target(e);if(!t||e.target.closest('.chk'))return;el=t;fired=false;sx=e.clientX;sy=e.clientY;
+    const row=t.closest('.item')||t;tm=setTimeout(()=>{fired=true;row.classList.remove('lp');t.dataset.nid?itemMenu('n',t.dataset.nid):itemMenu('t',t.dataset.tid)},520);row.classList.add('lp')},{passive:true});
+  const end=()=>{clearTimeout(tm);tm=null;el&&(el.closest('.item')||el).classList.remove('lp')};
+  document.addEventListener('pointermove',e=>{if(tm&&(Math.abs(e.clientX-sx)>10||Math.abs(e.clientY-sy)>10))end()},{passive:true});
+  document.addEventListener('pointerup',end);document.addEventListener('pointercancel',end);
+  document.addEventListener('contextmenu',e=>{if(target(e))e.preventDefault()});
+  document.addEventListener('click',e=>{const t=target(e);if(!t||e.target.closest('.chk'))return;if(fired){fired=false;e.preventDefault();e.stopPropagation();return}
+    t.dataset.nid?viewNote(t.dataset.nid):viewTask(t.dataset.tid)},true);
+})();
 document.querySelectorAll('.modal').forEach(m=>m.onclick=e=>{if(e.target===m){if(m.id==='mNote')closeNote();else m.classList.remove('on')}});
 $('nav').onclick=e=>{const b=e.target.closest('button');if(!b||!b.dataset.v)return;show(b.dataset.v)};
 function show(v){if(!$('v-'+v))v='bugun';if(v==='ayarlar'){renderBackup();renderVocab();renderCallStat()}if(v==='ayarlar')renderPerms();document.querySelectorAll('main>section').forEach(s=>s.classList.toggle('hidden',s.id!=='v-'+v));[...$('nav').children].forEach(b=>b.classList.toggle('act',b.dataset.v===v));$('fab').classList.toggle('hidden',v==='asistan');$('qBar').classList.toggle('hidden',v!=='bugun');document.body.classList.toggle('home',v==='bugun');window.scrollTo(0,0);if(v==='asistan')renderChat()}

@@ -58,6 +58,10 @@
             android:foregroundServiceType="specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Ekranda kayan sesli not ve kamera kısayolu" />
         </service>
+        <service
+            android:name=".QuickRecService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
         <receiver android:name=".QuickWidget" android:exported="true" android:label="Not Asistanı kısayol">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />

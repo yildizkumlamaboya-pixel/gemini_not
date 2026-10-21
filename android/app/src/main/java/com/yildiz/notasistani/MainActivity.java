@@ -407,8 +407,7 @@ public class MainActivity extends Activity {
     public void onBackPressed() {
         web.evaluateJavascript("window.nativeBack?window.nativeBack():false", v -> {
             if ("true".equals(v)) return;
-            if (web.canGoBack()) web.goBack();
-            else moveTaskToBack(true);
+            moveTaskToBack(true); // ana sayfadaysa uygulamayı arka plana al (kapatma)
         });
     }
 
@@ -986,6 +985,17 @@ public class MainActivity extends Activity {
                 runOnUiThread(() -> Toast.makeText(MainActivity.this, "Kaydedilemedi", Toast.LENGTH_SHORT).show());
                 return false;
             }
+        }
+
+        @JavascriptInterface
+        public void shareText(String text) {
+            runOnUiThread(() -> {
+                try {
+                    Intent i = new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text);
+                    startActivity(Intent.createChooser(i, "Paylaş"));
+                } catch (Exception ignored) {
+                }
+            });
         }
 
         @JavascriptInterface
