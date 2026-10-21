@@ -597,9 +597,11 @@ function vocabRules(){return vocab.flatMap(v=>String(v.from||'').split(',').map(
 function applyVocab(s){if(typeof s!=='string'||!s)return s;for(const[re,w]of vocabRules())s=s.replace(re,w);return s}
 function vocabDeep(o){if(typeof o==='string')return applyVocab(o);if(Array.isArray(o))return o.map(vocabDeep);if(o&&typeof o==='object'){const r={};for(const k in o)r[k]=vocabDeep(o[k]);return r}return o}
 // Kayıtlardan özel isimleri topla (fotoğraf "Firma" alanları + sık geçen büyük harfli kelimeler)
+const FIRMS=['Hipermak','Omkon','Acar Metal','Delta Boya','Minimar','Unicraft','Yıldız Kumlama Boya'];
 function knownTerms(){
   const t=new Map(),add=(w,n=1)=>{w=String(w||'').trim();if(w.length>=3)t.set(w,(t.get(w)||0)+n)};
   for(const v of vocab)add(v.w,99);
+  for(const w of FIRMS)add(w,60); // sık geçen müşteri/tedarikçi firmalar
   for(const n of notes)for(const p of n.photos||[])for(const[k,v]of Object.entries(p.fields||{}))if(/firma|müşteri|musteri/i.test(k))add(v,5);
   const SKIP=new Set(['Konuşmacı','Bugün','Yarın','Dün','Firma','Görev','Not','Günün','Günlük','Fotoğraflı','Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi','Pazar']);
   for(const s of[...notes.map(n=>n.title),...tasks.map(x=>x.title)])
@@ -608,7 +610,7 @@ function knownTerms(){
 }
 function vocabHint(){
   const terms=knownTerms(),fx=vocab.filter(v=>v.from).map(v=>`"${v.from.split(',')[0].trim()}" gibi duyulan kelime aslında "${v.w}"`).join('; ');
-  return `\nBAĞLAM: Konuşan kişi Yıldız Kumlama Boya firmasının sahibi. Konuşmalarda kumlama, boya, elektrostatik toz boya, RAL kodları, astar, son kat, kat, kova, teneke, galon, litre, kilo, tiner, vernik, epoksi, poliüretan, sertleştirici, macun, zımpara, kompresör, tabanca, kabin, fırın, palet, parça, sevkiyat, irsaliye, fatura, teklif, müşteri ve tedarikçi firma adları geçer. Miktarlar genelde "5 kova", "2 kat", "20 litre" gibi söylenir.`+
+  return `\nBAĞLAM: Konuşan kişi Yıldız Kumlama Boya firmasının sahibi. Konuşmalarda kumlama, boya, elektrostatik toz boya, RAL kodları, astar, son kat, kat, kova, teneke, galon, litre, kilo, tiner, vernik, epoksi, poliüretan, sertleştirici, macun, zımpara, kompresör, tabanca, kabin, fırın, palet, parça, sevkiyat, sevkiyat görseli, fotoğraf, görsel, irsaliye, fatura, teklif, müşteri ve tedarikçi firma adları geçer. Miktarlar genelde "5 kova", "2 kat", "20 litre" gibi söylenir.`+
     (terms.length?`\nBİLİNEN ÖZEL İSİMLER (doğru yazımları): ${terms.join(', ')}. Ses bunlardan birine benziyorsa bu yazımı kullan.`:'')+(fx?`\nDİKKAT: ${fx}.`:'')+
     `\nYAZIM KURALLARI: Duyduğunu Türkçe ve doğru yazımla yaz. Emin olmadığın özel isimleri ünlü yer, ülke veya marka adlarına (ör. Hong Kong, Amazon, Apple) çevirme; iş bağlamında bunlar çoğunlukla firma veya kişi adıdır, sese en yakın Türkçe yazımı kullan. Sayıları rakamla yaz (20 parça, 450 TL, RAL 7016).`;
 }
