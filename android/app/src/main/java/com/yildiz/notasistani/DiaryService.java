@@ -118,9 +118,9 @@ public class DiaryService extends Service {
             rec.setAudioSource(MediaRecorder.AudioSource.MIC);
             rec.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
             rec.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
-            rec.setAudioSamplingRate(16000);
+            rec.setAudioSamplingRate(32000);
             rec.setAudioChannels(1);
-            rec.setAudioEncodingBitRate(48000);
+            rec.setAudioEncodingBitRate(80000);
             rec.setOutputFile(cur.getAbsolutePath());
             rec.prepare();
             rec.start();

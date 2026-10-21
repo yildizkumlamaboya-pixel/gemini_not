@@ -86,16 +86,16 @@ public class VoiceService extends Service {
         }
         try {
             cur = new File(getCacheDir(), "voice_" + req + ".aac");
-            rec = new MediaRecorder();
-            rec.setAudioSource(MediaRecorder.AudioSource.MIC);
-            rec.setOutputFormat(MediaRecorder.OutputFormat.AAC_ADTS);
-            rec.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
-            rec.setAudioSamplingRate(16000);
-            rec.setAudioChannels(1);
-            rec.setAudioEncodingBitRate(40000);
-            rec.setOutputFile(cur.getAbsolutePath());
-            rec.prepare();
-            rec.start();
+            // Konuşma tanıma için ayarlanmış mikrofon modu; desteklenmezse normal mikrofon
+            try {
+                rec = newRec(MediaRecorder.AudioSource.VOICE_RECOGNITION);
+            } catch (Exception e1) {
+                try {
+                    if (rec != null) rec.release();
+                } catch (Exception ignored) {
+                }
+                rec = newRec(MediaRecorder.AudioSource.MIC);
+            }
         } catch (Exception e) {
             try {
                 if (rec != null) rec.release();
@@ -111,6 +111,21 @@ public class VoiceService extends Service {
         h.postDelayed(auto, MAX);
         h.post(poll);
         return START_NOT_STICKY;
+    }
+
+    MediaRecorder newRec(int source) throws Exception {
+        MediaRecorder r = new MediaRecorder();
+        rec = r;
+        r.setAudioSource(source);
+        r.setOutputFormat(MediaRecorder.OutputFormat.AAC_ADTS);
+        r.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
+        r.setAudioSamplingRate(32000);
+        r.setAudioChannels(1);
+        r.setAudioEncodingBitRate(96000);
+        r.setOutputFile(cur.getAbsolutePath());
+        r.prepare();
+        r.start();
+        return r;
     }
 
     void fg(String title, boolean withStop) {
@@ -165,7 +180,7 @@ public class VoiceService extends Service {
                     while ((n = is.read(buf)) > 0) bo.write(buf, 0, n);
                     audio = bo.toByteArray();
                 }
-                JSONObject gc = new JSONObject().put("temperature", 0.3).put("thinkingConfig", new JSONObject().put("thinkingBudget", 0));
+                JSONObject gc = new JSONObject().put("temperature", 0).put("thinkingConfig", new JSONObject().put("thinkingBudget", 0));
                 if (json) gc.put("responseMimeType", "application/json");
                 JSONObject body = new JSONObject()
                         .put("contents", new JSONArray().put(new JSONObject().put("role", "user").put("parts", new JSONArray()
