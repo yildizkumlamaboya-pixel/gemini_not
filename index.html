@@ -680,6 +680,13 @@ const APP=typeof window.Android!=='undefined';
 let vocab=LS.get('na_vocab',null);
 if(Array.isArray(vocab)&&!vocab.some(v=>v.w==='kova')){vocab.push({w:'kova',from:'koyle, koyla'});LS.set('na_vocab',vocab);LS.set('na_fix_kova',1)}
 if(!Array.isArray(vocab)){vocab=[{w:'kova',from:'koyle, koyla'},{w:'Omkon',from:'Hong Kong, Hongkong'},{w:'Acar Metal',from:''},{w:'Unique Raf',from:''},{w:'Delta Boya',from:''},{w:'Minimar',from:''},{w:'Yıldız Kumlama Boya',from:''}];LS.set('na_vocab',vocab);LS.set('na_vocab_fix',1)}
+// Kullanıcının firma/kişi adları: tanımaya önceden bildirilir (telefonun rehberdeki isimleri bildiği gibi)
+for(const [w,f] of [['Hipermak','Hiperman, Hipermark, İparmak'],['Fırat Mühendislik','']])if(!vocab.some(v=>v.w.toLocaleLowerCase('tr')===w.toLocaleLowerCase('tr'))){vocab.push({w,from:f});LS.set('na_vocab',vocab)}
+function speechNames(){return [...new Set([...vocab.map(v=>v.w),...knownTerms()])].filter(w=>w&&w.length>=3).slice(0,60)}
+function pushNames(){try{if(APP&&typeof Android.setNames==='function')Android.setNames(JSON.stringify(speechNames()))}catch{}}
+function namesHint(){const n=speechNames();if(!n.length)return '';const heard=vocab.filter(v=>v.from).map(v=>`"${v.from}" → "${v.w}"`).join('; ');
+  return `\nKULLANICININ KAYITLARINDAKİ İSİMLER (firma/kişi, doğru yazımları): ${n.join(', ')}.
+Metin konuşmadan yazıya döküldüğü için bu isimler yanlış duyulmuş olabilir: metinde bunlardan birine SESÇE çok benzeyen bir kelime isim yerinde geçiyorsa (ör. Hiperman → Hipermak) bilinen doğru yazımı kullan. Benzemeyen kelimelere dokunma.${heard?`\nDaha önce şöyle yanlış duyulmuştu: ${heard}.`:''}`}
 const escRe=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
 function vocabRules(){return vocab.flatMap(v=>String(v.from||'').split(',').map(f=>f.trim()).filter(Boolean).map(f=>[new RegExp(escRe(f),'gi'),v.w]))}
 function applyVocab(s){if(typeof s!=='string'||!s)return s;for(const[re,w]of vocabRules())s=s.replace(re,w);return s}
@@ -780,12 +787,12 @@ const busy=(btn,on,txt)=>{if(!btn)return;if(on){btn.dataset.t=btn.innerHTML;btn.
 
 // ================= HIZLI EKLE =================
 let pending=null;
-function quickSys(extra=''){return `Kullanıcının serbest metnini not ve görevlere ayıran bir asistansın. ${nowCtx()}${vocabHint()}
+function quickSys(extra=''){return `Kullanıcının serbest metnini not ve görevlere ayıran bir asistansın. ${nowCtx()}${namesHint()}
 Kurallar: Yapılacak iş/arama/toplantı/kontrol → görev. Bilgi, fikir, gözlem → not. Saat verilmezse ama gün verilmişse 09:00 kullan. "Öğleden sonra"=14:00, "akşam"=18:00, "sabah"=09:00.
 Görevi olan ve saati belli işler için hatırlatmayı varsayılan olarak 15 dakika önceye koy; "hatırlat" denirse tam o saate koy.
 Kullanıcı gün veya saat SÖYLEMEDİYSE due ve remind kesinlikle null olsun; kendinden tarih uydurma.
 Tek bir iş/istek söylendiyse (ör. "X'i ara", "Y'yi planla") sadece GÖREV oluştur; aynı şeyi ayrıca not olarak yazma. Not yalnızca bilgi/gözlem varsa oluşur.
-Kişi ve firma adlarını, söylenen kelimeleri metinde geçtiği gibi aynen kullan; değiştirme, kısaltma, başka isme çevirme.
+Kişi ve firma adlarını kısaltma veya başka isme çevirme; tek istisna yukarıdaki bilinen isimlere sesçe benzeyenleri doğru yazımla yazmaktır.
 Öncelik: acil/önemli → yuksek, normal → orta, ertelenebilir → dusuk.
 Sadece JSON döndür: {"notes":[{"title":"","body":"","tags":[""]}],"tasks":[{"title":"","note":"","due":null,"remind":null,"priority":"orta","repeat":""}]}  (repeat: "", "gunluk","haftalik","aylik")`+extra}
 $('iSearch').addEventListener('input',()=>renderItems());
@@ -921,7 +928,7 @@ function learnFrom(oldT,newT){
   const removed=o.filter(w=>!nS.has(w.toLocaleLowerCase('tr'))&&/^[A-ZÇĞİÖŞÜ]/.test(w)).map(w=>w.replace(/'.*$/,''));
   if(!added.length||added.length>3)return;
   const word=added.join(' ');if(vocab.some(v=>v.w.toLocaleLowerCase('tr')===word.toLocaleLowerCase('tr')))return;
-  vocab.push({w:word,from:removed.length&&removed.length<=3?removed.join(' '):'',auto:true});LS.set('na_vocab',vocab);
+  vocab.push({w:word,from:removed.length&&removed.length<=3?removed.join(' '):'',auto:true});LS.set('na_vocab',vocab);pushNames();
   toastMsg(`📖 "${esc(word)}" öğrenildi — bir dahakine doğru duyulacak`,3000);
 }
 // AI ile düzelt: kullanıcının söylediği/yazdığı düzeltmeyi uygular
@@ -2085,6 +2092,7 @@ window.nativeAct=()=>{let a=null;try{a=Android.takeAct()}catch{}if(!a)return;
 function importBubble(){
   if(!APP||typeof Android.bubbleResults!=='function')return;
   try{Android.setQuickPrompt(quickSys().replace(nowCtx(),'{{NOW}}'),cfg.code||'',cfg.model||'gemini-flash-latest')}catch{}
+  pushNames();
   let res=[];try{res=JSON.parse(Android.bubbleResults())}catch{}
   if(!res.length)return;let nt=0,nn=0;
   importBubblePhotos(res.filter(r=>r.photo));res=res.filter(r=>!r.photo);
@@ -2215,7 +2223,7 @@ function refreshAll(){
 }
 
 // ================= SÖZLÜK EKRANI =================
-function renderVocab(){
+function renderVocab(){pushNames();
   $('vocList').innerHTML=vocab.length?vocab.map((v,i)=>`<div class="vrow"><b>${esc(v.w)}</b>${v.auto?'<span class="tag">öğrenildi</span>':''}${v.from?`<span class="mut">≠ ${esc(v.from)}</span>`:''}<span style="flex:1"></span><button class="sm ghost" onclick="vocEdit(${i})">✏️</button><button class="sm ghost" onclick="vocab.splice(${i},1);LS.set('na_vocab',vocab);renderVocab()">✕</button></div>`).join(''):'<div class="mut">Henüz kelime yok</div>';
 }
 function vocEdit(i){const v=vocab[i];$('vocW').value=v.w;$('vocF').value=v.from||'';vocab.splice(i,1);LS.set('na_vocab',vocab);renderVocab();$('vocW').focus()}

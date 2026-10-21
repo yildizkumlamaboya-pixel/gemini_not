@@ -74,6 +74,19 @@ class Summary {
         return bo.toString("UTF-8");
     }
 
+    /** Kullanıcının kayıtlarındaki firma/kişi adları: konuşma tanımaya önceden bildirilir (Android 13+). */
+    static void bias(Context c, android.content.Intent i) {
+        try {
+            if (Build.VERSION.SDK_INT < 33) return;
+            String js = c.getSharedPreferences("app", Context.MODE_PRIVATE).getString("names", "[]");
+            org.json.JSONArray a = new org.json.JSONArray(js);
+            java.util.ArrayList<String> l = new java.util.ArrayList<>();
+            for (int k = 0; k < a.length() && k < 60; k++) l.add(a.getString(k));
+            if (!l.isEmpty()) i.putStringArrayListExtra("android.speech.extra.BIASING_STRINGS", l);
+        } catch (Exception ignored) {
+        }
+    }
+
     static void write(File f, String s) throws Exception {
         try (OutputStream os = new FileOutputStream(f)) {
             os.write(s.getBytes("UTF-8"));

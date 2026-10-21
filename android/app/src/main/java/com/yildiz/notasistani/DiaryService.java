@@ -360,6 +360,7 @@ public class DiaryService extends Service {
                 i.putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_CHANNEL_COUNT, 1);
                 i.putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_SAMPLING_RATE, RATE);
                 i.putExtra(RecognizerIntent.EXTRA_SEGMENTED_SESSION, RecognizerIntent.EXTRA_AUDIO_SOURCE);
+                Summary.bias(this, i);
                 sttQ.clear();
                 sttActive = true;
                 sttMode = sttKind == 0 ? "google" : "cihaz";

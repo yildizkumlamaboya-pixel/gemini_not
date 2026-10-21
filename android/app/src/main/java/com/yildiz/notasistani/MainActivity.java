@@ -641,6 +641,7 @@ public class MainActivity extends Activity {
         i.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 4000L);
         i.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 3000L);
         i.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 20000L);
+        Summary.bias(this, i);
         try {
             sr.startListening(i);
         } catch (Exception e) {
@@ -679,6 +680,11 @@ public class MainActivity extends Activity {
         }
 
         /** Kayan mikrofonun uygulamayı açmadan notu ayırabilmesi için AI talimatı ({{NOW}} = şu anki zaman). */
+        @JavascriptInterface
+        public void setNames(String json) {
+            prefs.edit().putString("names", json == null ? "[]" : json).apply();
+        }
+
         @JavascriptInterface
         public void setQuickPrompt(String prompt, String code, String model) {
             prefs.edit().putString("qPrompt", prompt).putString("qCode", code).putString("qModel", model).apply();

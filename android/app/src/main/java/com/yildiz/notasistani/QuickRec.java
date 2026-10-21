@@ -229,6 +229,7 @@ class QuickRec {
             i.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, svc.getPackageName());
             i.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, SILENCE_MS);
             i.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, SILENCE_MS);
+            Summary.bias(svc, i);
             aIntent = i;
             sr.startListening(i);
         } catch (Exception e) {
@@ -412,6 +413,7 @@ class QuickRec {
                 i.putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_CHANNEL_COUNT, 1);
                 i.putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_SAMPLING_RATE, RATE);
                 i.putExtra(RecognizerIntent.EXTRA_SEGMENTED_SESSION, RecognizerIntent.EXTRA_AUDIO_SOURCE);
+                Summary.bias(svc, i);
                 sttQ.clear();
                 sttEnded = false;
                 final ParcelFileDescriptor w = p[1];
