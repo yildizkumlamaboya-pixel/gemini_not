@@ -40,7 +40,9 @@ jobs:
         env:
           BUILD_NUMBER: ${{ github.run_number }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-        run: gradle assembleRelease --no-daemon --stacktrace
+        run: |
+          set -o pipefail
+          gradle assembleRelease --no-daemon --stacktrace 2>&1 | tee build.log || { grep -E "error:|\.java:[0-9]+: |What went wrong" -A2 build.log | head -40 | while IFS= read -r l; do echo "::error::$l"; done; exit 1; }
       - run: cp android/app/build/outputs/apk/release/app-release.apk NotAsistani.apk
       - uses: actions/upload-artifact@v4
         with:
