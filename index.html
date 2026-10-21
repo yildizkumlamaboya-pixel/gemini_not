@@ -137,6 +137,9 @@ nav button.act b{background:linear-gradient(135deg,rgba(37,99,235,.13),rgba(6,18
 .recbar.on{display:flex}
 .recbar i{width:9px;height:9px;border-radius:50%;background:#ef4444;animation:pul 1.4s ease-out infinite}
 .mono{font-family:var(--mono)}
+.ai-tag{background:linear-gradient(135deg,rgba(37,99,235,.14),rgba(6,182,212,.14));color:var(--acc)}
+#tagChips:empty{display:none}
+#tagChips{margin-top:-4px}
 #ttsBtn.act{background:var(--grad);color:#fff;border-color:transparent}
 .spk{padding:2px 6px!important;margin-left:4px;vertical-align:middle;opacity:.7}
 .spk svg{width:16px;height:16px}
@@ -238,6 +241,7 @@ details.card[open] summary{margin-bottom:6px}
     <button style="flex:0 0 auto" onclick="photoNote()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8a2 2 0 0 1 2-2h2l1.5-2h5L16 6h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.5"/></svg> Foto</button>
     <button class="pri" style="flex:0 0 auto" onclick="openNote()">＋ Not</button>
   </div>
+  <div class="chips" id="nFilter"></div>
   <div class="chips" id="tagChips"></div>
   <div class="card" id="noteList"></div>
 </section>
@@ -646,7 +650,7 @@ function renderPreview(){
 function commitPending(){
   const now=Date.now();
   pending.tasks.forEach(t=>tasks.push({id:uid(),title:t.title,note:t.note||'',due:t.due||'',remind:t.remind||'',priority:t.priority||'orta',repeat:t.repeat||'',done:false,notified:false,created:now}));
-  pending.notes.forEach(n=>notes.push({id:uid(),title:n.title,body:n.body||'',tags:n.tags||[],pinned:false,created:now,updated:now}));
+  const via=pending.transcript?'voice':'';pending.notes.forEach(n=>notes.push({id:uid(),title:n.title,body:n.body||'',tags:n.tags||[],pinned:false,created:now,updated:now,src:'ai',via}));
   toastMsg(`✔ ${pending.tasks.length} görev, ${pending.notes.length} not eklendi`);
   pending=null;$('qText').value='';save();renderAll();
 }
@@ -728,7 +732,7 @@ $('planBtn').onclick=async()=>{
 };
 
 // ================= NOTLAR =================
-let curNote=null,tagF='';
+let curNote=null,tagF='',nF=LS.get('na_nf','all');
 let edPhotos=[],edNew=new Set(),edDel=new Set();
 function openNote(id){
   const n=notes.find(x=>x.id===id);curNote=n||null;
@@ -742,7 +746,7 @@ function saveNote(){
   const title=$('nTitle').value.trim()||$('nBody').value.trim().split('\n')[0].slice(0,50)||(edPhotos.length?'Fotoğraflı not · '+stampDate(edPhotos[0].ts):'Başlıksız');
   edDel.forEach(id=>DB.del(id).catch(()=>{}));edNew=new Set();edDel=new Set();
   const data={title,body:$('nBody').value,tags:$('nTags').value.split(',').map(s=>s.trim()).filter(Boolean),pinned:$('nPin').checked,photos:edPhotos,updated:Date.now()};
-  if(curNote)Object.assign(curNote,data);else notes.push({id:uid(),created:Date.now(),...data});
+  if(curNote)Object.assign(curNote,data);else notes.push({id:uid(),created:Date.now(),src:'manual',...data});
   save();closeM('mNote');renderAll();
 }
 async function noteAI(mode){
@@ -770,13 +774,19 @@ async function noteAI(mode){
   }catch(e){out.innerHTML=`<div class="out">⚠️ ${esc(e.message)}</div>`}
 }
 function addNoteTasks(){(window._nt||[]).forEach(t=>tasks.push({id:uid(),title:t.title,note:t.note||'',due:t.due||'',remind:t.remind||'',priority:t.priority||'orta',repeat:'',done:false,notified:false,created:Date.now()}));save();renderAll();$('nAIOut').innerHTML='<div class="out">✔ Görevlere eklendi</div>'}
+const isSum=n=>n.kind==='summary'||(n.tags||[]).includes('özet')||/^Gün(ün|lük) özeti/.test(n.title||'');
+const isAI=n=>n.src==='ai'||isSum(n);
+const NF={all:['Tümü',()=>true],ai:['✨ AI',isAI],mine:['✍️ Benim',n=>!isAI(n)],photo:['📷 Fotoğraflı',n=>n.photos?.length>0],voice:['🎤 Sesli',n=>n.via==='voice'],sum:['📋 Özetler',isSum],pin:['📌 Sabit',n=>n.pinned],today:['Bugün',n=>dayKey(n.updated)===dayKey(Date.now())]};
+function setNF(k){nF=k;LS.set('na_nf',k);renderNotes()}
 function renderNotes(){
   const q=$('nSearch').value.toLocaleLowerCase('tr');
+  if(!NF[nF])nF='all';
+  $('nFilter').innerHTML=Object.entries(NF).map(([k,[l,f]])=>{const c=k==='all'?notes.length:notes.filter(f).length;return (c||k==='all'||k===nF)?`<button class="${k===nF?'act':''}" onclick="setNF('${k}')">${l}${c?` <span class="cnt">${c}</span>`:''}</button>`:''}).join('');
   const tags=[...new Set(notes.flatMap(n=>n.tags))];
-  $('tagChips').innerHTML=tags.length?`<button class="${tagF?'':'act'}" onclick="tagF='';renderNotes()">Tümü</button>`+tags.map(t=>`<button class="${tagF===t?'act':''}" onclick="tagF='${esc(t)}';renderNotes()">#${esc(t)}</button>`).join(''):'';
-  let list=notes.filter(n=>(!tagF||n.tags.includes(tagF))&&(!q||(n.title+' '+n.body+' '+n.tags.join(' ')+' '+(n.photos||[]).map(p=>[p.addr,p.tpl,p.title,...Object.values(p.fields||{})].join(' ')).join(' ')).toLocaleLowerCase('tr').includes(q)));
+  $('tagChips').innerHTML=tags.map(t=>`<button class="sm ${tagF===t?'act':''}" onclick="tagF=tagF==='${esc(t)}'?'':'${esc(t)}';renderNotes()">#${esc(t)}</button>`).join('');
+  let list=notes.filter(n=>NF[nF][1](n)&&(!tagF||n.tags.includes(tagF))&&(!q||(n.title+' '+n.body+' '+n.tags.join(' ')+' '+(n.photos||[]).map(p=>[p.addr,p.tpl,p.title,...Object.values(p.fields||{})].join(' ')).join(' ')).toLocaleLowerCase('tr').includes(q)));
   list.sort((a,b)=>(b.pinned-a.pinned)||(b.updated-a.updated));
-  $('noteList').innerHTML=list.length?list.map(n=>`<div class="item note" onclick="openNote('${n.id}')"><div class="bd"><div class="t">${n.pinned?'<span class="pin">📌</span> ':''}${esc(n.title)}</div><div class="prev">${esc(n.body)}</div>${n.photos?.length?`<div class="nthumbs">${n.photos.slice(0,4).map(p=>`<img data-pid="${p.id}" alt="">`).join('')}${n.photos.length>4?`<span class="mut" style="align-self:center">+${n.photos.length-4}</span>`:''}</div>${n.photos[0].addr?`<div class="ploc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>${esc(n.photos[0].addr)}</div>`:''}`:''}<div>${n.tags.map(t=>`<span class="tag">#${esc(t)}</span>`).join('')}<span class="mut" style="font-size:11px"> ${fmt(toLocal(new Date(n.updated)))}</span></div></div></div>`).join(''):'<div class="empty">Not yok</div>';
+  $('noteList').innerHTML=list.length?list.map(n=>`<div class="item note" onclick="openNote('${n.id}')"><div class="bd"><div class="t">${n.pinned?'<span class="pin">📌</span> ':''}${esc(n.title)}</div><div class="prev">${esc(n.body)}</div>${n.photos?.length?`<div class="nthumbs">${n.photos.slice(0,4).map(p=>`<img data-pid="${p.id}" alt="">`).join('')}${n.photos.length>4?`<span class="mut" style="align-self:center">+${n.photos.length-4}</span>`:''}</div>${n.photos[0].addr?`<div class="ploc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>${esc(n.photos[0].addr)}</div>`:''}`:''}<div>${isAI(n)?`<span class="tag ai-tag">✨ AI${n.via==='voice'?' · 🎤':''}</span>`:''}${n.tags.map(t=>`<span class="tag">#${esc(t)}</span>`).join('')}<span class="mut" style="font-size:11px"> ${fmt(toLocal(new Date(n.updated)))}</span></div></div></div>`).join(''):`<div class="empty">${nF==='all'&&!tagF&&!q?'Not yok':'Bu filtrede not yok'}</div>`;
   hydrate($('noteList'));
 }
 $('nSearch').oninput=renderNotes;
@@ -1217,7 +1227,7 @@ async function diaryAI(mode){
     }
   }catch(e){$('dqOut').innerHTML=`<div class="out">⚠️ ${esc(e.message)}</div>`}
 }
-function saveDiaryNote(){const s=window._dsum;if(!s)return;notes.push({id:uid(),title:'Günlük özeti · '+s.day.split('-').reverse().join('.'),body:s.r,tags:['günlük'],pinned:false,created:Date.now(),updated:Date.now()});save();renderAll();toastMsg('✔ Not olarak kaydedildi')}
+function saveDiaryNote(){const s=window._dsum;if(!s)return;notes.push({id:uid(),src:'ai',kind:'summary',title:'Günlük özeti · '+s.day.split('-').reverse().join('.'),body:s.r,tags:['günlük'],pinned:false,created:Date.now(),updated:Date.now()});save();renderAll();toastMsg('✔ Not olarak kaydedildi')}
 window.addEventListener('beforeunload',e=>{if(dr.on){e.preventDefault();e.returnValue=''}});
 
 // ================= GÖREVLER =================
@@ -1447,7 +1457,7 @@ $('sumOn').onchange=sumSettings;$('sumTime').onchange=sumSettings;
 function addSummaryNote(date,text){
   const title='Günün özeti · '+date.split('-').reverse().join('.');
   const ex=notes.find(n=>n.title===title);
-  if(ex){ex.body=text;ex.updated=Date.now()}else notes.push({id:uid(),title,body:text,tags:['özet'],pinned:false,created:Date.now(),updated:Date.now()});
+  if(ex){ex.body=text;ex.updated=Date.now()}else notes.push({id:uid(),src:'ai',kind:'summary',title,body:text,tags:['özet'],pinned:false,created:Date.now(),updated:Date.now()});
   save();renderAll();
 }
 async function summaryNow(){
