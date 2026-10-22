@@ -61,6 +61,8 @@ public class BubbleService extends Service {
 
     static void start(Context c) {
         if (!canDraw(c)) return;
+        BubbleService s = inst;
+        if (s != null && s.box != null) return; // zaten ekranda: tekrar başlatıp bildirim gösterme
         Intent i = new Intent(c, BubbleService.class);
         try {
             if (Build.VERSION.SDK_INT >= 26) c.startForegroundService(i);
@@ -100,6 +102,12 @@ public class BubbleService extends Service {
         }
         inst = this;
         appVisible(MainActivity.visible);
+        // "Kayan düğmeler açık" bildirimini hemen kaldır: düğmeler ekranda durdukça servis çalışmaya devam eder
+        try {
+            if (Build.VERSION.SDK_INT >= 24) stopForeground(STOP_FOREGROUND_REMOVE);
+            else stopForeground(true);
+        } catch (Exception ignored) {
+        }
         return START_STICKY;
     }
 
@@ -131,7 +139,7 @@ public class BubbleService extends Service {
     /** Uygulama açıldığında çağrılır: mikrofon izni türünü ekler. */
     static void upgrade(Context c) {
         BubbleService s = inst;
-        if (s != null && !s.micReady) s.h.post(s::startFg);
+        // kayıt artık ayrı servisle yapılıyor; burada bildirim göstermeye gerek yok
     }
 
     ImageView btn(int icon, int bg, String act) {
