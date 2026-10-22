@@ -91,6 +91,12 @@ nav button.act b{background:linear-gradient(135deg,rgba(37,99,235,.13),rgba(6,18
 .out{white-space:pre-wrap;background:#f8fafc;border:1px solid var(--line);border-left:3px solid var(--acc2);border-radius:12px;padding:12px;margin-top:10px;font-size:14px}
 .modal{position:fixed;inset:0;background:rgba(15,23,42,.32);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);display:none;align-items:flex-end;justify-content:center;z-index:20}
 .modal.on{display:flex}
+#mView{align-items:center;padding:16px}#mView .sheet{border-radius:24px;max-height:80vh;animation:pop .2s ease-out;box-shadow:0 20px 50px rgba(15,23,42,.25)}
+@keyframes pop{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:none}}
+.prisel{display:flex;gap:6px;margin:4px 0 10px;flex-wrap:wrap}.prisel button{flex:0 0 auto;width:auto;padding:7px 13px;border-radius:999px;font:600 13px inherit;font-family:inherit;border:1.5px solid var(--line);background:#fff;color:#475569}
+.prisel button.on.p-yuksek{background:#fee2e2;border-color:#fb7185;color:#b91c1c}.prisel button.on.p-orta{background:#fef3c7;border-color:#fbbf24;color:#b45309}.prisel button.on.p-dusuk{background:#d1fae5;border-color:#34d399;color:#047857}.prisel button.on.p-yok{background:#e2e8f0;border-color:#94a3b8;color:#334155}
+.prisel button:not(.on){background:#fff!important;color:#64748b!important}
+.aibusy{background:linear-gradient(90deg,#ede9fe,#e0f2fe);color:#5b21b6}
 .sheet{background:#fff;width:100%;max-width:760px;max-height:92vh;overflow:auto;border-radius:24px 24px 0 0;padding:18px;padding-bottom:calc(18px + env(safe-area-inset-bottom));box-shadow:0 -12px 40px rgba(15,23,42,.16);animation:up .22s ease-out}
 .sheet::before{content:'';display:block;width:42px;height:4px;border-radius:4px;background:#e2e8f0;margin:-6px auto 12px}
 @keyframes up{from{transform:translateY(24px);opacity:0}}
@@ -510,7 +516,8 @@ details.card[open] summary{margin-bottom:6px}
 <!-- NOT DÜZENLE -->
 <div class="modal" id="mView"><div class="sheet">
   <div class="row" style="align-items:flex-start;margin-bottom:6px"><h2 id="vTitle" style="flex:1;margin:0;font-size:20px;line-height:1.3"></h2><button class="sm ghost" style="flex:0 0 auto" onclick="closeM('mView')">✕</button></div>
-  <div id="vMeta" class="mut" style="margin-bottom:10px"></div>
+  <div id="vMeta" class="mut" style="margin-bottom:6px"></div>
+  <div id="vPri" class="prisel"></div>
   <div id="vBody" class="vbody"></div>
   <div id="vPhotos" class="vphotos"></div>
   <div id="vTags" style="margin-top:8px"></div>
@@ -696,6 +703,7 @@ details.card[open] summary{margin-bottom:6px}
 const $=id=>document.getElementById(id);
 const LS={get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}},set:(k,v)=>localStorage.setItem(k,JSON.stringify(v))};
 let notes=LS.get('na_notes',[]), tasks=LS.get('na_tasks',[]), chat=LS.get('na_chat',[]);
+notes.forEach(n=>{if(n.aiBusy){delete n.aiBusy;n.aiPending=true}});
 let cfg=LS.get('na_cfg',{key:'',model:'gemini-flash-latest',sound:true});
 // Gemini ayarları tamamen otomatik: sunucudaki anahtar + en güncel hızlı model (eski manuel ayarlar temizlenir)
 cfg.key='';cfg.model='gemini-flash-latest';LS.set('na_cfg',cfg);
@@ -823,17 +831,25 @@ Sadece JSON döndür: {"notes":[{"title":"","body":"","tags":[""]}],"tasks":[{"t
 $('iSearch').addEventListener('input',()=>renderItems());
 $('qText').addEventListener('input',e=>{const t=e.target;t.style.height='auto';t.style.height=Math.min(140,t.scrollHeight)+'px'});
 const OFFLINE_ERR=/internet bağlantısı|ulaşılamadı|failed to fetch|network/i;
+// AI ile ekle: yazı HEMEN listeye girer, alan temizlenir (beklemeden yenisini yazabilirsin); ayrıştırma arkada yapılır
 $('qBtn').onclick=async()=>{
   const text=$('qText').value.trim(); if(!text)return;
   if(!navigator.onLine){queueAI(text);return}
-  busy($('qBtn'),true,'Ayrıştırılıyor...');
+  const aud=pendAud;pendAud=null;const now=Date.now();
+  const tmp={id:uid(),title:text.split(/[.\n]/)[0].slice(0,50)||'Not',body:text,tags:[],pinned:false,created:now,updated:now,src:'manual',aiBusy:true};
+  notes.push(tmp);$('qText').value='';$('qText').style.height='';save();renderAll();
   try{
-    pending=await gemini(text,{system:quickSys(),json:true});
-    pending.notes=pending.notes||[];pending.tasks=pending.tasks||[];pending.src=text;
-    if(!pending.notes.length&&!pending.tasks.length)pending.notes=[{title:text.split(/[.\n]/)[0].slice(0,50)||'Not',body:text,tags:[]}];
-    commitPending(); // onay beklemeden doğrudan kaydet (Geri al ile geri alınabilir)
-  }catch(e){if(OFFLINE_ERR.test(e.message))queueAI(text);else toastMsg('⚠️ '+e.message)}
-  busy($('qBtn'),false);
+    const r=await gemini(text,{system:quickSys(),json:true});
+    notes=notes.filter(x=>x.id!==tmp.id);
+    pending={notes:r.notes||[],tasks:r.tasks||[],src:text};
+    if(!pending.notes.length&&!pending.tasks.length)pending.notes=[{title:tmp.title,body:text,tags:[]}];
+    pendAud=aud;commitPending(true); // onay beklemeden kaydet (Geri al ile geri alınabilir)
+  }catch(e){
+    delete tmp.aiBusy;if(aud){pendAud=aud;attachVoiceAudio([tmp])}
+    if(OFFLINE_ERR.test(e.message)){tmp.aiPending=true;toastMsg('📴 Not kaydedildi — internet gelince AI görevlere ayıracak',4000)}
+    else toastMsg('⚠️ AI ayıramadı, yazdığın not olarak kaydedildi: '+esc(e.message),5000);
+    save();renderAll();
+  }
 };
 // İnternet yokken: yazılanı hemen not olarak sakla, bağlantı gelince AI ile görev/hatırlatmaya ayır
 function queueAI(text){
@@ -969,13 +985,13 @@ async function aiFix(text){
   busy(b,false);renderPreview();
 }
 function pvCancel(){const t=pending?.src||'';pending=null;renderPreview();if(t&&!$('qText').value.trim()){$('qText').value=t;$('qText').dispatchEvent(new Event('input'))}}
-function commitPending(){
+function commitPending(keepInput){
   const now=Date.now(),ids=[],src=pending.src||'';
   pending.tasks.forEach(t=>{const id=uid();ids.push(id);tasks.push({id,title:t.title,note:t.note||'',due:t.due||'',remind:t.remind||'',priority:t.priority||'orta',repeat:t.repeat||'',done:false,notified:false,created:now})});
   const via=pending.transcript?'voice':'';pending.notes.forEach(n=>{const id=uid();ids.push(id);notes.push({id,title:n.title,body:n.body||'',tags:n.tags||[],pinned:false,created:now,updated:now,src:'ai',via})});
   if(pendAud){const idset=new Set(ids);attachVoiceAudio([...notes,...tasks].filter(x=>idset.has(x.id)))}
   const list=[...pending.tasks.map(t=>'✅ '+esc(t.title)+(t.remind?' <span class="tmut">⏰ '+fmt(t.remind)+'</span>':t.due?' <span class="tmut">📅 '+fmt(t.due)+'</span>':'')),...pending.notes.map(n=>'📝 '+esc(n.title))];
-  pending=null;$('qText').value='';$('qText').style.height='';save();renderAll();renderPreview();
+  pending=null;if(!keepInput){$('qText').value='';$('qText').style.height=''}save();renderAll();renderPreview();
   savedToast(list,ids,src);
 }
 // Kaydedildi bildirimi: ne eklendiğini gösterir, "Geri al" ile tek dokunuşta geri alınır
@@ -2040,7 +2056,7 @@ function iMatch(k,x,f){
 }
 function iText(k,x){return [x.title,x.body,x.note,(x.tags||[]).join(' '),...(x.photos||[]).map(p=>[p.addr,p.tpl,p.title,...Object.values(p.fields||{})].join(' '))].join(' ').toLocaleLowerCase('tr')}
 function noteInner(n){
-  return `<div class="ico">${n.photos?.length?'📷':'📝'}</div><div class="bd"><div class="t">${n.pinned?'<span class="pin">📌</span> ':''}${esc(n.title||'Not')}${n.aiPending?' <span class="tag">📴 AI bekliyor</span>':''}</div>${n.body?`<div class="prev">${esc(n.body)}</div>`:''}${n.photos?.length?`<div class="nthumbs">${n.photos.slice(0,4).map(p=>`<img data-pid="${p.id}" alt="">`).join('')}${n.photos.length>4?`<span class="mut" style="align-self:center">+${n.photos.length-4}</span>`:''}</div>${n.photos[0].addr?`<div class="ploc">📍 ${esc(n.photos[0].addr)}</div>`:''}`:''}<div>${isAI(n)?`<span class="tag ai-tag">✨ AI${n.via==='voice'?' · 🎤':''}</span>`:''}${(n.tags||[]).map(t=>`<span class="tag">#${esc(t)}</span>`).join('')}<span class="added"> 🕓 ${fmt(n.created||n.updated)}${n.updated&&n.created&&n.updated-n.created>6e4?' · düzenlendi':''}</span>${audBtn(n)}</div></div>`;
+  return `<div class="ico">${n.photos?.length?'📷':'📝'}</div><div class="bd"><div class="t">${n.pinned?'<span class="pin">📌</span> ':''}${esc(n.title||'Not')}${n.aiBusy?' <span class="tag aibusy">✨ ayrıştırılıyor…</span>':n.aiPending?' <span class="tag">📴 AI bekliyor</span>':''}</div>${n.body?`<div class="prev">${esc(n.body)}</div>`:''}${n.photos?.length?`<div class="nthumbs">${n.photos.slice(0,4).map(p=>`<img data-pid="${p.id}" alt="">`).join('')}${n.photos.length>4?`<span class="mut" style="align-self:center">+${n.photos.length-4}</span>`:''}</div>${n.photos[0].addr?`<div class="ploc">📍 ${esc(n.photos[0].addr)}</div>`:''}`:''}<div>${n.priority?`<span class="tag p-${n.priority}">${PRI[n.priority]}</span>`:''}${isAI(n)?`<span class="tag ai-tag">✨ AI${n.via==='voice'?' · 🎤':''}</span>`:''}${(n.tags||[]).map(t=>`<span class="tag">#${esc(t)}</span>`).join('')}<span class="added"> 🕓 ${fmt(n.created||n.updated)}${n.updated&&n.created&&n.updated-n.created>6e4?' · düzenlendi':''}</span>${audBtn(n)}</div></div>`;
 }
 function taskInner(t){
   const late=!t.done&&t.due&&new Date(t.due)<new Date();
@@ -2067,9 +2083,12 @@ function renderItems(){
   let l=all.filter(([k,x])=>iMatch(k,x,iF)&&(!iTag||(x.tags||[]).includes(iTag))&&(!q||iText(k,x).includes(q)));
   const now=new Date(),end=new Date(now.getFullYear(),now.getMonth(),now.getDate(),23,59);
   // En son eklenen en üstte (sabitlenenler önde, bitenler en altta)
-  const grp=([k,x])=>k==='t'&&x.done?9:x.pinned?0:3;
+  // Sıra: sabitlenenler → öncelik (Yüksek, Orta, Düşük) → önceliksizler; aynı öncelikte vadesi yakın olan, sonra en yeni üstte. Bitenler en altta.
+  const PR={yuksek:1,orta:2,dusuk:3};
+  const grp=([k,x])=>k==='t'&&x.done?9:(x.pinned||x.aiBusy)?0:(PR[x.priority]||4);
   const when=([k,x])=>-(x.created||x.updated||0);
-  l.sort((a,b)=>grp(a)-grp(b)||(grp(a)===9?(b[1].doneAt||0)-(a[1].doneAt||0):when(a)-when(b)));
+  const due=([k,x])=>k==='t'&&x.due?new Date(x.due).getTime():Infinity;
+  l.sort((a,b)=>grp(a)-grp(b)||(grp(a)===9?(b[1].doneAt||0)-(a[1].doneAt||0):(due(a)-due(b))||when(a)-when(b)));
   const open=l.filter(i=>grp(i)!==9),done=l.filter(i=>grp(i)===9);
   // Bitenler katlanır: kapalıyken sadece başlık görünür (Biten filtresinde veya başka kayıt yoksa açık)
   const dOpen=doneOpen||iF==='biten'||iF==='arsiv'||!open.length;
@@ -2589,8 +2608,18 @@ function hideToast(){$('toast').classList.remove('on')}
 $('toast').onclick=e=>{if(e.target===$('toast'))hideToast()};
 function closeM(id){$(id).classList.remove('on')}
 // ---- Görüntüleme (dokun) ve Düzenle/Sil menüsü (basılı tut) ----
+function priSel(k,x){
+  const opts=k==='n'?[['yok','Yok'],['dusuk','Düşük'],['orta','Orta'],['yuksek','Yüksek']]:[['dusuk','Düşük'],['orta','Orta'],['yuksek','Yüksek']];
+  const cur=x.priority||'yok';
+  $('vPri').innerHTML=`<span class="mut" style="font-size:12.5px;align-self:center;margin-right:2px">Öncelik:</span>`+opts.map(([v,l])=>`<button class="p-${v}${cur===v?' on':''}" onclick="setPri('${k}','${x.id}','${v}')">${l}</button>`).join('');
+}
+function setPri(k,id,v){
+  const x=(k==='n'?notes:tasks).find(y=>y.id===id);if(!x)return;
+  if(v==='yok')delete x.priority;else x.priority=v;
+  save();renderAll();k==='n'?viewNote(id):viewTask(id);
+}
 function viewNote(id){
-  const n=notes.find(x=>x.id===id);if(!n)return;
+  const n=notes.find(x=>x.id===id);if(!n)return;priSel('n',n);
   $('vTitle').textContent=n.title||'Not';
   $('vMeta').innerHTML=`📝 ${fmt(toLocal(new Date(n.created||n.updated)))}${n.updated&&n.updated!==n.created?' · düzenlendi '+fmt(toLocal(new Date(n.updated))):''}${isAI(n)?' · <span class="tag ai-tag">✨ AI'+(n.via==='voice'?' · 🎤':'')+'</span>':''}${n.pinned?' · 📌':''}`;
   $('vBody').textContent=n.body||'';
@@ -2601,10 +2630,10 @@ function viewNote(id){
   $('mView').classList.add('on');
 }
 function viewTask(id){
-  const t=tasks.find(x=>x.id===id);if(!t)return;
+  const t=tasks.find(x=>x.id===id);if(!t)return;priSel('t',t);
   $('vTitle').textContent=(t.done?'✓ ':'')+t.title;
   const late=!t.done&&t.due&&new Date(t.due)<new Date();
-  $('vMeta').innerHTML=[t.due?`<span class="${late?'late':''}">📅 ${fmt(t.due)}</span>`:'',t.remind?`⏰ ${fmt(t.remind)}`:'',`<span class="tag p-${t.priority}">${PRI[t.priority]||''}</span>`,t.repeat?'🔁 '+t.repeat:'',t.done&&t.doneAt?'✓ bitti '+fmt(toLocal(new Date(t.doneAt))):''].filter(Boolean).join(' · ');
+  $('vMeta').innerHTML=[t.due?`<span class="${late?'late':''}">📅 ${fmt(t.due)}</span>`:'',t.remind?`⏰ ${fmt(t.remind)}`:'',t.repeat?'🔁 '+t.repeat:'',t.done&&t.doneAt?'✓ bitti '+fmt(toLocal(new Date(t.doneAt))):''].filter(Boolean).join(' · ');
   $('vBody').textContent=t.note||'';$('vPhotos').innerHTML='';$('vTags').innerHTML='';
   $('vAct').innerHTML=`<button class="${t.done?'':'pri'}" onclick="toggle('${t.id}');viewTask('${t.id}')">${t.done?'↺ Geri al':'✓ Tamamlandı'}</button><button onclick="shareItem('t','${t.id}')">📤 Paylaş</button>${t.audio?`<button class="audbtn big" onclick="playAud('${t.audio}',this)">▶ Sesi dinle</button>`:''}`;
   $('mView').classList.add('on');

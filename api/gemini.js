@@ -60,12 +60,17 @@ module.exports = async (req, res) => {
       }
       return res.status(lastT.status).json(lastT.data);
     }
+    // Hız: "düşünme" kapalı olsun. 2.5 modelleri thinkingBudget:0, yeni (3.x / -latest) modeller thinkingLevel:'minimal' ister;
+    // yanlış ayar gönderilince model 400 verip ayarsız (düşünerek, yavaş) tekrar deneniyordu.
+    const thinkFor = (m) => /2\.5|2\.0/.test(m) ? { thinkingBudget: 0 } : { thinkingLevel: 'minimal' };
+    const wantFast = !!(body && body.generationConfig && body.generationConfig.thinkingConfig);
     const first = /^[a-z0-9.\-]+$/i.test(model || '') ? model : FALLBACK[0];
     const models = [first, ...FALLBACK.filter(m => m !== first)];
     let last = { status: 503, data: { error: { message: 'Gemini yanıt vermedi' } } };
     for (let i = 0; i < models.length; i++) {
       // İlk modeli bir kez daha dene (anlık yoğunluk çoğu zaman saniyeler içinde geçer)
       for (let attempt = 0; attempt < (i === 0 ? 2 : 1); attempt++) {
+        if (wantFast && body.generationConfig) body.generationConfig.thinkingConfig = thinkFor(models[i]);
         let r = await fetch(`${base}/models/${models[i]}:generateContent`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-goog-api-key': KEY },
@@ -73,6 +78,14 @@ module.exports = async (req, res) => {
         });
         let data = await r.json().catch(() => ({}));
         // Model "düşünme kapatma" ayarını desteklemiyorsa ayarsız tekrar dene
+        if (r.status === 400 && body?.generationConfig?.thinkingConfig) {
+          // önce diğer biçimi dene, o da olmazsa ayarsız
+          const alt = body.generationConfig.thinkingConfig.thinkingLevel ? { thinkingBudget: 0 } : { thinkingLevel: 'low' };
+          body.generationConfig.thinkingConfig = alt;
+          r = await fetch(`${base}/models/${models[i]}:generateContent`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': KEY }, body: JSON.stringify(body) });
+          data = await r.json().catch(() => ({}));
+          if (r.ok) { res.setHeader('x-gemini-model', models[i]); return res.status(200).json(data); }
+        }
         if (r.status === 400 && body?.generationConfig?.thinkingConfig) {
           delete body.generationConfig.thinkingConfig;
           r = await fetch(`${base}/models/${models[i]}:generateContent`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': KEY }, body: JSON.stringify(body) });
