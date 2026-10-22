@@ -142,7 +142,7 @@ public class DiaryService extends Service {
             sttFails = 0;
             sttKind = 0;
             sttHealthy = false;
-            sttStart();
+            liveStart(); // önce Gemini Live; olmazsa telefonun konuşma tanıması
         }
         return START_NOT_STICKY;
     }
@@ -225,7 +225,9 @@ public class DiaryService extends Service {
                 if (voiceSince == 0) voiceSince = now;
             }
             chunk.write(frame, 0, n);
-            if (sttActive) {
+            LiveSTT L = live;
+            if (L != null && L.ready) L.send(frame, 0, n);
+            if (sttActive && L == null) {
                 byte[] c = new byte[n];
                 System.arraycopy(frame, 0, c, 0, n);
                 if (!sttQ.offer(c)) sttQ.poll(); // tanıma geride kalırsa en eskiyi at
@@ -421,6 +423,59 @@ public class DiaryService extends Service {
         }
         if (running) h.postDelayed(this::sttStart, sttHealthy ? 1000 : 300);
     }
+
+    // ---------------- Gemini Live (gemini-3.5-transcribe-live) ----------------
+    volatile LiveSTT live;
+    volatile long liveSince = 0;
+    int liveFails = 0;
+    static final long LIVE_RENEW = 9 * 60000; // canlı oturum en çok 10 dk: 9 dk'da yenile
+
+    void liveStart() {
+        if (!running) return;
+        new Thread(() -> {
+            final LiveSTT L = new LiveSTT(new LiveSTT.CB() {
+                public void text(String full) {
+                }
+
+                public void fin(String seg) {
+                    ArrayList<String> a = new ArrayList<>();
+                    a.add(seg);
+                    onSttText(a);
+                }
+            });
+            if (L.start(this)) {
+                LiveSTT old = live;
+                live = L;
+                liveSince = System.currentTimeMillis();
+                liveFails = 0;
+                sttActive = true;
+                sttHealthy = true;
+                sttMode = "gemini-live";
+                if (old != null) new Thread(old::finish).start();
+                h.postDelayed(liveWatch, 5000);
+            } else if (++liveFails < 3 && running) {
+                h.postDelayed(this::liveStart, 2000);
+            } else if (running) { // canlı ses yok: telefonun konuşma tanımasına geç
+                live = null;
+                sttStart();
+            }
+        }, "gunluk-canli").start();
+    }
+
+    final Runnable liveWatch = new Runnable() {
+        public void run() {
+            if (!running) return;
+            LiveSTT L = live;
+            if (L == null) return;
+            if (L.closed || System.currentTimeMillis() - liveSince > LIVE_RENEW) {
+                liveSince = System.currentTimeMillis(); // tekrar tetiklenmesin
+                if (L.closed) live = null;
+                liveStart();
+                return;
+            }
+            h.postDelayed(this, 5000);
+        }
+    };
 
     void onSttText(ArrayList<String> r) {
         if (r == null || r.isEmpty()) return;
@@ -685,12 +740,16 @@ public class DiaryService extends Service {
             }
             ar = null;
             if (chunk != null) closeChunk(hadVoice); // son parça
+            h.removeCallbacks(liveWatch);
+            final LiveSTT L = live;
+            if (L != null) new Thread(() -> { L.finish(); }).start();
             h.post(() -> sttStop(true));
             // Google tanımanın son cümleyi bitirmesi için kısa bekle, kalan parçaları Gemini'ye ver
             try {
                 Thread.sleep(4000);
             } catch (Exception ignored) {
             }
+            live = null;
             h.post(() -> {
                 sttStop(false);
                 sttMode = "";

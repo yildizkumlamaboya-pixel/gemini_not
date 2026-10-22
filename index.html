@@ -586,7 +586,7 @@ details.card[open] summary{margin-bottom:6px}
 
 <div class="modal" id="mRec"><div class="sheet"><div class="recbox">
   <div id="recTitle" class="mut">Dinliyorum... konuş</div>
-  <div class="recdot" id="recDot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3.5"/></svg></div>
+  <div class="recdot" id="recDot" onclick="recFinish()" style="cursor:pointer" title="Kaydet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3.5"/></svg></div>
   <div class="rectime" id="recTime">0:00</div>
   <div class="mut" id="recHint">En fazla 90 saniye</div>
   <div id="recLive" class="reclive hidden"></div>
@@ -1077,6 +1077,7 @@ async function liveVoice(mode){
     else if(s>=180)recFinish()},250);
 }
 async function voice(mode){
+  if(rec.live||rec.stt){recFinish();return} // hangi mikrofon olursa olsun: kayıt sürerken 2. basış kaydeder
   rec.mode=mode;rec.cancel=false;$('recLive').classList.add('hidden');
   $('recTitle').textContent={fix:'Dinliyorum... neyi düzelteyim?',quick:'Dinliyorum... not, görev veya hatırlatma söyle',note:'Dinliyorum... notunu söyle',chat:'Dinliyorum... asistana sor'}[mode];
   $('recDot').className='recdot';$('recDot').innerHTML=MIC;$('recBtns').classList.remove('hidden');

@@ -25,6 +25,10 @@ import okhttp3.WebSocketListener;
 class LiveSTT {
     interface CB {
         void text(String full);
+
+        /** Kesinleşen bir cümle (günlük için). */
+        default void fin(String seg) {
+        }
     }
 
     static final String MODEL = "models/gemini-3.5-transcribe-live";
@@ -130,6 +134,7 @@ class LiveSTT {
                     fin.append(f.optString("text"));
                     interim = "";
                     lastText = System.currentTimeMillis();
+                    cb.fin(f.optString("text"));
                 } else if (t != null) {
                     interim = t.optString("text", "");
                     lastText = System.currentTimeMillis();
