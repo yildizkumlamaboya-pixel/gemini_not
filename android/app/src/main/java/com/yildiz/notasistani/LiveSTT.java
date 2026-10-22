@@ -69,15 +69,18 @@ class LiveSTT {
     boolean start(Context c) {
         try {
             String tok = token(c);
+            final JSONArray names = new JSONArray(c.getSharedPreferences("app", Context.MODE_PRIVATE).getString("names", "[]"));
             final CountDownLatch up = new CountDownLatch(1);
             ws = HTTP.newWebSocket(new Request.Builder().url(WS + java.net.URLEncoder.encode(tok, "UTF-8")).build(), new WebSocketListener() {
                 @Override
                 public void onOpen(WebSocket w, Response r) {
                     try {
+                        JSONObject tr = new JSONObject().put("languageCodes", new JSONArray().put("tr-TR")).put("mode", "SMART");
+                        if (names.length() > 0) tr.put("customVocabulary", names); // Ayarlar'daki firma/kişi isimleri
                         JSONObject setup = new JSONObject().put("setup", new JSONObject()
                                 .put("model", MODEL)
                                 .put("generationConfig", new JSONObject().put("responseModalities", new JSONArray().put("TEXT")))
-                                .put("inputAudioTranscription", new JSONObject().put("languageCodes", new JSONArray().put("tr-TR")).put("mode", "SMART")));
+                                .put("inputAudioTranscription", tr));
                         w.send(setup.toString());
                     } catch (Exception ignored) {
                     }

@@ -398,16 +398,14 @@ details.card[open] summary{margin-bottom:6px}
       <button onclick="scanCalls(true)">Şimdi tara</button>
     </div>
   </div>
-  <div class="card hidden">
-    <h3>Özel isimler sözlüğü</h3>
+  <div class="card">
+    <h3>Firma ve kişi isimleri</h3>
+    <div class="mut" style="font-size:13px;margin-bottom:6px">Sesli notta bu isimler doğru yazılır (Gemini'ye önceden bildirilir). Otomatik öğrenme yok; listeyi sen yönetirsin.</div>
     <div id="vocList"></div>
     <div class="row" style="margin-top:8px">
-      <input id="vocW" placeholder="Doğru yazım">
-      <input id="vocF" placeholder="Benzer duyulan">
-    </div>
-    <div class="row" style="margin-top:8px">
-      <button class="pri" onclick="vocAdd()">Ekle</button>
-      <button onclick="vocFixAll(true)">Kayıtlarda düzelt</button>
+      <input id="vocW" placeholder="Firma veya kişi adı (ör. Hipermak)">
+      <input id="vocF" class="hidden">
+      <button class="pri" style="flex:0 0 auto" onclick="vocAdd()">Ekle</button>
     </div>
   </div>
   <div class="card">
@@ -680,9 +678,12 @@ const APP=typeof window.Android!=='undefined';
 let vocab=LS.get('na_vocab',null);
 if(Array.isArray(vocab)&&!vocab.some(v=>v.w==='kova')){vocab.push({w:'kova',from:'koyle, koyla'});LS.set('na_vocab',vocab);LS.set('na_fix_kova',1)}
 if(!Array.isArray(vocab)){vocab=[{w:'kova',from:'koyle, koyla'},{w:'Omkon',from:'Hong Kong, Hongkong'},{w:'Acar Metal',from:''},{w:'Unique Raf',from:''},{w:'Delta Boya',from:''},{w:'Minimar',from:''},{w:'Yıldız Kumlama Boya',from:''}];LS.set('na_vocab',vocab);LS.set('na_vocab_fix',1)}
-// Öğrenme ve kelime/isim bildirme kaldırıldı: ses olduğu gibi tanınır
-function speechNames(){return []}
-function pushNames(){try{if(APP&&typeof Android.setNames==='function')Android.setNames('[]')}catch{}}
+// Otomatik öğrenme yok. Firma/kişi isimleri listesi (Ayarlar'dan düzenlenir) Gemini Live'a "özel sözlük" olarak verilir:
+// sözlükte olmayan firma adlarını hiçbir tanıma doğru yazamaz (ör. sözlüksüz "Hypermax", sözlükle "Hipermak").
+if(vocab.some(v=>v.auto)){vocab=vocab.filter(v=>!v.auto);LS.set('na_vocab',vocab)}
+for(const w of ['Hipermak','Fırat Mühendislik'])if(!vocab.some(v=>v.w.toLocaleLowerCase('tr')===w.toLocaleLowerCase('tr'))){vocab.push({w,from:''});LS.set('na_vocab',vocab)}
+function speechNames(){return [...new Set(vocab.map(v=>String(v.w||'').trim()).filter(w=>w.length>=2))].slice(0,100)}
+function pushNames(){try{if(APP&&typeof Android.setNames==='function')Android.setNames(JSON.stringify(speechNames()))}catch{}}
 function namesHint(){return ''}
 const escRe=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
 function vocabRules(){return vocab.flatMap(v=>String(v.from||'').split(',').map(f=>f.trim()).filter(Boolean).map(f=>[new RegExp(escRe(f),'gi'),v.w]))}
@@ -1021,7 +1022,7 @@ class LiveSTT{
       const ws=this.ws=new WebSocket(url);let ok=false;
       const to=setTimeout(()=>{if(!ok){try{ws.close()}catch{}rej(new Error('Canlı ses bağlanamadı'))}},8000);
       ws.onopen=()=>ws.send(JSON.stringify({setup:{model,generationConfig:{responseModalities:['TEXT']},
-        inputAudioTranscription:{languageCodes:['tr-TR'],mode:'SMART'}}}));
+        inputAudioTranscription:Object.assign({languageCodes:['tr-TR'],mode:'SMART'},speechNames().length?{customVocabulary:speechNames()}:{})}}));
       ws.onmessage=async ev=>{let m;try{m=JSON.parse(typeof ev.data==='string'?ev.data:await ev.data.text())}catch{return}
         if(m.setupComplete){ok=true;clearTimeout(to);this.ready=true;this.q.splice(0).forEach(b=>this.sendAudio(b));res()}
         const sc=m.serverContent||{},fin=sc.inputTranscription?.text,tmp=sc.interimInputTranscription?.text;
@@ -2301,7 +2302,7 @@ function refreshAll(){
 
 // ================= SÖZLÜK EKRANI =================
 function renderVocab(){pushNames();
-  $('vocList').innerHTML=vocab.length?vocab.map((v,i)=>`<div class="vrow"><b>${esc(v.w)}</b>${v.auto?'<span class="tag">öğrenildi</span>':''}${v.from?`<span class="mut">≠ ${esc(v.from)}</span>`:''}<span style="flex:1"></span><button class="sm ghost" onclick="vocEdit(${i})">✏️</button><button class="sm ghost" onclick="vocab.splice(${i},1);LS.set('na_vocab',vocab);renderVocab()">✕</button></div>`).join(''):'<div class="mut">Henüz kelime yok</div>';
+  $('vocList').innerHTML=vocab.length?vocab.map((v,i)=>`<div class="vrow"><b>${esc(v.w)}</b><span style="flex:1"></span><button class="sm ghost" onclick="vocab.splice(${i},1);LS.set('na_vocab',vocab);renderVocab()">✕</button></div>`).join(''):'<div class="mut">Henüz isim yok</div>';
 }
 function vocEdit(i){const v=vocab[i];$('vocW').value=v.w;$('vocF').value=v.from||'';vocab.splice(i,1);LS.set('na_vocab',vocab);renderVocab();$('vocW').focus()}
 function vocAdd(){
@@ -2309,7 +2310,7 @@ function vocAdd(){
   const ex=vocab.find(v=>v.w.toLocaleLowerCase('tr')===w.toLocaleLowerCase('tr'));
   if(ex)ex.from=[...new Set([...String(ex.from||'').split(','),...f.split(',')].map(s=>s.trim()).filter(Boolean))].join(', ');else vocab.push({w,from:f});
   LS.set('na_vocab',vocab);$('vocW').value='';$('vocF').value='';renderVocab();
-  toastMsg('✔ Sözlüğe eklendi');
+  toastMsg('✔ Eklendi');
 }
 // Kurallara göre tüm not, görev ve günlük kayıtlarını düzelt
 function vocFixAll(show){
