@@ -132,6 +132,13 @@ nav button.act b{background:linear-gradient(135deg,rgba(37,99,235,.13),rgba(6,18
 .sfront .ico{flex:0 0 26px;height:26px;display:grid;place-items:center;border-radius:8px;background:rgba(37,99,235,.08);font-size:14px;margin-top:1px}
 .sfront .bd{flex:1;min-width:0}
 body.camonly>*:not(#cam):not(.toast):not(script){display:none!important}body.camonly{background:#000;padding:0}
+/* Öncelik renkleri: yumuşak ton + sol şerit */
+.sfront.pri-yuksek{background:linear-gradient(90deg,#fff1f2,#fff 70%);box-shadow:inset 4px 0 0 #fb7185}
+.sfront.pri-orta{background:linear-gradient(90deg,#fffbeb,#fff 70%);box-shadow:inset 4px 0 0 #fbbf24}
+.sfront.pri-dusuk{background:linear-gradient(90deg,#ecfdf5,#fff 70%);box-shadow:inset 4px 0 0 #34d399}
+.sfront.note{background:linear-gradient(90deg,#eff6ff,#fff 70%);box-shadow:inset 4px 0 0 #93c5fd}
+.sfront.done{background:#f8fafc!important;box-shadow:inset 4px 0 0 #cbd5e1;opacity:1!important}
+.sfront.pri-yuksek .chk{border-color:#fb7185}.sfront.pri-orta .chk{border-color:#fbbf24}.sfront.pri-dusuk .chk{border-color:#34d399}
 .mic.rec{background:var(--bad);border-color:var(--bad);color:#fff}
 .empty{text-align:center;color:var(--mut);padding:22px 0;font-size:14px}
 .stat{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
@@ -1909,7 +1916,7 @@ const SW_EDIT='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke
 const SW_DEL='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>';
 function rowHTML(k,x){
   return `<div class="srow" data-k="${k}" data-id="${x.id}"><div class="sact"><button class="sbtn edit" onclick="swAct(event,'edit','${k}','${x.id}')">${SW_EDIT}<span>Düzenle</span></button><button class="sbtn del" onclick="swAct(event,'del','${k}','${x.id}')">${SW_DEL}<span>Sil</span></button></div>
-  <div class="sfront item ${k==='t'&&x.done?'done':''} ${k==='n'?'note':''}" ${k==='t'?'data-tid':'data-nid'}="${x.id}">${k==='t'?taskInner(x):noteInner(x)}</div></div>`;
+  <div class="sfront item ${k==='t'&&x.done?'done':''} ${k==='n'?'note':'pri-'+(x.priority||'orta')}" ${k==='t'?'data-tid':'data-nid'}="${x.id}">${k==='t'?taskInner(x):noteInner(x)}</div></div>`;
 }
 function renderItems(){
   if(!$('itemList'))return;
@@ -1923,8 +1930,9 @@ function renderItems(){
   $('iTags').innerHTML=tags.map(t=>`<button class="sm ${iTag===t?'act':''}" onclick="iTag=iTag==='${esc(t)}'?'':'${esc(t)}';renderItems()">#${esc(t)}</button>`).join('');
   let l=all.filter(([k,x])=>iMatch(k,x,iF)&&(!iTag||(x.tags||[]).includes(iTag))&&(!q||iText(k,x).includes(q)));
   const now=new Date(),end=new Date(now.getFullYear(),now.getMonth(),now.getDate(),23,59);
-  const grp=([k,x])=>k==='t'&&x.done?9:x.pinned?0:k==='t'&&x.due&&new Date(x.due)<now?1:k==='t'&&x.due&&new Date(x.due)<=end?2:3;
-  const when=([k,x])=>k==='t'?(x.due&&grp([k,x])<3?+new Date(x.due):-(x.created||0)):-(x.updated||x.created||0);
+  // En son eklenen en üstte (sabitlenenler önde, bitenler en altta)
+  const grp=([k,x])=>k==='t'&&x.done?9:x.pinned?0:3;
+  const when=([k,x])=>-(x.created||x.updated||0);
   l.sort((a,b)=>grp(a)-grp(b)||(grp(a)===9?(b[1].doneAt||0)-(a[1].doneAt||0):when(a)-when(b)));
   const open=l.filter(i=>grp(i)!==9),done=l.filter(i=>grp(i)===9);
   $('itemList').innerHTML=l.length?open.map(([k,x])=>rowHTML(k,x)).join('')+(done.length&&open.length?`<div class="donesep">Bitenler · ${done.length}</div>`:'')+done.map(([k,x])=>rowHTML(k,x)).join('')
