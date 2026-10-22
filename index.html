@@ -963,7 +963,7 @@ function undoSave(){
 
 // ================= SESLİ GİRİŞ (Gemini ses) =================
 const MIC='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3.5"/></svg>';
-$('micBtn').onclick=()=>{if(rec.stt){recFinish();return}voice('quick')}; // kırmızıyken tekrar basınca kaydet
+$('micBtn').onclick=()=>{if(rec.stt||rec.live){recFinish();return}voice('quick')}; // kırmızıyken tekrar basınca kaydet
 let rec={mr:null,stream:null,chunks:[],mode:'',t0:0,tick:null,cancel:false,native:null};
 const NATIVE_VOICE=APP&&typeof Android.voiceStart==='function';
 // Her sesli mod için Gemini isteği (yazıya dökme + ayrıştırma tek adımda)
@@ -1000,11 +1000,87 @@ window.onStt=(type,text)=>{
     else{try{applyVoice(rec.mode,t)}catch(e){toastMsg('⚠️ '+e.message)}}
   }
 };
+// ================= Gemini Live: ses doğrudan Gemini'ye canlı akar (AI Studio asistanlarıyla aynı altyapı) =================
+const LIVE_WS='wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.';
+let liveModelName=LS.get('na_livemodel','');
+async function liveModel(){
+  if(liveModelName&&Date.now()-LS.get('na_livemodel_t',0)<864e5)return liveModelName;
+  try{const d=await (await fetch(API+'?op=livemodels')).json(),m=d.models||[];
+    const pick=m.find(x=>/gemini-3\.8-live$/.test(x))||m.find(x=>/live/.test(x)&&!/thinking|preview/.test(x))||m.find(x=>/live|native-audio/.test(x));
+    if(pick){liveModelName=pick;LS.set('na_livemodel',pick);LS.set('na_livemodel_t',Date.now())}}catch{}
+  return liveModelName||'models/gemini-3.8-live';
+}
+const LIVE_STT_MODEL='models/gemini-3.5-transcribe-live'; // Google'ın canlı yazıya dökme modeli
+class LiveSTT{
+  constructor(onText){this.onText=onText;this.text='';this.ready=false;this.q=[];this.lastVoice=0;this.heard=false;this.t0=Date.now();this.lastText=Date.now()}
+  async start(){
+    const model=LIVE_STT_MODEL,tok=cfg.key?null:(await callGemini({op:'livetoken'})).token;
+    const url=cfg.key?LIVE_WS+'BidiGenerateContent?key='+encodeURIComponent(cfg.key):LIVE_WS+'BidiGenerateContentConstrained?access_token='+encodeURIComponent(tok);
+    this.stream=await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
+    await new Promise((res,rej)=>{
+      const ws=this.ws=new WebSocket(url);let ok=false;
+      const to=setTimeout(()=>{if(!ok){try{ws.close()}catch{}rej(new Error('Canlı ses bağlanamadı'))}},8000);
+      ws.onopen=()=>ws.send(JSON.stringify({setup:{model,generationConfig:{responseModalities:['TEXT']},
+        inputAudioTranscription:{languageCodes:['tr-TR'],mode:'SMART'}}}));
+      ws.onmessage=async ev=>{let m;try{m=JSON.parse(typeof ev.data==='string'?ev.data:await ev.data.text())}catch{return}
+        if(m.setupComplete){ok=true;clearTimeout(to);this.ready=true;this.q.splice(0).forEach(b=>this.sendAudio(b));res()}
+        const sc=m.serverContent||{},fin=sc.inputTranscription?.text,tmp=sc.interimInputTranscription?.text;
+        if(fin){this.text+=(this.text&&!/\s$/.test(this.text)?' ':'')+fin;this.interim='';this.lastText=Date.now()}
+        if(tmp!=null&&!fin){this.interim=tmp;this.lastText=Date.now()}
+        if(fin||tmp!=null)this.onText((this.text+' '+(this.interim||'')).replace(/\s+/g,' ').trim());
+        if(m.error||m.goAway)this.closed=true;
+        if(m.serverContent?.turnComplete||m.serverContent?.generationComplete)this.turnDone=true;};
+      ws.onerror=()=>{if(!ok){clearTimeout(to);rej(new Error('Canlı ses bağlanamadı'))}};
+      ws.onclose=e=>{this.closed=true;if(!ok){clearTimeout(to);rej(new Error(e.reason||'Canlı ses kapandı'))}};
+      // mikrofon → 16 kHz PCM
+      const ac=this.ac=new (window.AudioContext||window.webkitAudioContext)({sampleRate:16000});
+      const src=ac.createMediaStreamSource(this.stream),pr=this.pr=ac.createScriptProcessor(2048,1,1);
+      pr.onaudioprocess=e=>{const f=e.inputBuffer.getChannelData(0),rate=ac.sampleRate;
+        let d=f;if(rate!==16000){const r=rate/16000,n=Math.floor(f.length/r);d=new Float32Array(n);for(let i=0;i<n;i++)d[i]=f[Math.floor(i*r)]}
+        let sq=0;const pcm=new Int16Array(d.length);for(let i=0;i<d.length;i++){const s=Math.max(-1,Math.min(1,d[i]));pcm[i]=s<0?s*0x8000:s*0x7fff;sq+=s*s}
+        const rms=Math.sqrt(sq/d.length);if(rms>0.02){this.lastVoice=Date.now();this.heard=true}
+        if(this.stopped)return;if(this.ready)this.sendAudio(pcm);else this.q.push(pcm)};
+      src.connect(pr);pr.connect(ac.destination);
+    });
+  }
+  sendAudio(pcm){if(this.ws?.readyState!==1)return;const u=new Uint8Array(pcm.buffer);let s='';for(let i=0;i<u.length;i+=8192)s+=String.fromCharCode.apply(null,u.subarray(i,i+8192));
+    this.ws.send(JSON.stringify({realtimeInput:{audio:{data:btoa(s),mimeType:'audio/pcm;rate=16000'}}}))}
+  async stop(cancel){
+    this.stopped=true;try{this.pr.disconnect()}catch{}try{this.ac.close()}catch{}this.stream?.getTracks().forEach(t=>t.stop());
+    if(!cancel&&this.ws?.readyState===1){try{this.ws.send(JSON.stringify({realtimeInput:{audioStreamEnd:true}}))}catch{}
+      // son cümlenin kesin yazısı gelsin (en çok 5 sn)
+      const t=Date.now();while(Date.now()-t<5000&&!this.closed&&(this.interim||Date.now()-t<800)&&!(Date.now()-this.lastText>1800&&Date.now()-t>1200))await new Promise(r=>setTimeout(r,120))}
+    try{this.ws?.close()}catch{}
+    return (this.text+' '+(this.interim||'')).replace(/\s+/g,' ').trim();
+  }
+}
+// Ses kaydı bitince ortak işleme
+function voiceText(mode,t){
+  if(!t){toastMsg('Ses anlaşılamadı, tekrar dene');return}
+  if(mode==='quick'){show('bugun');$('qText').value=t;$('qText').dispatchEvent(new Event('input'));$('qBtn').click()}
+  else{try{applyVoice(mode,t)}catch(e){toastMsg('⚠️ '+e.message)}}
+}
+async function liveVoice(mode){
+  const L=new LiveSTT(t=>{$('recLive').textContent=t;$('recLive').scrollTop=1e6});
+  rec.live=L;$('recLive').textContent='';$('recLive').classList.remove('hidden');
+  $('recHint').textContent='Bağlanıyor…';$('mRec').classList.add('on');$('micBtn').classList.add('rec');
+  clearInterval(rec.tick);rec.t0=Date.now();
+  try{await L.start()}catch(e){ // canlı ses olmazsa telefonun konuşma tanımasına geç
+    rec.live=null;$('micBtn').classList.remove('rec');try{await L.stop(true)}catch{}
+    rec.noLive=true;voice(mode);rec.noLive=false;return}
+  if(rec.live!==L)return;
+  $('recHint').textContent='Konuştukça yazıya geçer · susunca kendiliğinden kaydedilir';
+  rec.tick=setInterval(()=>{const s=Math.floor((Date.now()-rec.t0)/1000);$('recTime').textContent=`${Math.floor(s/60)}:${pad(s%60)}`;
+    if(L.heard&&Date.now()-L.lastVoice>5000)recFinish(); // 5 sn sessizlik: kaydet
+    else if(!L.heard&&Date.now()-rec.t0>12000){recCancel();toastMsg('🤫 Ses duyulmadı')}
+    else if(s>=180)recFinish()},250);
+}
 async function voice(mode){
   rec.mode=mode;rec.cancel=false;$('recLive').classList.add('hidden');
   $('recTitle').textContent={fix:'Dinliyorum... neyi düzelteyim?',quick:'Dinliyorum... not, görev veya hatırlatma söyle',note:'Dinliyorum... notunu söyle',chat:'Dinliyorum... asistana sor'}[mode];
   $('recDot').className='recdot';$('recDot').innerHTML=MIC;$('recBtns').classList.remove('hidden');
   $('recTime').textContent='0:00';
+  if(!rec.noLive&&navigator.onLine&&navigator.mediaDevices?.getUserMedia&&window.WebSocket){liveVoice(mode);return}
   if(!rec.noStt&&HAS_STT()){sttVoice(mode);return}
   if(NATIVE_VOICE){
     const id='v'+uid(),vp=voicePrompt(mode);
@@ -1027,11 +1103,14 @@ async function voice(mode){
   rec.tick=setInterval(()=>{const s=Math.floor((Date.now()-rec.t0)/1000);$('recTime').textContent=`${Math.floor(s/60)}:${pad(s%60)}`;if(s>=90)recFinish()},250);
 }
 function recFinish(){
+  if(rec.live){const L=rec.live;rec.live=null;clearInterval(rec.tick);$('recHint').textContent='Tamamlanıyor…';
+    L.stop(false).then(t=>{$('micBtn').classList.remove('rec');$('mRec').classList.remove('on');$('recLive').classList.add('hidden');if(!rec.cancel)voiceText(rec.mode,t)});return}
   if(rec.stt){Android.sttStop();clearInterval(rec.tick);$('recHint').textContent='Tamamlanıyor…';return}
   if(rec.native){Android.voiceStop();clearInterval(rec.tick);rec.native=null;$('mRec').classList.remove('on');LS.set('na_vjobs',vJobs);vBusy();pollVoice();return}
   if(rec.mr?.state==='recording')rec.mr.stop();
 }
 function recCancel(){
+  if(rec.live){rec.cancel=true;const L=rec.live;rec.live=null;clearInterval(rec.tick);L.stop(true);$('micBtn').classList.remove('rec');$('mRec').classList.remove('on');$('recLive').classList.add('hidden');return}
   if(rec.stt){rec.cancel=true;rec.stt=false;$('micBtn').classList.remove('rec');Android.sttCancel();clearInterval(rec.tick);$('mRec').classList.remove('on');return}
   if(rec.native){Android.voiceCancel();delete vJobs[rec.native];rec.native=null;clearInterval(rec.tick);$('mRec').classList.remove('on');return}
   rec.cancel=true;recFinish();closeRec();

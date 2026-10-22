@@ -19,6 +19,44 @@ module.exports = async (req, res) => {
         return res.status(200).json({ models: (d.models || []).filter(m => (m.supportedGenerationMethods || []).includes('bidiGenerateContent')).map(m => m.name) });
       } catch (e) { return res.status(502).json({ error: e.message }); }
     }
+    if (req.query && req.query.op === 'livetest' && KEY) { // geçici: canlı yazıya dökme uçtan uca deneme
+      try {
+        const base = 'https://generativelanguage.googleapis.com/v1beta';
+        const text = String(req.query.q || 'Hipermak sevkiyatını yarın saat dokuzda planla').slice(0, 200);
+        const t = await fetch(`${base}/models/gemini-2.5-flash-preview-tts:generateContent`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': KEY },
+          body: JSON.stringify({ contents: [{ parts: [{ text }] }], generationConfig: { responseModalities: ['AUDIO'], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Charon' } } } } }) });
+        const td = await t.json();
+        const pcm24 = Buffer.from(td.candidates[0].content.parts[0].inlineData.data, 'base64');
+        const n24 = pcm24.length / 2, n16 = Math.floor(n24 * 2 / 3), out = Buffer.alloc(n16 * 2);
+        for (let i = 0; i < n16; i++) out.writeInt16LE(pcm24.readInt16LE(Math.min(n24 - 1, Math.floor(i * 1.5)) * 2), i * 2);
+        const now = Date.now();
+        const tk = await (await fetch(`${base}/auth_tokens`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': KEY },
+          body: JSON.stringify({ uses: 1, expireTime: new Date(now + 30 * 60e3).toISOString(), newSessionExpireTime: new Date(now + 2 * 60e3).toISOString() }) })).json();
+        const log = [];
+        const result = await new Promise((resolve) => {
+          const ws = new WebSocket('wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained?access_token=' + encodeURIComponent(tk.name));
+          let final = '';
+          const done = () => { try { ws.close(); } catch {} resolve(final); };
+          setTimeout(done, 25000);
+          ws.onopen = () => ws.send(JSON.stringify({ setup: { model: 'models/gemini-3.5-transcribe-live', generationConfig: { responseModalities: ['TEXT'] }, inputAudioTranscription: { languageCodes: ['tr-TR'], mode: 'SMART' } } }));
+          ws.onmessage = async (ev) => {
+            const s = typeof ev.data === 'string' ? ev.data : Buffer.from(await ev.data.arrayBuffer ? await ev.data.arrayBuffer() : ev.data).toString();
+            log.push(s.slice(0, 300));
+            const m = JSON.parse(s);
+            if (m.setupComplete) {
+              for (let o = 0; o < out.length; o += 3200) ws.send(JSON.stringify({ realtimeInput: { audio: { data: out.subarray(o, o + 3200).toString('base64'), mimeType: 'audio/pcm;rate=16000' } } }));
+              ws.send(JSON.stringify({ realtimeInput: { audio: { data: Buffer.alloc(32000).toString('base64'), mimeType: 'audio/pcm;rate=16000' } } }));
+              ws.send(JSON.stringify({ realtimeInput: { audioStreamEnd: true } }));
+            }
+            const fin = m.serverContent?.inputTranscription?.text;
+            if (fin) { final += (final ? ' ' : '') + fin; setTimeout(done, 1500); }
+          };
+          ws.onerror = (e) => { log.push('error ' + (e.message || '')); done(); };
+          ws.onclose = (e) => { log.push('close ' + e.code + ' ' + e.reason); done(); };
+        });
+        return res.status(200).json({ said: text, heard: result, token: !!tk.name, log: log.slice(0, 12) });
+      } catch (e) { return res.status(500).json({ error: e.message, stack: String(e.stack).slice(0, 300) }); }
+    }
     return res.status(200).json({ ok: true, hasKey: !!KEY, needsCode: !!CODE });
   }
   if (req.method !== 'POST') return res.status(405).json({ error: 'Sadece POST' });
