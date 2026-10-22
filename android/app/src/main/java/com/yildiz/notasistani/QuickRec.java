@@ -627,8 +627,23 @@ class QuickRec {
         d.mkdirs();
         File f = new File(d, ts + ".json");
         JSONObject out = new JSONObject();
+        File audF = null;
         try {
             out.put("ts", ts);
+            // sesli notun sesi: uygulama 7 gün saklar (dinlemek / yanlış duyulanı kontrol için)
+            if (heard && pcm.size() >= RATE) {
+                try {
+                    byte[] a = pcm.toByteArray();
+                    String an = "aud_" + ts + ".wav";
+                    try (java.io.OutputStream os = new java.io.FileOutputStream(new File(d, an))) {
+                        os.write(DiaryService.wavHeader(a.length));
+                        os.write(a);
+                    }
+                    out.put("audio", an);
+                    audF = new File(d, an);
+                } catch (Exception ignored) {
+                }
+            }
             if (!text.isEmpty()) {
                 // 1) hemen kaydet
                 out.put("transcript", text).put("pending", true).put("engine", engine);
@@ -662,11 +677,13 @@ class QuickRec {
             try {
                 r = ask(sys + "\nJSON'un İLK alanı \"transcript\" olsun: kaydın kelimesi kelimesine Türkçe metni. Konuşma yoksa transcript boş olsun.", parts, model, code);
             } catch (Exception e) {
+                if (audF != null) audF.delete();
                 l.done("⚠️ Yazıya dökülemedi (internet?)", false);
                 return;
             }
             String tr = r.optString("transcript", "").trim();
             if (tr.isEmpty()) {
+                if (audF != null) audF.delete();
                 l.done("🤫 Konuşma anlaşılmadı", false);
                 return;
             }
@@ -675,7 +692,8 @@ class QuickRec {
             Summary.write(f, out.toString());
             l.done(sum, true);
         } catch (Exception e) {
-            l.done("⚠️ Kaydedilemedi", false);
+            if (audF != null) audF.delete();
+                l.done("⚠️ Kaydedilemedi", false);
         }
     }
 }
