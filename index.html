@@ -398,7 +398,7 @@ details.card[open] summary{margin-bottom:6px}
       <button onclick="scanCalls(true)">Şimdi tara</button>
     </div>
   </div>
-  <div class="card">
+  <div class="card hidden">
     <h3>Özel isimler sözlüğü</h3>
     <div id="vocList"></div>
     <div class="row" style="margin-top:8px">
@@ -493,7 +493,7 @@ details.card[open] summary{margin-bottom:6px}
   <div id="vPhotos" class="vphotos"></div>
   <div id="vTags" style="margin-top:8px"></div>
   <div class="row" id="vAct" style="margin-top:14px"></div>
-  <div class="mut" style="font-size:12px;margin-top:10px;text-align:center">Düzenlemek veya silmek için listede üzerine basılı tut</div>
+  <div class="mut" style="font-size:12px;margin-top:10px;text-align:center">Düzenlemek veya silmek için listede sola kaydır</div>
 </div></div>
 <div class="modal" id="mAct"><div class="sheet actsheet">
   <div class="acthead"><span class="actic" id="aIcon"></span><div style="min-width:0;flex:1"><div class="mut" id="aKind" style="font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase"></div><div id="aTitle" class="acttitle"></div></div></div>
@@ -680,13 +680,10 @@ const APP=typeof window.Android!=='undefined';
 let vocab=LS.get('na_vocab',null);
 if(Array.isArray(vocab)&&!vocab.some(v=>v.w==='kova')){vocab.push({w:'kova',from:'koyle, koyla'});LS.set('na_vocab',vocab);LS.set('na_fix_kova',1)}
 if(!Array.isArray(vocab)){vocab=[{w:'kova',from:'koyle, koyla'},{w:'Omkon',from:'Hong Kong, Hongkong'},{w:'Acar Metal',from:''},{w:'Unique Raf',from:''},{w:'Delta Boya',from:''},{w:'Minimar',from:''},{w:'Yıldız Kumlama Boya',from:''}];LS.set('na_vocab',vocab);LS.set('na_vocab_fix',1)}
-// Kullanıcının firma/kişi adları: tanımaya önceden bildirilir (telefonun rehberdeki isimleri bildiği gibi)
-for(const [w,f] of [['Hipermak','Hiperman, Hipermark, İparmak'],['Fırat Mühendislik','']])if(!vocab.some(v=>v.w.toLocaleLowerCase('tr')===w.toLocaleLowerCase('tr'))){vocab.push({w,from:f});LS.set('na_vocab',vocab)}
-function speechNames(){return [...new Set([...vocab.map(v=>v.w),...knownTerms()])].filter(w=>w&&w.length>=3).slice(0,60)}
-function pushNames(){try{if(APP&&typeof Android.setNames==='function')Android.setNames(JSON.stringify(speechNames()))}catch{}}
-function namesHint(){const n=speechNames();if(!n.length)return '';const heard=vocab.filter(v=>v.from).map(v=>`"${v.from}" → "${v.w}"`).join('; ');
-  return `\nKULLANICININ KAYITLARINDAKİ İSİMLER (firma/kişi, doğru yazımları): ${n.join(', ')}.
-Metin konuşmadan yazıya döküldüğü için bu isimler yanlış duyulmuş olabilir: metinde bunlardan birine SESÇE çok benzeyen bir kelime isim yerinde geçiyorsa (ör. Hiperman → Hipermak) bilinen doğru yazımı kullan. Benzemeyen kelimelere dokunma.${heard?`\nDaha önce şöyle yanlış duyulmuştu: ${heard}.`:''}`}
+// Öğrenme ve kelime/isim bildirme kaldırıldı: ses olduğu gibi tanınır
+function speechNames(){return []}
+function pushNames(){try{if(APP&&typeof Android.setNames==='function')Android.setNames('[]')}catch{}}
+function namesHint(){return ''}
 const escRe=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
 function vocabRules(){return vocab.flatMap(v=>String(v.from||'').split(',').map(f=>f.trim()).filter(Boolean).map(f=>[new RegExp(escRe(f),'gi'),v.w]))}
 function applyVocab(s){if(typeof s!=='string'||!s)return s;for(const[re,w]of vocabRules())s=s.replace(re,w);return s}
@@ -792,7 +789,7 @@ Kurallar: Yapılacak iş/arama/toplantı/kontrol → görev. Bilgi, fikir, gözl
 Görevi olan ve saati belli işler için hatırlatmayı varsayılan olarak 15 dakika önceye koy; "hatırlat" denirse tam o saate koy.
 Kullanıcı gün veya saat SÖYLEMEDİYSE due ve remind kesinlikle null olsun; kendinden tarih uydurma.
 Tek bir iş/istek söylendiyse (ör. "X'i ara", "Y'yi planla") sadece GÖREV oluştur; aynı şeyi ayrıca not olarak yazma. Not yalnızca bilgi/gözlem varsa oluşur.
-Kişi ve firma adlarını kısaltma veya başka isme çevirme; tek istisna yukarıdaki bilinen isimlere sesçe benzeyenleri doğru yazımla yazmaktır.
+Kişi ve firma adlarını metinde geçtiği gibi aynen kullan; değiştirme, kısaltma, başka isme çevirme.
 Öncelik: acil/önemli → yuksek, normal → orta, ertelenebilir → dusuk.
 Sadece JSON döndür: {"notes":[{"title":"","body":"","tags":[""]}],"tasks":[{"title":"","note":"","due":null,"remind":null,"priority":"orta","repeat":""}]}  (repeat: "", "gunluk","haftalik","aylik")`+extra}
 $('iSearch').addEventListener('input',()=>renderItems());
@@ -921,7 +918,8 @@ function pvSave(silent){
 }
 
 // Kullanıcı bir metni düzelttiğinde yeni yazdığı özel isimleri sözlüğe ekle (Gemini bir dahakine doğru duysun)
-function learnFrom(oldT,newT){
+function learnFrom(){} // öğrenme kaldırıldı
+function learnFromOld(oldT,newT){
   const W=s=>String(s||'').replace(/[^\p{L}\p{N}\s'-]/gu,' ').split(/\s+/).filter(Boolean);
   const o=W(oldT),n=W(newT),oS=new Set(o.map(w=>w.toLocaleLowerCase('tr'))),nS=new Set(n.map(w=>w.toLocaleLowerCase('tr')));
   const added=n.filter(w=>!oS.has(w.toLocaleLowerCase('tr'))&&/^[A-ZÇĞİÖŞÜ0-9]/.test(w)&&w.length>=3).map(w=>w.replace(/'.*$/,''));
@@ -2402,7 +2400,7 @@ function itemMenu(k,id){
   let tm=null,el=null,sx=0,sy=0,fired=false;
   const target=e=>e.target.closest('[data-nid],[data-tid]');
   document.addEventListener('pointerdown',e=>{const t=target(e);if(!t||e.target.closest('.chk'))return;el=t;fired=false;sx=e.clientX;sy=e.clientY;
-    const row=t.closest('.item')||t;tm=setTimeout(()=>{fired=true;row.classList.remove('lp');t.dataset.nid?itemMenu('n',t.dataset.nid):itemMenu('t',t.dataset.tid)},520);row.classList.add('lp')},{passive:true});
+    },{passive:true}); // basılı tutma kaldırıldı (kaydırmayla çakışıyordu): düzenle/sil sola kaydırınca
   const end=()=>{clearTimeout(tm);tm=null;el&&(el.closest('.item')||el).classList.remove('lp')};
   document.addEventListener('pointermove',e=>{if(tm&&(Math.abs(e.clientX-sx)>10||Math.abs(e.clientY-sy)>10))end()},{passive:true});
   document.addEventListener('pointerup',end);document.addEventListener('pointercancel',end);

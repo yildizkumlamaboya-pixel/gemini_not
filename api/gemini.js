@@ -10,7 +10,17 @@ module.exports = async (req, res) => {
   const KEY = process.env.GEMINI_API_KEY;
   const CODE = process.env.APP_CODE || '';
 
-  if (req.method === 'GET') return res.status(200).json({ ok: true, hasKey: !!KEY, needsCode: !!CODE });
+  if (req.method === 'GET') {
+    // Canlı ses (Gemini Live) için kullanılabilir modeller — anahtar gösterilmez
+    if (req.query && req.query.op === 'livemodels' && KEY) {
+      try {
+        const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=300', { headers: { 'x-goog-api-key': KEY } });
+        const d = await r.json();
+        return res.status(200).json({ models: (d.models || []).filter(m => (m.supportedGenerationMethods || []).includes('bidiGenerateContent')).map(m => m.name) });
+      } catch (e) { return res.status(502).json({ error: e.message }); }
+    }
+    return res.status(200).json({ ok: true, hasKey: !!KEY, needsCode: !!CODE });
+  }
   if (req.method !== 'POST') return res.status(405).json({ error: 'Sadece POST' });
   if (!KEY) return res.status(500).json({ error: 'Sunucuda GEMINI_API_KEY tanımlı değil' });
   if (CODE && req.headers['x-app-code'] !== CODE) return res.status(401).json({ error: 'Uygulama kodu hatalı (Ayarlar → Uygulama kodu)' });
@@ -21,6 +31,17 @@ module.exports = async (req, res) => {
   const base = 'https://generativelanguage.googleapis.com/v1beta';
 
   try {
+    if (op === 'livetoken') {
+      // Gemini Live (canlı ses) için kısa ömürlü, tek kullanımlık anahtar: gerçek anahtar telefona hiç gitmez
+      const now = Date.now();
+      const r = await fetch(`${base}/auth_tokens`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': KEY },
+        body: JSON.stringify({ uses: 1, expireTime: new Date(now + 30 * 60e3).toISOString(), newSessionExpireTime: new Date(now + 2 * 60e3).toISOString() }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || !d.name) return res.status(r.status || 502).json({ error: d.error?.message || 'Canlı ses anahtarı alınamadı' });
+      return res.status(200).json({ token: d.name });
+    }
     if (op === 'models') {
       const r = await fetch(`${base}/models?pageSize=200`, { headers: { 'x-goog-api-key': KEY } });
       return res.status(r.status).json(await r.json());
