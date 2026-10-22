@@ -1142,6 +1142,32 @@ async function playAud(id,btn){
 function audLeft(id){const ts=LS.get('na_auds',{})[id];if(!ts)return'';const d=Math.max(0,Math.ceil((ts+AUD_DAYS*864e5-Date.now())/864e5));return d+' gün'}
 function audBtn(x){return x.audio?`<button class="audbtn" onclick="event.stopPropagation();playAud('${x.audio}',this)">▶ Ses${x.audioDur?' · '+x.audioDur+' sn':''}</button>`:''}
 setTimeout(sweepAudio,2500);setInterval(sweepAudio,6*3600e3);
+// ---- Ses → kesin yazı (tüm kaydı bağlamıyla dinler; canlı tanımanın cümle başını yanlış duymasını düzeltir) ----
+function audioSys(){const nm=speechNames();return `Ses kaydını KELİMESİ KELİMESİNE Türkçe yazıya dök (transcript). Bu kısa bir sesli not/komut; cümlenin tamamını dinleyip bağlama göre en doğru yazımı seç. Özel isimleri (kişi, firma, yer) duyduğun gibi doğru yaz.${nm.length?` Kullanıcının kayıtlarında geçen adlar (ses benziyorsa bu yazımı kullan, benzemiyorsa kullanma): ${nm.slice(0,80).join(', ')}.`:''} Konuşma yoksa transcript boş olsun.`}
+const wavPart=async b=>({inlineData:{mimeType:'audio/wav',data:await blobToB64(b)}});
+async function quickVoice(blob,live){
+  const aud=pendAud;pendAud=null;const now=Date.now();
+  const tmp={id:uid(),title:(live||'Sesli not').split(/[.\n]/)[0].slice(0,50)||'Sesli not',body:live||'',tags:[],pinned:false,created:now,updated:now,src:'manual',via:'voice',aiBusy:true};
+  notes.push(tmp);save();show('bugun');renderAll();
+  try{
+    const r=await gemini('Bu sesli notu önce yazıya dök, sonra not ve görevlere ayır.',{parts:[await wavPart(blob)],system:audioSys()+'\nJSON\'un İLK alanı "transcript" olsun.\n'+quickSys(),json:true});
+    const tr=String(r.transcript||'').trim()||live;
+    if(!tr){notes=notes.filter(x=>x.id!==tmp.id);save();renderAll();toastMsg('🤫 Konuşma anlaşılmadı');return}
+    notes=notes.filter(x=>x.id!==tmp.id);
+    pending={notes:r.notes||[],tasks:r.tasks||[],src:tr,transcript:tr};
+    if(!pending.notes.length&&!pending.tasks.length)pending.notes=[{title:tr.split(/[.\n]/)[0].slice(0,50)||'Sesli not',body:tr,tags:[]}];
+    pendAud=aud;commitPending(true);try{beep()}catch{}
+  }catch(e){ // ses gönderilemediyse canlı yazıyla devam
+    notes=notes.filter(x=>x.id!==tmp.id);pendAud=aud;
+    if(live){$('qText').value=live;$('qBtn').click()}else{save();renderAll();toastMsg('⚠️ '+esc(e.message))}
+  }
+}
+async function noteVoice(blob,live){
+  toastMsg('⏳ Yazıya dökülüyor…',2500);
+  let t=live;
+  try{const r=await gemini('Bu ses kaydını yazıya dök.',{parts:[await wavPart(blob)],system:audioSys()+' Sadece JSON: {"transcript":""}',json:true});t=String(r.transcript||'').trim()||live}catch{}
+  voiceText('note',t);
+}
 // Ses kaydı bitince ortak işleme
 function voiceText(mode,t){
   if(!t){toastMsg('Ses anlaşılamadı, tekrar dene');return}
@@ -1201,7 +1227,10 @@ async function voice(mode){
 }
 function recFinish(){
   if(rec.live){const L=rec.live;rec.live=null;clearInterval(rec.tick);$('recHint').textContent='Tamamlanıyor…';
-    L.stop(false).then(t=>{$('micBtn').classList.remove('rec');$('mRec').classList.remove('on');$('recLive').classList.add('hidden');if(!rec.cancel){if(t&&L.heard&&(rec.mode==='quick'||rec.mode==='note'))holdVoiceAudio(L.all);voiceText(rec.mode,t)}});return}
+    L.stop(false).then(t=>{$('micBtn').classList.remove('rec');$('mRec').classList.remove('on');$('recLive').classList.add('hidden');if(!rec.cancel){
+      // Kesin yazı: konuşma bitince TÜM ses tek parça Gemini'ye gider (canlı yazı sadece ekranda önizleme)
+      if(L.heard&&L.all?.length&&(rec.mode==='quick'||rec.mode==='note')){holdVoiceAudio(L.all);const b=pendAud?.blob;if(b){rec.mode==='quick'?quickVoice(b,t):noteVoice(b,t);return}}
+      voiceText(rec.mode,t)}});return}
   if(rec.stt){Android.sttStop();clearInterval(rec.tick);$('recHint').textContent='Tamamlanıyor…';return}
   if(rec.native){Android.voiceStop();clearInterval(rec.tick);rec.native=null;$('mRec').classList.remove('on');LS.set('na_vjobs',vJobs);vBusy();pollVoice();return}
   if(rec.mr?.state==='recording')rec.mr.stop();

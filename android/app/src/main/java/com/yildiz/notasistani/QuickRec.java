@@ -651,7 +651,27 @@ class QuickRec {
                 l.done("✔ Kaydedildi\n“" + (text.length() > 120 ? text.substring(0, 120) + "…" : text) + "”", true);
                 // 2) arkada görev/hatırlatmaya ayır
                 try {
-                    JSONObject r = ask(sys, new JSONArray().put(new JSONObject().put("text", text)), model, code);
+                    JSONObject r;
+                    if (pcm.size() >= RATE) { // kesin yazı: tüm ses tek parça (canlı yazı cümle başını yanlış duyabiliyor)
+                        byte[] audio = pcm.toByteArray();
+                        byte[] wav = new byte[44 + audio.length];
+                        System.arraycopy(DiaryService.wavHeader(audio.length), 0, wav, 0, 44);
+                        System.arraycopy(audio, 0, wav, 44, audio.length);
+                        String nm = "";
+                        try {
+                            JSONArray na = new JSONArray(pr.getString("names", "[]"));
+                            StringBuilder sb = new StringBuilder();
+                            for (int i = 0; i < Math.min(80, na.length()); i++) sb.append(i > 0 ? ", " : "").append(na.getString(i));
+                            if (sb.length() > 0) nm = " Kullanıcının kayıtlarında geçen adlar (ses benziyorsa bu yazımı kullan, benzemiyorsa kullanma): " + sb + ".";
+                        } catch (Exception ignored) {
+                        }
+                        JSONArray parts = new JSONArray().put(new JSONObject().put("inlineData", new JSONObject().put("mimeType", "audio/wav").put("data", Base64.encodeToString(wav, Base64.NO_WRAP))))
+                                .put(new JSONObject().put("text", "Bu sesli notu önce yazıya dök, sonra not ve görevlere ayır."));
+                        r = ask("Ses kaydını KELİMESİ KELİMESİNE Türkçe yazıya dök (transcript); cümlenin tamamını dinleyip bağlama göre en doğru yazımı seç, özel isimleri doğru yaz." + nm
+                                + "\nJSON'un İLK alanı \"transcript\" olsun.\n" + sys, parts, model, code);
+                        String tr = r.optString("transcript", "").trim();
+                        if (!tr.isEmpty()) out.put("transcript", tr);
+                    } else r = ask(sys, new JSONArray().put(new JSONObject().put("text", text)), model, code);
                     if (f.exists()) { // uygulama henüz almadıysa sonucu ekle
                         String sum = apply(out, r, ts);
                         Summary.write(f, out.toString());
