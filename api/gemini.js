@@ -38,7 +38,7 @@ module.exports = async (req, res) => {
           let final = '';
           const done = () => { try { ws.close(); } catch {} resolve(final); };
           setTimeout(done, 25000);
-          ws.onopen = () => ws.send(JSON.stringify({ setup: { model: 'models/gemini-3.5-transcribe-live', generationConfig: { responseModalities: ['TEXT'] }, inputAudioTranscription: { languageCodes: ['tr-TR'], mode: 'SMART' } } }));
+          ws.onopen = () => ws.send(JSON.stringify({ setup: { model: 'models/gemini-3.5-transcribe-live', generationConfig: { responseModalities: ['TEXT'] }, inputAudioTranscription: Object.assign({ languageCodes: ['tr-TR'], mode: req.query.mode || 'SMART' }, req.query.vocab ? { customVocabulary: String(req.query.vocab).split(',') } : {}) } }));
           ws.onmessage = async (ev) => {
             const s = typeof ev.data === 'string' ? ev.data : Buffer.from(await ev.data.arrayBuffer ? await ev.data.arrayBuffer() : ev.data).toString();
             log.push(s.slice(0, 300));

@@ -92,8 +92,23 @@ class QuickRec {
         }
     };
 
+    // Gemini Live (gemini-3.5-transcribe-live): ses doğrudan Gemini'ye canlı akar — öncelikli yöntem
+    volatile LiveSTT live;
+    boolean liveFlushed = false;
+
+    static boolean online(Context c) {
+        try {
+            android.net.ConnectivityManager cm = c.getSystemService(android.net.ConnectivityManager.class);
+            android.net.NetworkCapabilities nc = cm.getNetworkCapabilities(cm.getActiveNetwork());
+            return nc != null && nc.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET);
+        } catch (Exception e) {
+            return true;
+        }
+    }
+
     boolean start() {
         if (recOn || busy) return recOn;
+        if (online(svc) && startOwn(true)) return true;
         if (Build.VERSION.SDK_INT >= 26) {
             said.setLength(0);
             partial = "";
@@ -112,7 +127,7 @@ class QuickRec {
             h.postDelayed(tick, 400);
             return true;
         }
-        return startOwn();
+        return startOwn(false);
     }
 
     int fails = 0;
@@ -269,8 +284,12 @@ class QuickRec {
     }
 
     boolean startOwn() {
+        return startOwn(false);
+    }
+
+    boolean startOwn(boolean useLive) {
         if (recOn || busy) return recOn;
-        engine = Build.VERSION.SDK_INT >= 33 ? "google-ses" : "gemini";
+        engine = useLive ? "gemini-live" : Build.VERSION.SDK_INT >= 33 ? "google-ses" : "gemini";
         try {
             int min = AudioRecord.getMinBufferSize(RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
             AudioRecord a = null;
@@ -305,7 +324,22 @@ class QuickRec {
         recStart = System.currentTimeMillis();
         l.state(true);
         l.text("🎤 Dinliyorum… konuşunca yazıya geçer");
-        sttStart();
+        live = null;
+        liveFlushed = false;
+        if (useLive) {
+            sttEnded = true;
+            final LiveSTT L = new LiveSTT(t -> {});
+            live = L;
+            new Thread(() -> {
+                if (!L.start(svc)) { // canlı ses olmadı: telefonun konuşma tanımasına geç
+                    if (live == L) {
+                        live = null;
+                        engine = Build.VERSION.SDK_INT >= 33 ? "google-ses" : "gemini";
+                        if (recOn) sttStart();
+                    }
+                }
+            }, "canli-ses").start();
+        } else sttStart();
         new Thread(this::recLoop, "kayan-kayit").start();
         return true;
     }
@@ -339,6 +373,14 @@ class QuickRec {
                 break;
             }
             pcm.write(f, 0, n);
+            LiveSTT L = live;
+            if (L != null && L.ready) {
+                if (!liveFlushed) { // bağlanana kadar biriken sesi de gönder
+                    byte[] all = pcm.toByteArray();
+                    for (int o = 0; o < all.length; o += 3200) L.send(all, o, Math.min(3200, all.length - o));
+                    liveFlushed = true;
+                } else L.send(f, 0, n);
+            }
             if (sttW != null) {
                 byte[] c = new byte[n];
                 System.arraycopy(f, 0, c, 0, n);
@@ -348,7 +390,8 @@ class QuickRec {
             if (now - lastUi > 400) {
                 lastUi = now;
                 long s = (now - recStart) / 1000;
-                String t = (said + " " + partial).trim();
+                LiveSTT L2 = live;
+                String t = L2 != null ? L2.full() : (said + " " + partial).trim();
                 l.text((t.isEmpty() ? "🎤 Dinliyorum… " : "🎤 " + t + "  ") + String.format(java.util.Locale.ROOT, "%d:%02d", s / 60, s % 60));
             }
             if (now - recStart > MAX_MS) {
@@ -471,6 +514,9 @@ class QuickRec {
         ar = null;
         if (cancel) {
             stopStt();
+            LiveSTT L = live;
+            live = null;
+            if (L != null) new Thread(L::cancel).start();
             l.done("✕ İptal edildi", false);
             return;
         }
@@ -562,6 +608,12 @@ class QuickRec {
         }
         stopStt();
         String text = (said + " " + partial).trim();
+        LiveSTT L = live;
+        if (L != null) { // Gemini Live: son cümlenin kesin yazısını al
+            String lt = L.finish();
+            live = null;
+            if (!lt.isEmpty()) text = lt;
+        }
         SharedPreferences pr = svc.getSharedPreferences("app", Context.MODE_PRIVATE);
         String code = pr.getString("qCode", ""), model = pr.getString("qModel", "gemini-flash-latest");
         String sys = pr.getString("qPrompt", "");
