@@ -190,7 +190,9 @@ body.camonly>*:not(#cam):not(.toast):not(script){display:none!important}body.cam
 .recbar.on{display:flex}
 .recbar i{width:9px;height:9px;border-radius:50%;background:#ef4444;animation:pul 1.4s ease-out infinite}
 .mono{font-family:var(--mono)}
-.donesep{font-size:12px;font-weight:600;color:var(--mut);padding:14px 0 4px;border-top:1px dashed var(--line);margin-top:4px}
+.donesep{display:flex;align-items:center;gap:8px;width:100%;font:600 13px inherit;font-family:inherit;color:var(--mut);background:#f8fafc;border:1px dashed var(--line);border-radius:14px;padding:11px 14px;margin-top:8px;cursor:pointer;text-align:left}
+.donesep .cv{margin-left:auto;transition:transform .2s;font-size:12px}.donesep.open .cv{transform:rotate(180deg)}
+.added{font-size:11px;color:var(--mut);white-space:nowrap}
 .dent.draft .tx{color:#475569}
 .ok-tag{background:#d1fae5;color:#047857}
 .dent.call{border-left:3px solid var(--acc2);padding-left:10px}
@@ -1897,7 +1899,7 @@ function taskRow(t){
 }
 const sortT=(a,b)=>(a.due||'9999').localeCompare(b.due||'9999')||({yuksek:0,orta:1,dusuk:2}[a.priority]-{yuksek:0,orta:1,dusuk:2}[b.priority]);
 // ================= Notlar + görevler tek listede =================
-let iF=LS.get('na_iF','all'),iTag='';
+let iF=LS.get('na_iF','all'),iTag='',doneOpen=!!LS.get('na_doneOpen',false);
 const IF={all:'Tümü',gorev:'✅ Görev',not:'📝 Not',bugun:'Bugün',geciken:'Geciken',biten:'Biten',photo:'📷 Fotoğraflı',ai:'✨ AI',gunluk:'🎙 Günlük',pin:'📌 Sabit'};
 function setIF(k){iF=k;LS.set('na_iF',k);renderItems()}
 function iMatch(k,x,f){
@@ -1918,12 +1920,12 @@ function iMatch(k,x,f){
 }
 function iText(k,x){return [x.title,x.body,x.note,(x.tags||[]).join(' '),...(x.photos||[]).map(p=>[p.addr,p.tpl,p.title,...Object.values(p.fields||{})].join(' '))].join(' ').toLocaleLowerCase('tr')}
 function noteInner(n){
-  return `<div class="ico">${n.photos?.length?'📷':'📝'}</div><div class="bd"><div class="t">${n.pinned?'<span class="pin">📌</span> ':''}${esc(n.title||'Not')}${n.aiPending?' <span class="tag">📴 AI bekliyor</span>':''}</div>${n.body?`<div class="prev">${esc(n.body)}</div>`:''}${n.photos?.length?`<div class="nthumbs">${n.photos.slice(0,4).map(p=>`<img data-pid="${p.id}" alt="">`).join('')}${n.photos.length>4?`<span class="mut" style="align-self:center">+${n.photos.length-4}</span>`:''}</div>${n.photos[0].addr?`<div class="ploc">📍 ${esc(n.photos[0].addr)}</div>`:''}`:''}<div>${isAI(n)?`<span class="tag ai-tag">✨ AI${n.via==='voice'?' · 🎤':''}</span>`:''}${(n.tags||[]).map(t=>`<span class="tag">#${esc(t)}</span>`).join('')}<span class="mut" style="font-size:11px"> ${fmt(toLocal(new Date(n.updated||n.created)))}</span></div></div>`;
+  return `<div class="ico">${n.photos?.length?'📷':'📝'}</div><div class="bd"><div class="t">${n.pinned?'<span class="pin">📌</span> ':''}${esc(n.title||'Not')}${n.aiPending?' <span class="tag">📴 AI bekliyor</span>':''}</div>${n.body?`<div class="prev">${esc(n.body)}</div>`:''}${n.photos?.length?`<div class="nthumbs">${n.photos.slice(0,4).map(p=>`<img data-pid="${p.id}" alt="">`).join('')}${n.photos.length>4?`<span class="mut" style="align-self:center">+${n.photos.length-4}</span>`:''}</div>${n.photos[0].addr?`<div class="ploc">📍 ${esc(n.photos[0].addr)}</div>`:''}`:''}<div>${isAI(n)?`<span class="tag ai-tag">✨ AI${n.via==='voice'?' · 🎤':''}</span>`:''}${(n.tags||[]).map(t=>`<span class="tag">#${esc(t)}</span>`).join('')}<span class="added"> 🕓 ${fmt(n.created||n.updated)}${n.updated&&n.created&&n.updated-n.created>6e4?' · düzenlendi':''}</span></div></div>`;
 }
 function taskInner(t){
   const late=!t.done&&t.due&&new Date(t.due)<new Date();
   return `<div class="chk ${t.done?'on':''}" onclick="toggle('${t.id}')">${t.done?'✓':''}</div><div class="bd"><div class="t">${esc(t.title)}</div>
-  <div class="mut">${t.due?`<span class="${late?'late':''}">📅 ${fmt(t.due)}</span>`:''}${t.remind&&!t.done?` ⏰ ${fmt(t.remind)}`:''}${t.repeat?' 🔁':''} <span class="tag p-${t.priority}">${PRI[t.priority]||''}</span>${(t.tags||[]).map(g=>`<span class="tag">#${esc(g)}</span>`).join('')}</div>
+  <div class="mut">${t.due?`<span class="${late?'late':''}">📅 ${fmt(t.due)}</span>`:''}${t.remind&&!t.done?` ⏰ ${fmt(t.remind)}`:''}${t.repeat?' 🔁':''} <span class="tag p-${t.priority}">${PRI[t.priority]||''}</span>${(t.tags||[]).map(g=>`<span class="tag">#${esc(g)}</span>`).join('')}${!t.done&&t.created?`<span class="added"> 🕓 ${fmt(t.created)}</span>`:''}</div>
   ${t.note?`<div class="mut">${esc(t.note)}</div>`:''}</div>`;
 }
 const SW_EDIT='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>';
@@ -1949,7 +1951,9 @@ function renderItems(){
   const when=([k,x])=>-(x.created||x.updated||0);
   l.sort((a,b)=>grp(a)-grp(b)||(grp(a)===9?(b[1].doneAt||0)-(a[1].doneAt||0):when(a)-when(b)));
   const open=l.filter(i=>grp(i)!==9),done=l.filter(i=>grp(i)===9);
-  $('itemList').innerHTML=l.length?open.map(([k,x])=>rowHTML(k,x)).join('')+(done.length&&open.length?`<div class="donesep">Bitenler · ${done.length}</div>`:'')+done.map(([k,x])=>rowHTML(k,x)).join('')
+  // Bitenler katlanır: kapalıyken sadece başlık görünür (Biten filtresinde veya başka kayıt yoksa açık)
+  const dOpen=doneOpen||iF==='biten'||!open.length;
+  $('itemList').innerHTML=l.length?open.map(([k,x])=>rowHTML(k,x)).join('')+(done.length&&open.length&&iF!=='biten'?`<button class="donesep ${dOpen?'open':''}" onclick="doneOpen=!doneOpen;LS.set('na_doneOpen',doneOpen);renderItems()">✓ Bitenler · ${done.length}<span class="cv">▼</span></button>`:'')+(dOpen?done.map(([k,x])=>rowHTML(k,x)).join(''):'')
     :`<div class="empty">${q||iTag?'Eşleşen kayıt yok':iF==='all'?'Henüz not ya da görev yok':'Bu filtrede kayıt yok'}</div>`;
   hydrate($('itemList'));
 }
