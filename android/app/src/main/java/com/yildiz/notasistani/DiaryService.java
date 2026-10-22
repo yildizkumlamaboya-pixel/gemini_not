@@ -453,11 +453,14 @@ public class DiaryService extends Service {
                 sttMode = "gemini-live";
                 if (old != null) new Thread(old::finish).start();
                 h.postDelayed(liveWatch, 5000);
-            } else if (++liveFails < 3 && running) {
-                h.postDelayed(this::liveStart, 2000);
-            } else if (running) { // canlı ses yok: telefonun konuşma tanımasına geç
-                live = null;
-                sttStart();
+            } else if (running) {
+                // canlı ses şu an yok: parçalar Gemini'ye ses olarak gider; canlı sesi tekrar dene (hep Gemini)
+                if (live == null) {
+                    sttActive = false;
+                    sttMode = "";
+                }
+                liveFails++;
+                h.postDelayed(this::liveStart, liveFails < 3 ? 2000 : 15000);
             }
         }, "gunluk-canli").start();
     }

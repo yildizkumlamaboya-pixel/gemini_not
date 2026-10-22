@@ -405,7 +405,7 @@ details.card[open] summary{margin-bottom:6px}
       <button onclick="scanCalls(true)">Şimdi tara</button>
     </div>
   </div>
-  <div class="card">
+  <div class="card hidden">
     <h3>Firma ve kişi isimleri</h3>
     <div class="mut" style="font-size:13px;margin-bottom:6px">Sesli notta bu isimler doğru yazılır (Gemini'ye önceden bildirilir). Otomatik öğrenme yok; listeyi sen yönetirsin.</div>
     <div id="vocList"></div>
@@ -459,8 +459,7 @@ details.card[open] summary{margin-bottom:6px}
       <button class="sm" style="flex:0 0 auto" onclick="speak('Merhaba, ben Not Asistanı. Cevaplarım böyle duyulacak.')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg></button>
     </div>
   </div>
-  <details class="card">
-    <summary style="font-weight:650;cursor:pointer">Gelişmiş</summary>
+  <div class="hidden"><!-- Gemini ayarları otomatik: kullanıcıya gösterilmez -->
     <div id="srvStat" class="mut"></div>
     <label>Uygulama kodu (sunucuda APP_CODE tanımladıysan)</label>
     <input id="sCode" type="password" placeholder="Boş bırakılabilir">
@@ -476,9 +475,11 @@ details.card[open] summary{margin-bottom:6px}
       <button onclick="testAI()">Bağlantıyı test et</button>
     </div>
     <div id="sOut" class="mut" style="margin-top:8px"></div>
-  
-    <button class="sm ghost" style="color:var(--bad);margin-top:14px" onclick="wipe()">Tüm verileri sil</button>
-  </details>
+  </div>
+  <div class="card">
+    <h3>Veriler</h3>
+    <button class="sm ghost" style="color:var(--bad)" onclick="wipe()">Tüm verileri sil</button>
+  </div>
 </section>
 </main>
 
@@ -680,6 +681,8 @@ const $=id=>document.getElementById(id);
 const LS={get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}},set:(k,v)=>localStorage.setItem(k,JSON.stringify(v))};
 let notes=LS.get('na_notes',[]), tasks=LS.get('na_tasks',[]), chat=LS.get('na_chat',[]);
 let cfg=LS.get('na_cfg',{key:'',model:'gemini-flash-latest',sound:true});
+// Gemini ayarları tamamen otomatik: sunucudaki anahtar + en güncel hızlı model (eski manuel ayarlar temizlenir)
+cfg.key='';cfg.model='gemini-flash-latest';LS.set('na_cfg',cfg);
 const APP=typeof window.Android!=='undefined';
 // ---- Özel isimler sözlüğü: Gemini'ye doğru yazımları öğretir + yanlış duyulanları düzeltir ----
 let vocab=LS.get('na_vocab',null);
@@ -689,7 +692,8 @@ if(!Array.isArray(vocab)){vocab=[{w:'kova',from:'koyle, koyla'},{w:'Omkon',from:
 // sözlükte olmayan firma adlarını hiçbir tanıma doğru yazamaz (ör. sözlüksüz "Hypermax", sözlükle "Hipermak").
 if(vocab.some(v=>v.auto)){vocab=vocab.filter(v=>!v.auto);LS.set('na_vocab',vocab)}
 for(const w of ['Hipermak','Fırat Mühendislik'])if(!vocab.some(v=>v.w.toLocaleLowerCase('tr')===w.toLocaleLowerCase('tr'))){vocab.push({w,from:''});LS.set('na_vocab',vocab)}
-function speechNames(){return [...new Set(vocab.map(v=>String(v.w||'').trim()).filter(w=>w.length>=2))].slice(0,100)}
+// Otomatik: kayıtlarındaki firma/kişi adları (not ve görev başlıklarından, fotoğraf firma alanlarından) Gemini'ye arka planda bildirilir
+function speechNames(){return [...new Set([...vocab.map(v=>String(v.w||'').trim()),...knownTerms()].filter(w=>w.length>=2))].slice(0,100)}
 function pushNames(){try{if(APP&&typeof Android.setNames==='function')Android.setNames(JSON.stringify(speechNames()))}catch{}}
 function namesHint(){return ''}
 const escRe=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
@@ -1024,7 +1028,7 @@ class LiveSTT{
   async start(){
     const model=LIVE_STT_MODEL,tok=cfg.key?null:(await callGemini({op:'livetoken'})).token;
     const url=cfg.key?LIVE_WS+'BidiGenerateContent?key='+encodeURIComponent(cfg.key):LIVE_WS+'BidiGenerateContentConstrained?access_token='+encodeURIComponent(tok);
-    this.stream=await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
+    this.stream=await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:false,noiseSuppression:false,autoGainControl:true}});
     await new Promise((res,rej)=>{
       const ws=this.ws=new WebSocket(url);let ok=false;
       const to=setTimeout(()=>{if(!ok){try{ws.close()}catch{}rej(new Error('Canlı ses bağlanamadı'))}},8000);
@@ -1044,7 +1048,9 @@ class LiveSTT{
       const ac=this.ac=new (window.AudioContext||window.webkitAudioContext)({sampleRate:16000});
       const src=ac.createMediaStreamSource(this.stream),pr=this.pr=ac.createScriptProcessor(2048,1,1);
       pr.onaudioprocess=e=>{const f=e.inputBuffer.getChannelData(0),rate=ac.sampleRate;
-        let d=f;if(rate!==16000){const r=rate/16000,n=Math.floor(f.length/r);d=new Float32Array(n);for(let i=0;i<n;i++)d[i]=f[Math.floor(i*r)]}
+        let d=f;if(rate!==16000){ // ortalamalı örnek azaltma (bozulma/aliasing olmasın)
+          const r=rate/16000,n=Math.floor(f.length/r);d=new Float32Array(n);
+          for(let i=0;i<n;i++){const a=Math.floor(i*r),b=Math.min(f.length,Math.floor((i+1)*r));let sum=0;for(let j=a;j<b;j++)sum+=f[j];d[i]=sum/Math.max(1,b-a)}}
         let sq=0;const pcm=new Int16Array(d.length);for(let i=0;i<d.length;i++){const s=Math.max(-1,Math.min(1,d[i]));pcm[i]=s<0?s*0x8000:s*0x7fff;sq+=s*s}
         const rms=Math.sqrt(sq/d.length);if(rms>0.02){this.lastVoice=Date.now();this.heard=true}
         if(this.stopped)return;if(this.ready)this.sendAudio(pcm);else this.q.push(pcm)};
@@ -1073,10 +1079,18 @@ async function liveVoice(mode){
   rec.live=L;$('recLive').textContent='';$('recLive').classList.remove('hidden');
   $('recHint').textContent='Bağlanıyor…';$('mRec').classList.add('on');$('micBtn').classList.add('rec');
   clearInterval(rec.tick);rec.t0=Date.now();
-  try{await L.start()}catch(e){ // canlı ses olmazsa telefonun konuşma tanımasına geç
-    rec.live=null;$('micBtn').classList.remove('rec');try{await L.stop(true)}catch{}
-    rec.noLive=true;voice(mode);rec.noLive=false;return}
+  try{await L.start()}catch(e){ // bir kez daha dene; hep aynı (Gemini Live) tanıma kullanılsın
+    try{await L.stop(true)}catch{}
+    const L2=new LiveSTT(L.onText);rec.live=L2;$('recHint').textContent='Yeniden bağlanıyor…';
+    try{await L2.start()}catch(e2){
+      rec.live=null;$('micBtn').classList.remove('rec');try{await L2.stop(true)}catch{}
+      if(navigator.onLine){$('mRec').classList.remove('on');toastMsg('⚠️ Gemini\'ye bağlanılamadı, tekrar dene');return}
+      rec.noLive=true;voice(mode);rec.noLive=false;return} // internet yoksa telefonun tanıması
+    if(rec.live!==L2)return;return liveAfterStart(L2,mode)}
   if(rec.live!==L)return;
+  return liveAfterStart(L,mode);
+}
+function liveAfterStart(L,mode){
   $('recHint').textContent='Konuştukça yazıya geçer · susunca kendiliğinden kaydedilir';
   rec.tick=setInterval(()=>{const s=Math.floor((Date.now()-rec.t0)/1000);$('recTime').textContent=`${Math.floor(s/60)}:${pad(s%60)}`;
     if(L.heard&&Date.now()-L.lastVoice>5000)recFinish(); // 5 sn sessizlik: kaydet
@@ -2515,7 +2529,7 @@ if(!window.CAMONLY){checkServer();renderNStat();renderAll();checkReminders();syn
 if(NATIVE_DIARY){pullResults();pullChunks();let st={};try{st=JSON.parse(Android.diaryState())}catch{}if(st.on){dr.on=true;dr.native=true;diaryUI(true);nativeTick()}}
 if(APP&&cfg.sumOn&&typeof Android.setSummary==='function')sumSettings();
 renderPerms().then(all=>{if(!all&&!LS.get('na_perm',0))setTimeout(()=>$('mPerm').classList.add('on'),900)});
-setTimeout(()=>{if(!cfg.key&&!(srv.ok&&srv.hasKey))toastMsg('👋 Gemini bağlantısı yok — <b>Ayarlar</b>\'a bak.',6000)},1500);
+setTimeout(()=>{if(!cfg.key&&!(srv.ok&&srv.hasKey))toastMsg('📴 Gemini\'ye şu an ulaşılamıyor — internet gelince kendiliğinden bağlanır.',5000)},1500);
 const sv=new URLSearchParams(location.search).get('v');if(sv)show(sv);
 try{const pv=sessionStorage.getItem('na_ptr');if(pv){sessionStorage.removeItem('na_ptr');show(pv);setTimeout(()=>toastMsg('✔ Yenilendi',1500),300)}}catch{}
 </script>

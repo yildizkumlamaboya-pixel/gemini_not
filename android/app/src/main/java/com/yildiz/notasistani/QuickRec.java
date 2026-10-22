@@ -331,12 +331,16 @@ class QuickRec {
             final LiveSTT L = new LiveSTT(t -> {});
             live = L;
             new Thread(() -> {
-                if (!L.start(svc)) { // canlı ses olmadı: telefonun konuşma tanımasına geç
-                    if (live == L) {
-                        live = null;
-                        engine = Build.VERSION.SDK_INT >= 33 ? "google-ses" : "gemini";
-                        if (recOn) sttStart();
-                    }
+                if (L.start(svc)) return;
+                // bir kez daha dene; olmazsa kayıt bitince ses yine Gemini'ye yazdırılır (hep Gemini, başka tanıma yok)
+                final LiveSTT L2 = new LiveSTT(t -> {});
+                if (live == L && recOn) {
+                    live = L2;
+                    if (L2.start(svc)) return;
+                }
+                if (live == L2 || live == L) {
+                    live = null;
+                    engine = "gemini";
                 }
             }, "canli-ses").start();
         } else sttStart();
