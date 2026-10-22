@@ -1888,7 +1888,7 @@ function toggle(id){
     tasks.push({...t,id:uid(),due:shift(t.due,t.repeat),remind:shift(t.remind,t.repeat),notified:false,done:false,created:Date.now()});
     t.repeat='';
   }
-  t.done=!t.done;t.doneAt=t.done?Date.now():null;save();renderAll();
+  t.done=!t.done;t.doneAt=t.done?Date.now():null;if(!t.done)delete t.archived;save();renderAll();
 }
 function taskRow(t){
   const late=!t.done&&t.due&&new Date(t.due)<new Date();
@@ -1900,10 +1900,11 @@ function taskRow(t){
 const sortT=(a,b)=>(a.due||'9999').localeCompare(b.due||'9999')||({yuksek:0,orta:1,dusuk:2}[a.priority]-{yuksek:0,orta:1,dusuk:2}[b.priority]);
 // ================= Notlar + görevler tek listede =================
 let iF=LS.get('na_iF','all'),iTag='',doneOpen=!!LS.get('na_doneOpen',false);
-const IF={all:'Tümü',gorev:'✅ Görev',not:'📝 Not',bugun:'Bugün',geciken:'Geciken',biten:'Biten',photo:'📷 Fotoğraflı',ai:'✨ AI',gunluk:'🎙 Günlük',pin:'📌 Sabit'};
+const IF={all:'Tümü',gorev:'✅ Görev',not:'📝 Not',bugun:'Bugün',geciken:'Geciken',biten:'Biten',arsiv:'🗄 Arşiv',photo:'📷 Fotoğraflı',ai:'✨ AI',gunluk:'🎙 Günlük',pin:'📌 Sabit'};
 function setIF(k){iF=k;LS.set('na_iF',k);renderItems()}
 function iMatch(k,x,f){
   const n=new Date(),end=new Date(n.getFullYear(),n.getMonth(),n.getDate(),23,59);
+  if(x.archived)return f==='arsiv';
   if(f!=='gunluk'&&fromG(x))return false;
   switch(f){
     case 'gorev':return k==='t'&&!x.done;
@@ -1911,6 +1912,7 @@ function iMatch(k,x,f){
     case 'bugun':return k==='t'?(!x.done&&x.due&&new Date(x.due)<=end):dayKey(x.updated||x.created)===dayKey(Date.now());
     case 'geciken':return k==='t'&&!x.done&&x.due&&new Date(x.due)<n;
     case 'biten':return k==='t'&&x.done;
+    case 'arsiv':return false;
     case 'photo':return k==='n'&&x.photos?.length>0;
     case 'ai':return x.src==='ai'||(k==='n'&&isAI(x));
     case 'gunluk':return fromG(x);
@@ -1952,8 +1954,8 @@ function renderItems(){
   l.sort((a,b)=>grp(a)-grp(b)||(grp(a)===9?(b[1].doneAt||0)-(a[1].doneAt||0):when(a)-when(b)));
   const open=l.filter(i=>grp(i)!==9),done=l.filter(i=>grp(i)===9);
   // Bitenler katlanır: kapalıyken sadece başlık görünür (Biten filtresinde veya başka kayıt yoksa açık)
-  const dOpen=doneOpen||iF==='biten'||!open.length;
-  $('itemList').innerHTML=l.length?open.map(([k,x])=>rowHTML(k,x)).join('')+(done.length&&open.length&&iF!=='biten'?`<button class="donesep ${dOpen?'open':''}" onclick="doneOpen=!doneOpen;LS.set('na_doneOpen',doneOpen);renderItems()">✓ Bitenler · ${done.length}<span class="cv">▼</span></button>`:'')+(dOpen?done.map(([k,x])=>rowHTML(k,x)).join(''):'')
+  const dOpen=doneOpen||iF==='biten'||iF==='arsiv'||!open.length;
+  $('itemList').innerHTML=l.length?open.map(([k,x])=>rowHTML(k,x)).join('')+(done.length&&open.length&&iF!=='biten'&&iF!=='arsiv'?`<button class="donesep ${dOpen?'open':''}" onclick="doneOpen=!doneOpen;LS.set('na_doneOpen',doneOpen);renderItems()">✓ Bitenler · ${done.length}<span class="cv">▼</span></button>`:'')+(dOpen?done.map(([k,x])=>rowHTML(k,x)).join(''):'')
     :`<div class="empty">${q||iTag?'Eşleşen kayıt yok':iF==='all'?'Henüz not ya da görev yok':'Bu filtrede kayıt yok'}</div>`;
   hydrate($('itemList'));
 }
@@ -1981,7 +1983,7 @@ function swCloseAll(except){document.querySelectorAll('.srow.open').forEach(r=>{
 function renderTasks(){renderItems();return;
   const n=new Date(),wk=new Date(n);wk.setDate(n.getDate()+7);
   let l=tasks.filter(t=>{
-    if(tF==='gunluk')return fromG(t);if(fromG(t))return false;
+    if(t.archived)return false;    if(tF==='gunluk')return fromG(t);if(fromG(t))return false;
     if(tF==='biten')return t.done; if(tF==='acik')return true; if(t.done)return false;
     if(tF==='bugun')return t.due&&new Date(t.due)<=new Date(n.getFullYear(),n.getMonth(),n.getDate(),23,59);
     if(tF==='hafta')return t.due&&new Date(t.due)<=wk;
@@ -2520,6 +2522,14 @@ document.querySelectorAll('.modal').forEach(m=>m.onclick=e=>{if(e.target===m){if
 $('nav').onclick=e=>{const b=e.target.closest('button');if(!b||!b.dataset.v)return;show(b.dataset.v)};
 function show(v){if(v==='notlar'){iF='not';v='bugun';setTimeout(renderItems,0)}if(!$('v-'+v))v='bugun';if(v==='ayarlar'){renderBackup();renderVocab();renderCallStat()}if(v==='ayarlar')renderPerms();document.querySelectorAll('main>section').forEach(s=>s.classList.toggle('hidden',s.id!=='v-'+v));[...$('nav').children].forEach(b=>b.classList.toggle('act',b.dataset.v===v));$('fab').classList.toggle('hidden',v==='asistan');$('qBar').classList.toggle('hidden',v!=='bugun');document.body.classList.toggle('home',v==='bugun');window.scrollTo(0,0);if(v==='asistan')renderChat()}
 function renderAll(){renderToday();renderNotes();renderTasks();renderDiary()}
+// 30 günden önce biten görevler arşive taşınır (silinmez; "🗄 Arşiv" filtresinde durur, işareti kaldırınca geri gelir)
+const ARCHIVE_DAYS=30;
+function autoArchive(){
+  const lim=Date.now()-ARCHIVE_DAYS*864e5;let ch=0;
+  tasks.forEach(t=>{if(!t.done||t.archived)return;if(!t.doneAt){t.doneAt=Date.now();ch++;return}if(t.doneAt<lim){t.archived=true;ch++}});
+  if(ch){save();renderAll()}
+}
+setTimeout(autoArchive,1500);setInterval(autoArchive,6*3600e3);
 setInterval(()=>{const n=new Date();$('clock').textContent=`${GUN[n.getDay()].slice(0,3)} ${pad(n.getHours())}:${pad(n.getMinutes())}`},1000);
 $('sKey').value=cfg.key||'';$('sCode').value=cfg.code||'';$('sModel').innerHTML=`<option>${esc(cfg.model)}</option>`;$('sSound').checked=cfg.sound!==false;$('sumOn').checked=!!cfg.sumOn;$('sumTime').value=cfg.sumTime||'20:00';$('ttsVoice').value=cfg.voice||'Charon';$('ttsBtn').classList.toggle('act',!!cfg.tts);
 {const e=new Date(new Date().setHours(23,59,0,0));if(!tasks.some(t=>!t.done&&t.due&&new Date(t.due)<=e))tF='acik'}
