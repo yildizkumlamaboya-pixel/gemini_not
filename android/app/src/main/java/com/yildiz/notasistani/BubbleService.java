@@ -50,7 +50,7 @@ public class BubbleService extends Service {
     WindowManager wm;
     LinearLayout box;
     WindowManager.LayoutParams lp;
-    ImageView micV, camV;
+    ImageView micV, camV, penV;
     TextView panel;
     boolean micReady = false;
     final Handler h = new Handler(Looper.getMainLooper());
@@ -167,6 +167,11 @@ public class BubbleService extends Service {
         b2.topMargin = dp(10);
         box.addView(mic, a);
         box.addView(cam, b2);
+        ImageView pen = btn(R.drawable.ic_pen, R.drawable.bg_pen, "text");
+        penV = pen;
+        LinearLayout.LayoutParams b3 = new LinearLayout.LayoutParams(dp(52), dp(52));
+        b3.topMargin = dp(10);
+        box.addView(pen, b3);
         SharedPreferences pr = getSharedPreferences("app", MODE_PRIVATE);
         DisplayMetrics dm = getResources().getDisplayMetrics();
         lp = new WindowManager.LayoutParams(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
@@ -231,6 +236,7 @@ public class BubbleService extends Service {
         };
         mic.setOnTouchListener(drag);
         cam.setOnTouchListener(drag);
+        pen.setOnTouchListener(drag);
         wm.addView(box, lp);
     }
 
@@ -265,6 +271,14 @@ public class BubbleService extends Service {
         }
         if (QuickRecService.recording) { // kayıt sırasında: mikrofon = kaydet, ✕ = iptal
             sendRec("voice".equals(act) ? QuickRecService.TOGGLE : QuickRecService.CANCEL);
+            return;
+        }
+        if ("text".equals(act)) { // mini not alanı (yanında biri varken elle yaz)
+            try {
+                startActivity(new Intent(this, QuickNoteActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_NO_ANIMATION));
+            } catch (Exception e) {
+                open("note");
+            }
             return;
         }
         if ("voice".equals(act)) { // uygulamayı açmadan kayda başla
@@ -460,6 +474,7 @@ public class BubbleService extends Service {
             micV.setImageResource(on ? R.drawable.ic_stop : R.drawable.ic_mic);
             camV.setBackgroundResource(on ? R.drawable.bg_gray : R.drawable.bg_cam);
             camV.setImageResource(on ? R.drawable.ic_close : R.drawable.ic_cam);
+            if (penV != null) penV.setVisibility(on ? View.GONE : View.VISIBLE);
         });
     }
 

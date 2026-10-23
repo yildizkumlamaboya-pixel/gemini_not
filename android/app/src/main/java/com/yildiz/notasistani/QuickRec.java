@@ -598,6 +598,10 @@ class QuickRec {
 
     /** AI sonucu: görevleri/notları dosyaya yazar, alarmları kurar, özet döndürür. */
     String apply(JSONObject out, JSONObject r, long ts) throws Exception {
+        return applyStatic(svc, out, r, ts);
+    }
+
+    static String applyStatic(Context svc, JSONObject out, JSONObject r, long ts) throws Exception {
         JSONArray tasks = r.optJSONArray("tasks"), notes = r.optJSONArray("notes");
         if (tasks == null) tasks = new JSONArray();
         if (notes == null) notes = new JSONArray();
@@ -617,6 +621,10 @@ class QuickRec {
     }
 
     JSONObject ask(String sys, JSONArray parts, String model, String code) throws Exception {
+        return askStatic(svc, sys, parts, model, code);
+    }
+
+    static JSONObject askStatic(Context svc, String sys, JSONArray parts, String model, String code) throws Exception {
         JSONObject body = new JSONObject().put("contents", new JSONArray().put(new JSONObject().put("role", "user").put("parts", parts)))
                 .put("systemInstruction", new JSONObject().put("parts", new JSONArray().put(new JSONObject().put("text", sys.replace("{{NOW}}", nowCtx())))))
                 .put("generationConfig", new JSONObject().put("temperature", 0.1).put("responseMimeType", "application/json").put("thinkingConfig", new JSONObject().put("thinkingBudget", 0)));

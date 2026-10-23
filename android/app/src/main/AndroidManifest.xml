@@ -51,6 +51,14 @@
             android:launchMode="singleTask"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|keyboard|uiMode|density"
             android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
+        <activity
+            android:name=".QuickNoteActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity="com.yildiz.notasistani.quicknote"
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="stateVisible|adjustResize"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
         <receiver android:name=".AlarmReceiver" android:exported="false" />
         <receiver android:name=".NotifAction" android:exported="false" />
         <receiver android:name=".SummaryReceiver" android:exported="false" />

@@ -2397,16 +2397,16 @@ function importBubble(){
   for(const r of res.sort((a,b)=>a.ts-b.ts)){
     const n0=notes.length,t0=tasks.length;
     if(!notes.some(n=>n.bub===r.ts)&&!tasks.some(t=>t.bub===r.ts)){
-      if(r.pending||(!r.tasks?.length&&!r.notes?.length)){notes.push({id:uid(),title:(r.transcript||'').split(/[.\n]/)[0].slice(0,50)||'Sesli not',body:r.transcript||'',tags:[],pinned:false,created:r.ts,updated:r.ts,src:'manual',via:'voice',aiPending:!!r.pending,bub:r.ts});nn++}
+      if(r.pending||(!r.tasks?.length&&!r.notes?.length)){notes.push({id:uid(),title:(r.transcript||'').split(/[.\n]/)[0].slice(0,50)||(r.kind==='text'?'Not':'Sesli not'),body:r.transcript||'',tags:[],pinned:false,created:r.ts,updated:r.ts,src:'manual',via:r.kind==='text'?'':'voice',aiPending:!!r.pending,bub:r.ts});nn++}
       else{
-        (r.tasks||[]).forEach(t=>{tasks.push({id:t.id||uid(),title:t.title,note:t.note||'',due:t.due||'',remind:t.remind||'',priority:t.priority||'orta',repeat:t.repeat||'',done:false,notified:false,created:r.ts,src:'ai',via:'voice',bub:r.ts});nt++});
-        (r.notes||[]).forEach(n=>{notes.push({id:uid(),title:n.title,body:n.body||'',tags:n.tags||[],pinned:false,created:r.ts,updated:r.ts,src:'ai',via:'voice',bub:r.ts});nn++});
+        (r.tasks||[]).forEach(t=>{tasks.push({id:t.id||uid(),title:t.title,note:t.note||'',due:t.due||'',remind:t.remind||'',priority:t.priority||'orta',repeat:t.repeat||'',done:false,notified:false,created:r.ts,src:'ai',via:r.kind==='text'?'':'voice',bub:r.ts});nt++});
+        (r.notes||[]).forEach(n=>{notes.push({id:uid(),title:n.title,body:n.body||'',tags:n.tags||[],pinned:false,created:r.ts,updated:r.ts,src:'ai',via:r.kind==='text'?'':'voice',bub:r.ts});nn++});
       }
     }
     if(r.audio){const items=[...notes.slice(n0),...tasks.slice(t0)];let b64='';try{b64=Android.bubbleFile(r.audio)||''}catch{}if(b64&&items.length)audJobs.push(storeAudioB64(b64,r.ts,items));try{Android.bubbleAck(r.audio)}catch{}}
     try{Android.bubbleAck(r.name)}catch{}
   }
-  save();renderAll();if(nt||nn)toastMsg(`🎤 Kayan mikrofondan: ${nt} görev, ${nn} not eklendi`);
+  save();renderAll();if(nt||nn)toastMsg(`📥 Kayan düğmelerden: ${nt} görev, ${nn} not eklendi`);
   if(audJobs.length)Promise.all(audJobs).then(()=>{save();renderAll()});
   setTimeout(processAIQueue,1500);
 }
