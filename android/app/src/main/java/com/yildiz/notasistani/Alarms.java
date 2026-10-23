@@ -69,7 +69,7 @@ class Alarms {
                 String t = o.optString("title"), b = o.optString("body");
                 if (when > now) arm(c, id, when, t, b);
                 else if (now - when < 6 * 3600 * 1000L) {
-                    Notif.show(c, id.hashCode(), t, b);
+                    Notif.show(c, id.hashCode(), t, b, id);
                     done(c, id);
                 } else done(c, id);
             } catch (Exception ignored) {

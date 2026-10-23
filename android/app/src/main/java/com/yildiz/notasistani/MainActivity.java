@@ -969,6 +969,13 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
+        public String takeNotifActs() {
+            String v = prefs.getString("notifActs", "[]");
+            prefs.edit().remove("notifActs").apply();
+            return v;
+        }
+
+        @JavascriptInterface
         public void cancel(String id) {
             Alarms.cancel(MainActivity.this, id);
         }

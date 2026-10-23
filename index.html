@@ -2239,7 +2239,19 @@ function checkReminders(){
   if(ch){save();renderAll()}
 }
 function snooze(id,min){const t=tasks.find(x=>x.id===id);t.remind=toLocal(new Date(Date.now()+min*6e4));t.notified=false;save();renderAll();hideToast();toastMsg('⏰ '+min+' dk sonra tekrar hatırlatılacak')}
-setInterval(checkReminders,15000);document.addEventListener('visibilitychange',()=>{if(!document.hidden){checkReminders();renderAll()}});
+// Bildirimdeki "Tamamlandı / Ertele" düğmeleri (uygulama kapalıyken basılanlar) görevlere işlenir
+function applyNotifActs(){
+  if(!APP||typeof Android.takeNotifActs!=='function')return;
+  let a=[];try{a=JSON.parse(Android.takeNotifActs()||'[]')}catch{}
+  if(!a.length)return;let d=0,z=0;
+  for(const x of a){const t=tasks.find(y=>y.id===x.id);if(!t)continue;
+    if(x.act==='done'&&!t.done){toggle(t.id);d++}
+    else if(x.act==='snooze'&&x.until){t.remind=toLocal(new Date(x.until));t.notified=false;z++}}
+  save();renderAll();
+  if(d||z)toastMsg([d?`✓ ${d} görev tamamlandı`:'',z?`⏰ ${z} görev ertelendi`:''].filter(Boolean).join(' · ')+' (bildirimden)');
+}
+setTimeout(applyNotifActs,800);
+setInterval(()=>{applyNotifActs();checkReminders()},15000);document.addEventListener('visibilitychange',()=>{if(!document.hidden){applyNotifActs();checkReminders();renderAll()}});
 function askNotif(){if(!('Notification' in window)){toastMsg('Bu tarayıcı bildirim desteklemiyor');return}Notification.requestPermission().then(renderNStat)}
 function testNotif(){notify('🔔 Test','Hatırlatmalar böyle görünecek','test');beep()}
 function renderNStat(){if(APP){let s={};try{s=JSON.parse(Android.permStatus())}catch{}$('nStat').textContent=s.notifications==='granted'?'✔ Bildirim izni verildi — hatırlatmalar uygulama kapalıyken de gelir':s.notifications==='denied'?'✕ Kapalı — Ayarlar → İzinler → Tüm izinleri ver':'Henüz izin verilmedi';return}$('nStat').textContent=!('Notification' in window)?'Desteklenmiyor':Notification.permission==='granted'?'✔ Bildirim izni verildi':Notification.permission==='denied'?'✕ Engellendi — tarayıcı ayarlarından izin ver':'Henüz izin verilmedi';}
