@@ -2124,9 +2124,11 @@ function renderItems(){
   let l=all.filter(([k,x])=>iMatch(k,x,iF)&&(!iTag||(x.tags||[]).includes(iTag))&&(!q||iText(k,x).includes(q)));
   const now=new Date(),end=new Date(now.getFullYear(),now.getMonth(),now.getDate(),23,59);
   // En son eklenen en üstte (sabitlenenler önde, bitenler en altta)
-  // Sıra: sabitlenenler → öncelik (Yüksek, Orta, Düşük) → önceliksizler; aynı öncelikte vadesi yakın olan, sonra en yeni üstte. Bitenler en altta.
+  // Sıra: son eklenen → sabitlenenler → öncelik (Yüksek, Orta, Düşük) → önceliksizler; aynı öncelikte vadesi yakın olan, sonra en yeni üstte. Bitenler en altta.
   const PR={yuksek:1,orta:2,dusuk:3};
-  const grp=([k,x])=>k==='t'&&x.done?9:(x.pinned||x.aiBusy)?0:(PR[x.priority]||4);
+  // Son eklenen kayıt (aynı anda eklenenlerle birlikte) önceliğe bakmadan en üstte
+  const lastAt=Math.max(0,...l.filter(([k,x])=>!(k==='t'&&x.done)).map(([k,x])=>x.created||0));
+  const grp=([k,x])=>k==='t'&&x.done?9:x.aiBusy?-1:(lastAt&&(x.created||0)>=lastAt-60e3)?-1:x.pinned?0:(PR[x.priority]||4);
   const when=([k,x])=>-(x.created||x.updated||0);
   const due=([k,x])=>k==='t'&&x.due?new Date(x.due).getTime():Infinity;
   l.sort((a,b)=>grp(a)-grp(b)||(grp(a)===9?(b[1].doneAt||0)-(a[1].doneAt||0):(due(a)-due(b))||when(a)-when(b)));
