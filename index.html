@@ -521,7 +521,7 @@ details.card[open] summary{margin-bottom:6px}
   <div id="vBody" class="vbody"></div>
   <div id="vPhotos" class="vphotos"></div>
   <div id="vTags" style="margin-top:8px"></div>
-  <div class="row" id="vAct" style="margin-top:14px"></div>
+  <div class="row" id="vAct" style="margin-top:14px;flex-wrap:wrap"></div>
   <div class="mut" style="font-size:12px;margin-top:10px;text-align:center">Düzenlemek veya silmek için listede sola kaydır</div>
 </div></div>
 <div class="modal" id="mAct"><div class="sheet actsheet">
@@ -2666,6 +2666,25 @@ function priSel(k,x){
   const cur=x.priority||'yok';
   $('vPri').innerHTML=`<span class="mut" style="font-size:12.5px;align-self:center;margin-right:2px">Öncelik:</span>`+opts.map(([v,l])=>`<button class="p-${v}${cur===v?' on':''}" onclick="setPri('${k}','${x.id}','${v}')">${l}</button>`).join('');
 }
+// Notu göreve / görevi nota çevir (Geri al ile geri alınır)
+function convertItem(k,id){
+  const src=k==='n'?notes:tasks,i=src.findIndex(x=>x.id===id);if(i<0)return;const x=src[i];
+  if(k==='n'&&x.photos?.length&&!confirm('Fotoğraflar görevde görünmez (silinmez; nota geri çevirince geri gelir). Göreve çevrilsin mi?'))return;
+  let y;
+  if(k==='n'){
+    y={id:x.id,title:x.title||'Görev',note:x.body||'',due:x.due||'',remind:x.remind||'',priority:x.priority||'orta',repeat:'',done:false,notified:false,created:x.created||Date.now(),tags:x.tags||[],src:x.src,via:x.via};
+    if(x.photos?.length)y.photos=x.photos;
+  }else{
+    y={id:x.id,title:x.title||'Not',body:x.note||'',tags:x.tags||[],pinned:false,created:x.created||Date.now(),updated:Date.now(),src:x.src||'manual',via:x.via};
+    if(x.priority&&x.priority!=='orta')y.priority=x.priority;
+    if(x.due)y.due=x.due;if(x.remind)y.remind=x.remind;if(x.photos?.length)y.photos=x.photos;
+  }
+  ['audio','audioDur','from','bub'].forEach(f=>{if(x[f]!=null)y[f]=x[f]});
+  src.splice(i,1);(k==='n'?tasks:notes).push(y);save();renderAll();
+  closeM('mView');k==='n'?viewTask(y.id):viewNote(y.id);
+  window.undoConv=()=>{const dst=k==='n'?tasks:notes,j=dst.findIndex(z=>z.id===id);if(j>=0)dst.splice(j,1);src.splice(i,0,x);save();renderAll();closeM('mView');toastMsg('↶ Geri alındı',2000)};
+  toastMsg(`${k==='n'?'✅ Göreve':'📝 Nota'} çevrildi <button class="sm" style="margin-left:8px" onclick="undoConv()">Geri al</button>`,5000);
+}
 function setPri(k,id,v){
   const x=(k==='n'?notes:tasks).find(y=>y.id===id);if(!x)return;
   if(v==='yok')delete x.priority;else x.priority=v;
@@ -2678,7 +2697,7 @@ function viewNote(id){
   $('vBody').textContent=n.body||'';
   edPhotos=[...(n.photos||[])];$('vPhotos').innerHTML=edPhotos.map((p,i)=>`<img data-pid="${p.id}" onclick="viewPhoto(${i})" alt="">`).join('');hydrate($('vPhotos'));
   $('vTags').innerHTML=(n.tags||[]).map(t=>`<span class="tag">#${esc(t)}</span>`).join('');
-  $('vAct').innerHTML=`${n.audio?`<button class="audbtn big" onclick="playAud('${n.audio}',this)">▶ Sesi dinle${n.audioDur?' · '+n.audioDur+' sn':''}</button><button class="sm ghost" style="flex:0 0 auto;width:auto" onclick="saveAud('${n.audio}')" title="Ses dosyasını kaydet">⬇</button>`:''}<button onclick="shareItem('n','${n.id}')">📤 Paylaş</button>`;
+  $('vAct').innerHTML=`${n.audio?`<button class="audbtn big" onclick="playAud('${n.audio}',this)">▶ Sesi dinle${n.audioDur?' · '+n.audioDur+' sn':''}</button><button class="sm ghost" style="flex:0 0 auto;width:auto" onclick="saveAud('${n.audio}')" title="Ses dosyasını kaydet">⬇</button>`:''}<button onclick="shareItem('n','${n.id}')">📤 Paylaş</button><button onclick="convertItem('n','${n.id}')">✅ Göreve çevir</button>`;
   if(n.audio)$('vMeta').insertAdjacentHTML('beforeend',` · <span class="mut">🎤 ses ${audLeft(n.audio)} daha saklanır</span>`);
   $('mView').classList.add('on');
 }
@@ -2688,7 +2707,7 @@ function viewTask(id){
   const late=!t.done&&t.due&&new Date(t.due)<new Date();
   $('vMeta').innerHTML=[t.due?`<span class="${late?'late':''}">📅 ${fmt(t.due)}</span>`:'',t.remind?`⏰ ${fmt(t.remind)}`:'',t.repeat?'🔁 '+t.repeat:'',t.done&&t.doneAt?'✓ bitti '+fmt(toLocal(new Date(t.doneAt))):''].filter(Boolean).join(' · ');
   $('vBody').textContent=t.note||'';$('vPhotos').innerHTML='';$('vTags').innerHTML='';
-  $('vAct').innerHTML=`<button class="${t.done?'':'pri'}" onclick="toggle('${t.id}');viewTask('${t.id}')">${t.done?'↺ Geri al':'✓ Tamamlandı'}</button><button onclick="shareItem('t','${t.id}')">📤 Paylaş</button>${t.audio?`<button class="audbtn big" onclick="playAud('${t.audio}',this)">▶ Sesi dinle</button><button class="sm ghost" style="flex:0 0 auto;width:auto" onclick="saveAud('${t.audio}')" title="Ses dosyasını kaydet">⬇</button>`:''}`;
+  $('vAct').innerHTML=`<button class="${t.done?'':'pri'}" onclick="toggle('${t.id}');viewTask('${t.id}')">${t.done?'↺ Geri al':'✓ Tamamlandı'}</button><button onclick="shareItem('t','${t.id}')">📤 Paylaş</button>${t.audio?`<button class="audbtn big" onclick="playAud('${t.audio}',this)">▶ Sesi dinle</button><button class="sm ghost" style="flex:0 0 auto;width:auto" onclick="saveAud('${t.audio}')" title="Ses dosyasını kaydet">⬇</button>`:''}<button onclick="convertItem('t','${t.id}')">📝 Nota çevir</button>`;
   $('mView').classList.add('on');
 }
 function shareItem(k,id){
