@@ -328,12 +328,12 @@ class QuickRec {
         liveFlushed = false;
         if (useLive) {
             sttEnded = true;
-            final LiveSTT L = new LiveSTT(t -> {});
+            final LiveSTT L = new LiveSTT(cmdCB());
             live = L;
             new Thread(() -> {
                 if (L.start(svc)) return;
                 // bir kez daha dene; olmazsa kayıt bitince ses yine Gemini'ye yazdırılır (hep Gemini, başka tanıma yok)
-                final LiveSTT L2 = new LiveSTT(t -> {});
+                final LiveSTT L2 = new LiveSTT(cmdCB());
                 if (live == L && recOn) {
                     live = L2;
                     if (L2.start(svc)) return;
@@ -487,6 +487,30 @@ class QuickRec {
         });
     }
 
+    // Sesli bitirme komutu: cümle sonunda "tamam / kaydet / not al / bitti" → beklemeden kaydet
+    static final java.util.regex.Pattern END_CMD = java.util.regex.Pattern.compile("(?iu)(?:^|[\\s,.;!])(?:tamam(?:dır)?|kaydet|not al|bitti)[\\s.!]*$");
+    volatile boolean cmdEnd = false;
+
+    LiveSTT.CB cmdCB() {
+        cmdEnd = false;
+        return new LiveSTT.CB() {
+            public void text(String full) {
+            }
+
+            public void fin(String seg) {
+                LiveSTT L = live;
+                if (L != null && recOn && END_CMD.matcher(L.fin.toString().trim()).find()) {
+                    cmdEnd = true;
+                    h.post(() -> finish(false));
+                }
+            }
+        };
+    }
+
+    static String stripCmd(String t) {
+        return t == null ? "" : t.replaceAll("(?iu)[\\s,.;!]*(?:tamam(?:dır)?|kaydet|not al|bitti)[\\s.!]*$", "").trim();
+    }
+
     void finish(boolean cancel) {
         if (modeA) {
             if (!recOn) return;
@@ -618,6 +642,8 @@ class QuickRec {
             live = null;
             if (!lt.isEmpty()) text = lt;
         }
+        final boolean cmd = cmdEnd;
+        if (cmd) text = stripCmd(text);
         SharedPreferences pr = svc.getSharedPreferences("app", Context.MODE_PRIVATE);
         String code = pr.getString("qCode", ""), model = pr.getString("qModel", "gemini-flash-latest");
         String sys = pr.getString("qPrompt", "");
@@ -667,9 +693,11 @@ class QuickRec {
                         }
                         JSONArray parts = new JSONArray().put(new JSONObject().put("inlineData", new JSONObject().put("mimeType", "audio/wav").put("data", Base64.encodeToString(wav, Base64.NO_WRAP))))
                                 .put(new JSONObject().put("text", "Bu sesli notu önce yazıya dök, sonra not ve görevlere ayır."));
-                        r = ask("Ses kaydını KELİMESİ KELİMESİNE Türkçe yazıya dök (transcript); cümlenin tamamını dinleyip bağlama göre en doğru yazımı seç, özel isimleri doğru yaz." + nm
-                                + "\nJSON'un İLK alanı \"transcript\" olsun.\n" + sys, parts, model, code);
+                        r = ask((cmd ? "Kaydın sonundaki \"tamam\", \"kaydet\", \"not al\", \"bitti\" kelimesi bitirme komutudur; metne YAZMA. " : "")
+                                + "Ses kaydını KELİMESİ KELİMESİNE Türkçe yazıya dök (transcript); cümlenin tamamını dinleyip bağlama göre en doğru yazımı seç, özel isimleri doğru yaz." + nm
+                                + "\nJSON'un İLK alanı \"transcript\" olsun.\n" + sys, parts, "gemini-pro-latest", code);
                         String tr = r.optString("transcript", "").trim();
+                        if (cmd) tr = stripCmd(tr);
                         if (!tr.isEmpty()) out.put("transcript", tr);
                     } else r = ask(sys, new JSONArray().put(new JSONObject().put("text", text)), model, code);
                     if (f.exists()) { // uygulama henüz almadıysa sonucu ekle

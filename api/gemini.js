@@ -62,7 +62,7 @@ module.exports = async (req, res) => {
     }
     // Hız: "düşünme" kapalı olsun. 2.5 modelleri thinkingBudget:0, yeni (3.x / -latest) modeller thinkingLevel:'minimal' ister;
     // yanlış ayar gönderilince model 400 verip ayarsız (düşünerek, yavaş) tekrar deneniyordu.
-    const thinkFor = (m) => /2\.5|2\.0/.test(m) ? { thinkingBudget: 0 } : { thinkingLevel: 'minimal' };
+    const thinkFor = (m) => /2\.5-pro/.test(m) ? { thinkingBudget: 128 } : /2\.5|2\.0/.test(m) ? { thinkingBudget: 0 } : /pro/.test(m) ? { thinkingLevel: 'low' } : { thinkingLevel: 'minimal' };
     const wantFast = !!(body && body.generationConfig && body.generationConfig.thinkingConfig);
     const first = /^[a-z0-9.\-]+$/i.test(model || '') ? model : FALLBACK[0];
     const models = [first, ...FALLBACK.filter(m => m !== first)];

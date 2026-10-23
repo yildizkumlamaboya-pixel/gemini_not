@@ -1024,7 +1024,7 @@ const HAS_STT=()=>{try{return APP&&!!Android.sttAvailable&&Android.sttAvailable(
 function sttVoice(mode){
   if(!Android.sttStart()){toastMsg('🎤 Mikrofon izni gerekli');return}
   rec.stt=true;rec.sttText='';$('recLive').textContent='';$('recLive').classList.remove('hidden');
-  $('recHint').textContent='Konuştukça yazıya geçer · susunca kendiliğinden kaydedilir';$('mRec').classList.add('on');
+  $('recHint').textContent='Bitirince "tamam" ya da "kaydet" de · susunca da kendiliğinden kaydedilir';$('mRec').classList.add('on');
   clearInterval(rec.tick);rec.t0=Date.now();
   $('micBtn').classList.add('rec');rec.lastP=Date.now();
   rec.tick=setInterval(()=>{const s=Math.floor((Date.now()-rec.t0)/1000);$('recTime').textContent=`${Math.floor(s/60)}:${pad(s%60)}`;
@@ -1055,6 +1055,9 @@ async function liveModel(){
     if(pick){liveModelName=pick;LS.set('na_livemodel',pick);LS.set('na_livemodel_t',Date.now())}}catch{}
   return liveModelName||'models/gemini-3.8-live';
 }
+// Sesli bitirme komutu: cümlenin SONUNDA "tamam / kaydet / not al / bitti" denince 5 sn beklemeden kaydeder
+const END_CMD=/(?:^|[\s,.;!])(?:tamam(?:dır)?|kaydet|not al|bitti)[\s.!]*$/i;
+const stripCmd=t=>String(t||'').replace(/[\s,.;!]*(?:tamam(?:dır)?|kaydet|not al|bitti)[\s.!]*$/i,'').trim();
 const LIVE_STT_MODEL='models/gemini-3.5-transcribe-live'; // Google'ın canlı yazıya dökme modeli
 class LiveSTT{
   constructor(onText){this.onText=onText;this.text='';this.ready=false;this.q=[];this.lastVoice=0;this.heard=false;this.t0=Date.now();this.lastText=Date.now()}
@@ -1070,7 +1073,7 @@ class LiveSTT{
       ws.onmessage=async ev=>{let m;try{m=JSON.parse(typeof ev.data==='string'?ev.data:await ev.data.text())}catch{return}
         if(m.setupComplete){ok=true;clearTimeout(to);this.ready=true;this.q.splice(0).forEach(b=>this.sendAudio(b));res()}
         const sc=m.serverContent||{},fin=sc.inputTranscription?.text,tmp=sc.interimInputTranscription?.text;
-        if(fin){this.text+=(this.text&&!/\s$/.test(this.text)?' ':'')+fin;this.interim='';this.lastText=Date.now()}
+        if(fin){this.text+=(this.text&&!/\s$/.test(this.text)?' ':'')+fin;this.interim='';this.lastText=Date.now();if(END_CMD.test(this.text.trim())&&this.onCmd){this.cmdEnd=true;this.onCmd()}}
         if(tmp!=null&&!fin){this.interim=tmp;this.lastText=Date.now()}
         if(fin||tmp!=null)this.onText((this.text+' '+(this.interim||'')).replace(/\s+/g,' ').trim());
         if(m.error||m.goAway)this.closed=true;
@@ -1139,19 +1142,26 @@ async function playAud(id,btn){
   a.onended=()=>{btn?.classList.remove('on');URL.revokeObjectURL(a.src);if(audPlayer===a)audPlayer=null};
   a.play().catch(()=>toastMsg('Ses çalınamadı'));
 }
+async function saveAud(id){
+  let b;try{b=await DB.get(id)}catch{}if(!b){toastMsg('Ses bulunamadı');return}
+  const name='sesli-not-'+new Date().toISOString().slice(0,16).replace(/[-:T]/g,'')+'.wav';
+  if(APP&&typeof Android.saveFile==='function'){Android.saveFile(await blobToB64(b),name,'audio/wav');return}
+  const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;a.click();
+}
 function audLeft(id){const ts=LS.get('na_auds',{})[id];if(!ts)return'';const d=Math.max(0,Math.ceil((ts+AUD_DAYS*864e5-Date.now())/864e5));return d+' gün'}
 function audBtn(x){return x.audio?`<button class="audbtn" onclick="event.stopPropagation();playAud('${x.audio}',this)">▶ Ses${x.audioDur?' · '+x.audioDur+' sn':''}</button>`:''}
 setTimeout(sweepAudio,2500);setInterval(sweepAudio,6*3600e3);
 // ---- Ses → kesin yazı (tüm kaydı bağlamıyla dinler; canlı tanımanın cümle başını yanlış duymasını düzeltir) ----
-function audioSys(){const nm=speechNames();return `Ses kaydını KELİMESİ KELİMESİNE Türkçe yazıya dök (transcript). Bu kısa bir sesli not/komut; cümlenin tamamını dinleyip bağlama göre en doğru yazımı seç. Özel isimleri (kişi, firma, yer) duyduğun gibi doğru yaz.${nm.length?` Kullanıcının kayıtlarında geçen adlar (ses benziyorsa bu yazımı kullan, benzemiyorsa kullanma): ${nm.slice(0,80).join(', ')}.`:''} Konuşma yoksa transcript boş olsun.`}
+function audioSys(cmd){const nm=speechNames();return `${cmd?'Kaydın sonundaki "tamam", "kaydet", "not al", "bitti" kelimesi kaydı bitirme komutudur; metne YAZMA. ':''}Ses kaydını KELİMESİ KELİMESİNE Türkçe yazıya dök (transcript). Bu kısa bir sesli not/komut; cümlenin tamamını dinleyip bağlama göre en doğru yazımı seç. Özel isimleri (kişi, firma, yer) duyduğun gibi doğru yaz.${nm.length?` Kullanıcının kayıtlarında geçen adlar (ses benziyorsa bu yazımı kullan, benzemiyorsa kullanma): ${nm.slice(0,80).join(', ')}.`:''} Konuşma yoksa transcript boş olsun.`}
 const wavPart=async b=>({inlineData:{mimeType:'audio/wav',data:await blobToB64(b)}});
-async function quickVoice(blob,live){
+const AUDIO_MODEL='gemini-pro-latest'; // kesin yazı için en iyi ses anlayan model (not anında kaydedildiği için bekletmez)
+async function quickVoice(blob,live,cmd){
   const aud=pendAud;pendAud=null;const now=Date.now();
   const tmp={id:uid(),title:(live||'Sesli not').split(/[.\n]/)[0].slice(0,50)||'Sesli not',body:live||'',tags:[],pinned:false,created:now,updated:now,src:'manual',via:'voice',aiBusy:true};
   notes.push(tmp);save();show('bugun');renderAll();
   try{
-    const r=await gemini('Bu sesli notu önce yazıya dök, sonra not ve görevlere ayır.',{parts:[await wavPart(blob)],system:audioSys()+'\nJSON\'un İLK alanı "transcript" olsun.\n'+quickSys(),json:true});
-    const tr=String(r.transcript||'').trim()||live;
+    const r=await gemini('Bu sesli notu önce yazıya dök, sonra not ve görevlere ayır.',{parts:[await wavPart(blob)],system:audioSys(cmd)+'\nJSON\'un İLK alanı "transcript" olsun.\n'+quickSys(),json:true,model:AUDIO_MODEL});
+    let tr=String(r.transcript||'').trim()||live;if(cmd)tr=stripCmd(tr);
     if(!tr){notes=notes.filter(x=>x.id!==tmp.id);save();renderAll();toastMsg('🤫 Konuşma anlaşılmadı');return}
     notes=notes.filter(x=>x.id!==tmp.id);
     pending={notes:r.notes||[],tasks:r.tasks||[],src:tr,transcript:tr};
@@ -1162,10 +1172,10 @@ async function quickVoice(blob,live){
     if(live){$('qText').value=live;$('qBtn').click()}else{save();renderAll();toastMsg('⚠️ '+esc(e.message))}
   }
 }
-async function noteVoice(blob,live){
+async function noteVoice(blob,live,cmd){
   toastMsg('⏳ Yazıya dökülüyor…',2500);
   let t=live;
-  try{const r=await gemini('Bu ses kaydını yazıya dök.',{parts:[await wavPart(blob)],system:audioSys()+' Sadece JSON: {"transcript":""}',json:true});t=String(r.transcript||'').trim()||live}catch{}
+  try{const r=await gemini('Bu ses kaydını yazıya dök.',{parts:[await wavPart(blob)],system:audioSys(cmd)+' Sadece JSON: {"transcript":""}',json:true,model:AUDIO_MODEL});t=String(r.transcript||'').trim()||live;if(cmd)t=stripCmd(t)}catch{}
   voiceText('note',t);
 }
 // Ses kaydı bitince ortak işleme
@@ -1191,7 +1201,8 @@ async function liveVoice(mode){
   return liveAfterStart(L,mode);
 }
 function liveAfterStart(L,mode){
-  $('recHint').textContent='Konuştukça yazıya geçer · susunca kendiliğinden kaydedilir';
+  L.onCmd=()=>{if(rec.live===L)recFinish()};
+  $('recHint').textContent='Bitirince "tamam" ya da "kaydet" de · susunca da kendiliğinden kaydedilir';
   rec.tick=setInterval(()=>{const s=Math.floor((Date.now()-rec.t0)/1000);$('recTime').textContent=`${Math.floor(s/60)}:${pad(s%60)}`;
     if(L.heard&&Date.now()-L.lastVoice>5000)recFinish(); // 5 sn sessizlik: kaydet
     else if(!L.heard&&Date.now()-rec.t0>12000){recCancel();toastMsg('🤫 Ses duyulmadı')}
@@ -1229,7 +1240,8 @@ function recFinish(){
   if(rec.live){const L=rec.live;rec.live=null;clearInterval(rec.tick);$('recHint').textContent='Tamamlanıyor…';
     L.stop(false).then(t=>{$('micBtn').classList.remove('rec');$('mRec').classList.remove('on');$('recLive').classList.add('hidden');if(!rec.cancel){
       // Kesin yazı: konuşma bitince TÜM ses tek parça Gemini'ye gider (canlı yazı sadece ekranda önizleme)
-      if(L.heard&&L.all?.length&&(rec.mode==='quick'||rec.mode==='note')){holdVoiceAudio(L.all);const b=pendAud?.blob;if(b){rec.mode==='quick'?quickVoice(b,t):noteVoice(b,t);return}}
+      if(L.cmdEnd)t=stripCmd(t);
+      if(L.heard&&L.all?.length&&(rec.mode==='quick'||rec.mode==='note')){holdVoiceAudio(L.all);const b=pendAud?.blob;if(b){rec.mode==='quick'?quickVoice(b,t,L.cmdEnd):noteVoice(b,t,L.cmdEnd);return}}
       voiceText(rec.mode,t)}});return}
   if(rec.stt){Android.sttStop();clearInterval(rec.tick);$('recHint').textContent='Tamamlanıyor…';return}
   if(rec.native){Android.voiceStop();clearInterval(rec.tick);rec.native=null;$('mRec').classList.remove('on');LS.set('na_vjobs',vJobs);vBusy();pollVoice();return}
@@ -2654,7 +2666,7 @@ function viewNote(id){
   $('vBody').textContent=n.body||'';
   edPhotos=[...(n.photos||[])];$('vPhotos').innerHTML=edPhotos.map((p,i)=>`<img data-pid="${p.id}" onclick="viewPhoto(${i})" alt="">`).join('');hydrate($('vPhotos'));
   $('vTags').innerHTML=(n.tags||[]).map(t=>`<span class="tag">#${esc(t)}</span>`).join('');
-  $('vAct').innerHTML=`${n.audio?`<button class="audbtn big" onclick="playAud('${n.audio}',this)">▶ Sesi dinle${n.audioDur?' · '+n.audioDur+' sn':''}</button>`:''}<button onclick="shareItem('n','${n.id}')">📤 Paylaş</button>`;
+  $('vAct').innerHTML=`${n.audio?`<button class="audbtn big" onclick="playAud('${n.audio}',this)">▶ Sesi dinle${n.audioDur?' · '+n.audioDur+' sn':''}</button><button class="sm ghost" style="flex:0 0 auto;width:auto" onclick="saveAud('${n.audio}')" title="Ses dosyasını kaydet">⬇</button>`:''}<button onclick="shareItem('n','${n.id}')">📤 Paylaş</button>`;
   if(n.audio)$('vMeta').insertAdjacentHTML('beforeend',` · <span class="mut">🎤 ses ${audLeft(n.audio)} daha saklanır</span>`);
   $('mView').classList.add('on');
 }
@@ -2664,7 +2676,7 @@ function viewTask(id){
   const late=!t.done&&t.due&&new Date(t.due)<new Date();
   $('vMeta').innerHTML=[t.due?`<span class="${late?'late':''}">📅 ${fmt(t.due)}</span>`:'',t.remind?`⏰ ${fmt(t.remind)}`:'',t.repeat?'🔁 '+t.repeat:'',t.done&&t.doneAt?'✓ bitti '+fmt(toLocal(new Date(t.doneAt))):''].filter(Boolean).join(' · ');
   $('vBody').textContent=t.note||'';$('vPhotos').innerHTML='';$('vTags').innerHTML='';
-  $('vAct').innerHTML=`<button class="${t.done?'':'pri'}" onclick="toggle('${t.id}');viewTask('${t.id}')">${t.done?'↺ Geri al':'✓ Tamamlandı'}</button><button onclick="shareItem('t','${t.id}')">📤 Paylaş</button>${t.audio?`<button class="audbtn big" onclick="playAud('${t.audio}',this)">▶ Sesi dinle</button>`:''}`;
+  $('vAct').innerHTML=`<button class="${t.done?'':'pri'}" onclick="toggle('${t.id}');viewTask('${t.id}')">${t.done?'↺ Geri al':'✓ Tamamlandı'}</button><button onclick="shareItem('t','${t.id}')">📤 Paylaş</button>${t.audio?`<button class="audbtn big" onclick="playAud('${t.audio}',this)">▶ Sesi dinle</button><button class="sm ghost" style="flex:0 0 auto;width:auto" onclick="saveAud('${t.audio}')" title="Ses dosyasını kaydet">⬇</button>`:''}`;
   $('mView').classList.add('on');
 }
 function shareItem(k,id){
