@@ -203,6 +203,18 @@ body.camonly>*:not(#cam):not(.toast):not(script){display:none!important}body.cam
 .meet{background:#f8fafc;border:1px solid var(--line);border-radius:14px;padding:12px;margin-top:6px}
 .meet .chips2{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
 .meet h4{margin:12px 0 4px;font-size:13px;color:#334155}.meet ul{margin:0;padding-left:18px}.meet li{margin:2px 0}
+.psum{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
+.psum div{background:#f8fafc;border:1px solid var(--line);border-radius:14px;padding:10px;text-align:center}
+.psum b{display:block;font-size:16px;margin-top:2px}.psum small{font-size:11.5px;color:var(--mut);font-weight:600}
+.psum .bad b{color:#dc2626}.psum .ok b{color:#059669}
+.prow{display:flex;align-items:center;gap:10px;padding:11px 12px;border:1px solid var(--line);border-radius:16px;margin-bottom:8px;background:#fff;box-shadow:inset 4px 0 0 #93c5fd}
+.prow.late{background:#fff1f2;box-shadow:inset 4px 0 0 #f43f5e}.prow.soon{background:#fffbeb;box-shadow:inset 4px 0 0 #f59e0b}.prow.paid{background:#f0fdf4;box-shadow:inset 4px 0 0 #22c55e;opacity:.85}
+.prow .pd{flex:0 0 46px;text-align:center;line-height:1.1}.prow .pd b{font-size:19px;display:block}.prow .pd small{font-size:11px;color:var(--mut)}
+.prow .pb{flex:1;min-width:0}.prow .pt{font-weight:700;font-size:14.5px}.prow .pm{font-size:12px;color:var(--mut);margin-top:2px}
+.prow .pa{font-weight:800;font-size:15px;white-space:nowrap;text-align:right}
+.prow .pchk{flex:0 0 auto;width:auto;padding:7px 10px;border-radius:12px;font-size:12.5px;font-weight:700;border:1.5px solid #22c55e;color:#15803d;background:#fff}
+.prow.paid .pchk{background:#22c55e;color:#fff}
+.pdef{display:flex;align-items:center;gap:8px;padding:9px 0;border-top:1px solid var(--line);cursor:pointer}.pdef:first-child{border-top:0}
 .donesep{display:flex;align-items:center;gap:8px;width:100%;font:600 13px inherit;font-family:inherit;color:var(--mut);background:#f8fafc;border:1px dashed var(--line);border-radius:14px;padding:11px 14px;margin-top:8px;cursor:pointer;text-align:left}
 .donesep .cv{margin-left:auto;transition:transform .2s;font-size:12px}.donesep.open .cv{transform:rotate(180deg)}
 .added{font-size:11px;color:var(--mut);white-space:nowrap}
@@ -360,6 +372,19 @@ details.card[open] summary{margin-bottom:6px}
 </section>
 
 <!-- GÜNLÜK -->
+<section id="v-odeme" class="hidden">
+  <div class="card">
+    <div class="row" style="align-items:center"><button class="sm ghost dnav" onclick="payShift(-1)">‹</button><b id="pMonth" style="flex:1;text-align:center;font-size:17px"></b><button class="sm ghost dnav" onclick="payShift(1)">›</button></div>
+    <div class="psum" id="pSum"></div>
+  </div>
+  <div class="card">
+    <div class="row"><textarea id="pAI" rows="2" placeholder="Yaz, AI eklesin: &quot;Garanti kredi 12 taksit ayda 15.000, her ayın 5'i&quot; · &quot;Akbank çek 25 Kasım 48.500 Borataş'a&quot; · &quot;Kira her ayın 1'i 20.000&quot;"></textarea></div>
+    <div class="row" style="margin-top:8px;flex-wrap:wrap"><button class="pri" style="flex:0 0 auto" id="pAIBtn" onclick="payAI()">✨ AI ile ekle</button><button class="sm" onclick="payForm()">+ Elle ekle</button><button class="sm" onclick="payShare()">📤 Muhasebeye gönder</button></div>
+  </div>
+  <div class="card"><div id="pList"></div></div>
+  <div class="card"><details><summary><b>Tüm ödeme kayıtları</b> <span class="mut" id="pDefCnt"></span></summary><div id="pDefs" style="margin-top:8px"></div></details></div>
+</section>
+
 <section id="v-gunluk" class="hidden">
   <div class="card ai">
     <div class="dhero">
@@ -510,10 +535,23 @@ details.card[open] summary{margin-bottom:6px}
   <button data-v="bugun" class="act"><b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg></b>Ana sayfa</button>
   <button data-v="gunluk"><b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 10v4M6 6v12M10 3v18M14 8v8M18 5v14M22 10v4"/></svg></b>Günlük</button>
   <button data-v="asistan"><b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 4.7 4.7 1.8-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2 2.2.8-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg></b>Asistan</button>
+  <button data-v="odeme"><b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5.5" width="19" height="13" rx="2.5"/><path d="M2.5 10h19M6.5 15h4"/></svg></b>Ödemeler</button>
   <button data-v="ayarlar"><b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></b>Ayarlar</button>
 </nav>
 
 <!-- NOT DÜZENLE -->
+<div class="modal" id="mPay"><div class="sheet">
+  <div class="row" style="align-items:center;margin-bottom:10px"><h2 id="pfTitle" style="flex:1;margin:0;font-size:19px">Ödeme ekle</h2><button class="sm ghost" style="flex:0 0 auto" onclick="closeM('mPay')">✕</button></div>
+  <div class="seg" id="pfType"><button data-v="taksit">💳 Taksit</button><button data-v="cek">🧾 Çek</button><button data-v="aylik">🔁 Aylık sabit</button><button data-v="tek">📌 Tek ödeme</button></div>
+  <label class="mut" style="font-size:12.5px;display:block;margin:10px 0 4px">Açıklama (kime / ne)</label><input id="pfName" placeholder="Örn: Garanti kredi, Kira, SGK, Borataş çeki">
+  <div class="row" style="margin-top:8px"><div style="flex:1"><label class="mut" style="font-size:12.5px;display:block;margin-bottom:4px">Tutar (₺)</label><input id="pfAmt" type="number" inputmode="decimal" placeholder="0"></div>
+    <div style="flex:1"><label class="mut" style="font-size:12.5px;display:block;margin-bottom:4px" id="pfDateL">Tarih</label><input id="pfDate" type="date"></div></div>
+  <div class="row" style="margin-top:8px" id="pfCntRow"><div style="flex:1"><label class="mut" style="font-size:12.5px;display:block;margin-bottom:4px">Taksit sayısı</label><input id="pfCnt" type="number" inputmode="numeric" placeholder="12"></div><div style="flex:1"></div></div>
+  <div class="row" style="margin-top:8px" id="pfEndRow"><div style="flex:1"><label class="mut" style="font-size:12.5px;display:block;margin-bottom:4px">Bitiş (isteğe bağlı)</label><input id="pfEnd" type="month"></div><div style="flex:1"></div></div>
+  <div class="row" style="margin-top:8px" id="pfCekRow"><div style="flex:1"><label class="mut" style="font-size:12.5px;display:block;margin-bottom:4px">Banka</label><input id="pfBank" placeholder="Akbank"></div><div style="flex:1"><label class="mut" style="font-size:12.5px;display:block;margin-bottom:4px">Çek no</label><input id="pfNo"></div></div>
+  <label class="mut" style="font-size:12.5px;display:block;margin:8px 0 4px">Not</label><input id="pfNote" placeholder="İsteğe bağlı">
+  <div class="row" style="margin-top:14px"><button class="ghost hidden" id="pfDel" style="flex:0 0 auto;color:var(--bad)" onclick="payDel()">Sil</button><span style="flex:1"></span><button class="pri" style="flex:0 0 auto" onclick="paySave()">Kaydet</button></div>
+</div></div>
 <div class="modal" id="mView"><div class="sheet">
   <div class="row" style="align-items:flex-start;margin-bottom:6px"><h2 id="vTitle" style="flex:1;margin:0;font-size:20px;line-height:1.3"></h2><button class="sm ghost" style="flex:0 0 auto" onclick="closeM('mView')">✕</button></div>
   <div id="vMeta" class="mut" style="margin-bottom:6px"></div>
@@ -703,6 +741,7 @@ details.card[open] summary{margin-bottom:6px}
 const $=id=>document.getElementById(id);
 const LS={get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}},set:(k,v)=>localStorage.setItem(k,JSON.stringify(v))};
 let notes=LS.get('na_notes',[]), tasks=LS.get('na_tasks',[]), chat=LS.get('na_chat',[]);
+let pays=LS.get('na_pays',[]); // ödemeler: [{id,type,title,amount,date,count,end,bank,no,note,paid:{key:ts},created}]
 notes.forEach(n=>{if(n.aiBusy){delete n.aiBusy;n.aiPending=true}});
 let cfg=LS.get('na_cfg',{key:'',model:'gemini-flash-latest',sound:true});
 // Gemini ayarları tamamen otomatik: sunucudaki anahtar + en güncel hızlı model (eski manuel ayarlar temizlenir)
@@ -742,6 +781,7 @@ function syncAlarms(){
   try{
     const want={},now=Date.now();
     for(const t of tasks){if(!t.done&&t.remind){const w=+new Date(t.remind);if(w>now)want[t.id]={w,title:'⏰ '+t.title,body:(t.due?'📅 '+stampDate(+new Date(t.due))+'  ':'')+(t.note||'')}}}
+    try{payAlarms(want)}catch{}
     const prev=LS.get('na_alarms',{});
     for(const id in prev)if(!want[id]||prev[id]!==want[id].w)Android.cancel(id);
     for(const id in want)if(prev[id]!==want[id].w)Android.schedule(id,want[id].w,want[id].title,want[id].body);
@@ -2203,7 +2243,7 @@ async function runChat(){
     const sys=`Kullanıcının kişisel not ve planlama asistanısın. Türkçe, samimi ve kısa cevap ver; markdown başlık kullanma. Sesli günlük kayıtlarıyla ilgili sorularda yalnızca kayıtlara dayan, ilgili kayıtların tarih-saatini belirt; filtreleme istenirse ilgili bölümleri tarih-saatleriyle aynen alıntıla; kayıtta yoksa uydurma. ${nowCtx()}
 Kullanıcı yeni görev/hatırlatma eklemeni isterse cevabının EN SONUNA şu satırı ekle:
 @@EKLE {"tasks":[{"title":"","note":"","due":null,"remind":null,"priority":"orta"}],"notes":[{"title":"","body":"","tags":[]}]}
-\nSESLİ GÜNLÜK KAYITLARI (son 30 gün, [tarih saat] etiketli):\n${diaryText(30).slice(-150000)||'(yok)'}\n\nNOTLAR:\n${ctxN||'(yok)'}\n\nGÖREVLER:\n${ctxT||'(yok)'}`;
+\nSESLİ GÜNLÜK KAYITLARI (son 30 gün, [tarih saat] etiketli):\n${diaryText(30).slice(-150000)||'(yok)'}\n\nNOTLAR:\n${ctxN||'(yok)'}\n\nGÖREVLER:\n${ctxT||'(yok)'}\n\nÖDEMELER (muhasebe: taksit/çek/aylık; bu ay ve sonraki 2 ay, ödenmemişler):\n${(()=>{const f=dayKey(Date.now()).slice(0,7);return pays.flatMap(p=>payInst(p,f,ymAdd(f,2)).filter(i=>!isPaid(p,i.key)).map(i=>`• ${i.date} ${p.title} ${money(i.amount)}${i.total?' ('+i.no+'/'+i.total+')':''} [${p.type}]`)).sort().join('\n')})()||'(yok)'}`;
     chat=chat.filter(m=>!m.typing);
     const hist=chat.filter(m=>!m.err).slice(-12).map(m=>({role:m.r==='user'?'user':'model',parts:[{text:m.t}]}));
     let r=await gemini('',{system:sys,history:hist});
@@ -2246,7 +2286,10 @@ function applyNotifActs(){
   if(!APP||typeof Android.takeNotifActs!=='function')return;
   let a=[];try{a=JSON.parse(Android.takeNotifActs()||'[]')}catch{}
   if(!a.length)return;let d=0,z=0;
-  for(const x of a){const t=tasks.find(y=>y.id===x.id);if(!t)continue;
+  for(const x of a){
+    const pm=/^payb?_([^_]+)_(.+)$/.exec(x.id);
+    if(pm){const p=pays.find(y=>y.id===pm[1]);if(p&&x.act==='done'){p.paid=p.paid||{};p.paid[pm[2]]=Date.now();d++;LS.set('na_pays',pays);renderPays()}continue}
+    const t=tasks.find(y=>y.id===x.id);if(!t)continue;
     if(x.act==='done'&&!t.done){toggle(t.id);d++}
     else if(x.act==='snooze'&&x.until){t.remind=toLocal(new Date(x.until));t.notified=false;z++}}
   save();renderAll();
@@ -2324,7 +2367,7 @@ async function folderBackup(manual){
         if(Android.writeFile('Fotograflar/'+fn,await blobToB64(b),'image/jpeg',false))saved[p.id]=fn}catch{}
     }
     LS.set('na_bk_photos',saved);
-    const js=JSON.stringify({notes,tasks,diary,tpls,vocab,logo:LS.get('na_logo',''),photoFiles:saved,v:5,at:Date.now()});
+    const js=JSON.stringify({notes,tasks,diary,pays,tpls,vocab,logo:LS.get('na_logo',''),photoFiles:saved,v:5,at:Date.now()});
     const ok=Android.writeText('NotAsistani-yedek.json',js)&&Android.writeText('Yedekler/yedek-'+dayKey(Date.now())+'.json',js);
     if(ok)LS.set('na_bk_last',Date.now());
     if(manual)toastMsg(ok?'✔ Yedeklendi':'⚠️ Yedeklenemedi — klasörü yeniden seç');
@@ -2337,7 +2380,7 @@ async function folderRestore(){
   let d;try{d=JSON.parse(s)}catch{toastMsg('Yedek dosyası okunamadı');return}
   if(!confirm(`${d.notes?.length||0} not, ${d.tasks?.length||0} görev, ${d.diary?.length||0} günlük kaydı yüklensin mi? (mevcutlara eklenir)`))return;
   const ids=new Set([...notes,...tasks].map(x=>x.id));
-  notes.push(...(d.notes||[]).filter(x=>!ids.has(x.id)));tasks.push(...(d.tasks||[]).filter(x=>!ids.has(x.id)));
+  notes.push(...(d.notes||[]).filter(x=>!ids.has(x.id)));tasks.push(...(d.tasks||[]).filter(x=>!ids.has(x.id)));{const pi=new Set(pays.map(x=>x.id));pays.push(...(d.pays||[]).filter(x=>!pi.has(x.id)));LS.set('na_pays',pays)}
   const di=new Set(diary.map(x=>x.id));diary.push(...(d.diary||[]).filter(x=>!di.has(x.id)));
   if(Array.isArray(d.tpls)){const ti=new Set(tpls.map(x=>x.id));tpls.push(...d.tpls.filter(x=>!ti.has(x.id)).map(normTpl))}
   if(d.logo&&!LS.get('na_logo','')){LS.set('na_logo',d.logo);loadLogo()}
@@ -2362,7 +2405,7 @@ async function driveBackup(manual){
   if(drvBusy||!Android.driveBegin()){clearTimeout(drvTimer);drvTimer=setTimeout(()=>{drvTimer=null;driveBackup(manual)},20000);return}
   drvBusy=true;drvDirty=false;driveBackup.manual=manual;
   try{
-    Android.driveAppend(JSON.stringify({app:'NotAsistani',v:6,at:Date.now(),notes,tasks,diary,tpls,vocab,sugg,logo:LS.get('na_logo','')})+'\n');
+    Android.driveAppend(JSON.stringify({app:'NotAsistani',v:6,at:Date.now(),notes,tasks,diary,pays,tpls,vocab,sugg,logo:LS.get('na_logo','')})+'\n');
     let n=0;for(const x of notes)for(const p of x.photos||[]){try{const b=await DB.get(p.id);if(b){Android.driveAppend('P\t'+p.id+'\t'+await blobToB64(b)+'\n');n++}}catch{}}
     Android.driveCommit();if(manual)toastMsg('☁️ Drive\'a yükleniyor…',1500);
   }catch(e){drvBusy=false;LS.set('na_drv_err',e.message);renderDrive()}
@@ -2375,7 +2418,7 @@ window.onDriveRestore=async ok=>{
   let d;try{d=JSON.parse(Android.driveReadLine()||'')}catch{toastMsg('Bu bir Not Asistanı yedeği değil');return}
   if(!confirm(`${d.notes?.length||0} not, ${d.tasks?.length||0} görev, ${d.diary?.length||0} günlük kaydı yüklensin mi? (mevcutlara eklenir)`)){while(Android.driveReadLine()!==null);renderDrive();return}
   const ids=new Set([...notes,...tasks].map(x=>x.id));
-  notes.push(...(d.notes||[]).filter(x=>!ids.has(x.id)));tasks.push(...(d.tasks||[]).filter(x=>!ids.has(x.id)));
+  notes.push(...(d.notes||[]).filter(x=>!ids.has(x.id)));tasks.push(...(d.tasks||[]).filter(x=>!ids.has(x.id)));{const pi=new Set(pays.map(x=>x.id));pays.push(...(d.pays||[]).filter(x=>!pi.has(x.id)));LS.set('na_pays',pays)}
   const di=new Set(diary.map(x=>x.id));diary.push(...(d.diary||[]).filter(x=>!di.has(x.id)));
   if(Array.isArray(d.tpls)){const ti=new Set(tpls.map(x=>x.id));tpls.push(...d.tpls.filter(x=>!ti.has(x.id)).map(normTpl))}
   if(d.logo&&!LS.get('na_logo','')){LS.set('na_logo',d.logo);loadLogo()}
@@ -2650,10 +2693,10 @@ async function checkServer(){
     :'ℹ️ Sunucu bulunamadı (Vercel\'de yayınlanınca otomatik bağlanır). Şimdilik aşağıya kendi anahtarını girebilirsin.';
   setDot(!!cfg.key||(srv.ok&&srv.hasKey));
 }
-async function exportData(){toastMsg('Yedek hazırlanıyor...');const photos={};for(const n of notes)for(const p of n.photos||[]){try{const b=await DB.get(p.id);if(b)photos[p.id]=await blobToB64(b,true)}catch{}}const js=JSON.stringify({notes,tasks,diary,photos,tpls,logo:LS.get('na_logo',''),v:4});const fn='not-asistani-yedek-'+toLocal(new Date()).slice(0,10)+'.json';
+async function exportData(){toastMsg('Yedek hazırlanıyor...');const photos={};for(const n of notes)for(const p of n.photos||[]){try{const b=await DB.get(p.id);if(b)photos[p.id]=await blobToB64(b,true)}catch{}}const js=JSON.stringify({notes,tasks,diary,pays,photos,tpls,logo:LS.get('na_logo',''),v:4});const fn='not-asistani-yedek-'+toLocal(new Date()).slice(0,10)+'.json';
   if(APP){const r=new FileReader();r.onload=()=>Android.saveFile(r.result.split(',')[1],fn,'application/json');r.readAsDataURL(new Blob([js],{type:'application/json'}));return}
   const b=new Blob([js],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='not-asistani-yedek-'+toLocal(new Date()).slice(0,10)+'.json';a.click()}
-$('impFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const d=JSON.parse(await f.text());if(confirm(`${d.notes?.length||0} not, ${d.tasks?.length||0} görev içe aktarılsın mı? (mevcutlara eklenir)`)){const ids=new Set([...notes,...tasks].map(x=>x.id));notes.push(...(d.notes||[]).filter(x=>!ids.has(x.id)));tasks.push(...(d.tasks||[]).filter(x=>!ids.has(x.id)));if(Array.isArray(d.tpls)){const ti=new Set(tpls.map(x=>x.id));tpls.push(...d.tpls.filter(x=>!ti.has(x.id)).map(normTpl));saveTpls()}if(d.logo&&!LS.get('na_logo','')){LS.set('na_logo',d.logo);loadLogo()}{const di=new Set(diary.map(x=>x.id));diary.push(...(d.diary||[]).filter(x=>!di.has(x.id)));saveDiary()}for(const[k,v]of Object.entries(d.photos||{})){try{await DB.put(k,await (await fetch(v)).blob())}catch{}}save();renderAll();toastMsg('✔ İçe aktarıldı')}}catch{toastMsg('Dosya okunamadı')}};
+$('impFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const d=JSON.parse(await f.text());if(confirm(`${d.notes?.length||0} not, ${d.tasks?.length||0} görev içe aktarılsın mı? (mevcutlara eklenir)`)){const ids=new Set([...notes,...tasks].map(x=>x.id));notes.push(...(d.notes||[]).filter(x=>!ids.has(x.id)));tasks.push(...(d.tasks||[]).filter(x=>!ids.has(x.id)));{const pi=new Set(pays.map(x=>x.id));pays.push(...(d.pays||[]).filter(x=>!pi.has(x.id)));LS.set('na_pays',pays)}if(Array.isArray(d.tpls)){const ti=new Set(tpls.map(x=>x.id));tpls.push(...d.tpls.filter(x=>!ti.has(x.id)).map(normTpl));saveTpls()}if(d.logo&&!LS.get('na_logo','')){LS.set('na_logo',d.logo);loadLogo()}{const di=new Set(diary.map(x=>x.id));diary.push(...(d.diary||[]).filter(x=>!di.has(x.id)));saveDiary()}for(const[k,v]of Object.entries(d.photos||{})){try{await DB.put(k,await (await fetch(v)).blob())}catch{}}save();renderAll();toastMsg('✔ İçe aktarıldı')}}catch{toastMsg('Dosya okunamadı')}};
 function wipe(){if(confirm('TÜM notlar ve görevler silinsin mi?')&&confirm('Emin misin? Geri alınamaz.')){notes=[];tasks=[];chat=[];diary=[];saveDiary();DB.clear().catch(()=>{});save();renderAll()}}
 
 // ================= GENEL =================
@@ -2667,6 +2710,102 @@ function priSel(k,x){
   const opts=k==='n'?[['yok','Yok'],['dusuk','Düşük'],['orta','Orta'],['yuksek','Yüksek']]:[['dusuk','Düşük'],['orta','Orta'],['yuksek','Yüksek']];
   const cur=x.priority||'yok';
   $('vPri').innerHTML=`<span class="mut" style="font-size:12.5px;align-self:center;margin-right:2px">Öncelik:</span>`+opts.map(([v,l])=>`<button class="p-${v}${cur===v?' on':''}" onclick="setPri('${k}','${x.id}','${v}')">${l}</button>`).join('');
+}
+// ================= ÖDEMELER: taksit, çek, aylık sabit, tek seferlik (muhasebe takibi) =================
+const savePays=()=>{LS.set('na_pays',pays);syncAlarms();afterChange()};
+const PTYPE={taksit:'💳 Taksit',cek:'🧾 Çek',aylik:'🔁 Aylık',tek:'📌 Tek ödeme'};
+const AYLAR=['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
+let payMonth=dayKey(Date.now()).slice(0,7),curPay=null,pfType='taksit';
+const money=n=>(+n||0).toLocaleString('tr-TR',{maximumFractionDigits:2})+' ₺';
+function ymAdd(ym,k){const [y,m]=ym.split('-').map(Number);const d=new Date(y,m-1+k,1);return d.getFullYear()+'-'+pad(d.getMonth()+1)}
+function dayIn(ym,day){const [y,m]=ym.split('-').map(Number);return ym+'-'+pad(Math.min(day,new Date(y,m,0).getDate()))}
+const ymName=ym=>{const [y,m]=ym.split('-').map(Number);return AYLAR[m-1]+' '+y};
+/** Bir ödeme kaydının verilen aylar arasındaki vadeleri */
+function payInst(p,fromYm,toYm){
+  const out=[];
+  if(p.type==='cek'||p.type==='tek'){if(p.date){const ym=p.date.slice(0,7);if(ym>=fromYm&&ym<=toYm)out.push({key:'x',date:p.date,amount:+p.amount||0})}return out}
+  if(!p.date)return out;
+  const day=+p.date.slice(8,10)||1,n=p.type==='taksit'?Math.max(1,+p.count||1):1e9,endYm=p.type==='aylik'&&p.end?p.end.slice(0,7):null;
+  for(let i=0,ym=p.date.slice(0,7);i<n&&i<1200;i++,ym=ymAdd(ym,1)){
+    if(ym>toYm||(endYm&&ym>endYm))break;if(ym<fromYm)continue;
+    out.push({key:ym,date:dayIn(ym,day),amount:+p.amount||0,no:i+1,total:p.type==='taksit'?n:null});
+  }
+  return out;
+}
+const isPaid=(p,k)=>!!(p.paid&&p.paid[k]);
+function payRows(ym){return pays.flatMap(p=>payInst(p,ym,ym).map(i=>({p,...i}))).sort((a,b)=>a.date.localeCompare(b.date))}
+function payOverdue(){const today=dayKey(Date.now()),thisYm=today.slice(0,7);return pays.flatMap(p=>payInst(p,'2000-01',thisYm).map(i=>({p,...i}))).filter(r=>!isPaid(r.p,r.key)&&r.date<today)}
+function payShift(k){payMonth=ymAdd(payMonth,k);renderPays()}
+function renderPays(){
+  if(!$('pList'))return;
+  const today=dayKey(Date.now()),soon=dayKey(Date.now()+3*864e5),thisYm=today.slice(0,7);
+  $('pMonth').textContent=ymName(payMonth);
+  const rows=payRows(payMonth),tot=rows.reduce((a,r)=>a+r.amount,0),paid=rows.filter(r=>isPaid(r.p,r.key)).reduce((a,r)=>a+r.amount,0);
+  const od=payOverdue(),odT=od.reduce((a,r)=>a+r.amount,0);
+  $('pSum').innerHTML=`<div><small>Bu ay toplam</small><b>${money(tot)}</b></div><div class="ok"><small>Ödenen</small><b>${money(paid)}</b></div><div class="${odT?'bad':''}"><small>${odT?'Geciken':'Kalan'}</small><b>${money(odT||tot-paid)}</b></div>`;
+  const row=r=>{const pd=isPaid(r.p,r.key),cls=pd?'paid':r.date<today?'late':r.date<=soon?'soon':'';const d=new Date(r.date+'T12:00');
+    const meta=[PTYPE[r.p.type],r.total?`${r.no}/${r.total}. taksit`:'',r.p.bank,r.p.no?'No '+r.p.no:'',pd?'✓ ödendi '+stampDate(r.p.paid[r.key]).slice(0,10):r.date<today?'⚠️ gecikti':r.date===today?'⏰ bugün':''].filter(Boolean).join(' · ');
+    return `<div class="prow ${cls}"><div class="pd"><b>${d.getDate()}</b><small>${AYLAR[d.getMonth()].slice(0,3)}</small></div><div class="pb" onclick="payForm('${r.p.id}')"><div class="pt">${esc(r.p.title||'Ödeme')}</div><div class="pm">${esc(meta)}</div>${r.p.note?`<div class="pm">${esc(r.p.note)}</div>`:''}</div><div class="pa">${money(r.amount)}</div><button class="pchk" onclick="payToggle('${r.p.id}','${r.key}')">${pd?'✓':'Ödendi'}</button></div>`};
+  const odPrev=od.filter(r=>r.date.slice(0,7)<thisYm);
+  const odHtml=payMonth===thisYm&&odPrev.length?`<div class="mut" style="font-weight:700;color:#dc2626;margin:2px 0 8px">⚠️ Önceki aylardan ödenmeyenler (${odPrev.length})</div>`+odPrev.map(row).join(''):'';
+  $('pList').innerHTML=(odHtml+(rows.length?`<div class="mut" style="font-weight:700;margin:6px 0 8px">${ymName(payMonth)} ödemeleri (${rows.length})</div>`+rows.map(row).join(''):`<div class="empty">Bu ay ödeme yok</div>`));
+  $('pDefCnt').textContent=pays.length?'('+pays.length+')':'';
+  $('pDefs').innerHTML=pays.length?[...pays].sort((a,b)=>(a.type+a.title).localeCompare(b.type+b.title,'tr')).map(p=>{
+    const all=p.type==='taksit'?payInst(p,'2000-01','2999-12'):null,pc=all?all.filter(i=>isPaid(p,i.key)).length:0;
+    return `<div class="pdef" onclick="payForm('${p.id}')"><span>${PTYPE[p.type].split(' ')[0]}</span><div style="flex:1;min-width:0"><b>${esc(p.title)}</b><div class="mut" style="font-size:12px">${p.type==='taksit'?`${pc}/${all.length} ödendi · her ayın ${+p.date.slice(8,10)}'i`:p.type==='aylik'?`her ayın ${+String(p.date).slice(8,10)}'i${p.end?' · '+ymName(p.end.slice(0,7))+"'a kadar":''}`:'vade '+String(p.date||'').split('-').reverse().join('.')}</div></div><b>${money(p.amount)}</b></div>`}).join(''):'<div class="mut">Henüz kayıt yok</div>';
+}
+function payToggle(id,key){const p=pays.find(x=>x.id===id);if(!p)return;p.paid=p.paid||{};if(p.paid[key])delete p.paid[key];else p.paid[key]=Date.now();savePays();renderPays()}
+function payForm(id){
+  curPay=id?pays.find(x=>x.id===id):null;const p=curPay||{type:'taksit',date:dayKey(Date.now())};
+  $('pfTitle').textContent=curPay?'Ödemeyi düzenle':'Ödeme ekle';$('pfDel').classList.toggle('hidden',!curPay);
+  pfType=p.type;$('pfName').value=p.title||'';$('pfAmt').value=p.amount||'';$('pfDate').value=p.date||'';$('pfCnt').value=p.count||'';$('pfEnd').value=(p.end||'').slice(0,7);$('pfBank').value=p.bank||'';$('pfNo').value=p.no||'';$('pfNote').value=p.note||'';
+  pfSync();$('mPay').classList.add('on');
+}
+function pfSync(){
+  [...$('pfType').children].forEach(b=>b.classList.toggle('act',b.dataset.v===pfType));
+  $('pfDateL').textContent={taksit:'İlk taksit tarihi',cek:'Vade tarihi',aylik:'İlk ödeme tarihi',tek:'Ödeme tarihi'}[pfType];
+  $('pfCntRow').classList.toggle('hidden',pfType!=='taksit');$('pfEndRow').classList.toggle('hidden',pfType!=='aylik');$('pfCekRow').classList.toggle('hidden',pfType!=='cek');
+}
+$('pfType').onclick=e=>{const b=e.target.closest('button');if(b){pfType=b.dataset.v;pfSync()}};
+function paySave(){
+  const title=$('pfName').value.trim(),amount=parseFloat(String($('pfAmt').value).replace(',','.'))||0,date=$('pfDate').value;
+  if(!title){toastMsg('Açıklama yaz');return}if(!date){toastMsg('Tarih seç');return}
+  const d={type:pfType,title,amount,date,count:pfType==='taksit'?Math.max(1,parseInt($('pfCnt').value)||1):null,end:pfType==='aylik'&&$('pfEnd').value?$('pfEnd').value+'-28':null,bank:$('pfBank').value.trim(),no:$('pfNo').value.trim(),note:$('pfNote').value.trim()};
+  if(curPay)Object.assign(curPay,d);else pays.push({id:uid(),paid:{},created:Date.now(),...d});
+  savePays();closeM('mPay');payMonth=date.slice(0,7)<dayKey(Date.now()).slice(0,7)?dayKey(Date.now()).slice(0,7):date.slice(0,7);renderPays();toastMsg('✔ Kaydedildi');
+}
+function payDel(){if(!curPay||!confirm(`"${curPay.title}" ödeme kaydı silinsin mi?`))return;pays=pays.filter(x=>x!==curPay);savePays();closeM('mPay');renderPays();toastMsg('🗑 Silindi')}
+async function payAI(){
+  const text=$('pAI').value.trim();if(!text){$('pAI').focus();return}
+  busy($('pAIBtn'),true,'Ekleniyor…');
+  try{
+    const r=await gemini(text,{json:true,system:`${nowCtx()} Kullanıcının yazdığı muhasebe ödemelerini kayda çevir. Sadece JSON: {"items":[{"type":"taksit|cek|aylik|tek","title":"kime/ne (kısa)","amount":0,"date":"YYYY-MM-DD","count":null,"end":null,"bank":"","no":"","note":""}]}
+type: taksit = belli sayıda aylık taksit (kredi, kredi kartı taksiti, borç); date = İLK taksit tarihi, count = taksit sayısı. aylik = sonu belirsiz her ay tekrar eden sabit ödeme (kira, SGK, maaş, aidat, abonelik); date = ilk ödeme tarihi; end = bitiş "YYYY-MM-DD" söylendiyse. cek = ödenecek çek; date = vade, bank ve no varsa yaz, title'a kime verildiğini yaz. tek = tek seferlik ödeme.
+"Her ayın 5'i" gibi sadece gün söylendiyse: bu ayın o günü henüz geçmediyse bu ay, geçtiyse gelecek ay başlat. Tutar TL sayı (15 bin = 15000). Söylenmeyeni uydurma.`});
+    const items=(r.items||[]).filter(x=>x&&x.date&&PTYPE[x.type]);
+    if(!items.length){toastMsg('Ödeme bulunamadı, biraz daha açık yaz');busy($('pAIBtn'),false);return}
+    const ids=[];items.forEach(x=>{const id=uid();ids.push(id);pays.push({id,type:x.type,title:x.title||'Ödeme',amount:+x.amount||0,date:x.date,count:x.type==='taksit'?Math.max(1,+x.count||1):null,end:x.end||null,bank:x.bank||'',no:x.no||'',note:x.note||'',paid:{},created:Date.now()})});
+    savePays();$('pAI').value='';payMonth=items[0].date.slice(0,7)<dayKey(Date.now()).slice(0,7)?dayKey(Date.now()).slice(0,7):items[0].date.slice(0,7);renderPays();
+    window.undoPay=()=>{pays=pays.filter(x=>!ids.includes(x.id));savePays();renderPays();toastMsg('↶ Geri alındı',2000)};
+    toastMsg(`<div class="sv"><div class="svh"><span class="svok">✓</span><b>Eklendi</b><button class="svund" onclick="undoPay()">Geri al</button></div>${items.map(x=>`<div class="svi">${PTYPE[x.type]} · ${esc(x.title)} · ${money(x.amount)}${x.count?' × '+x.count:''} · ${String(x.date).split('-').reverse().join('.')}</div>`).join('')}</div>`,7000);
+  }catch(e){toastMsg('⚠️ '+esc(e.message))}
+  busy($('pAIBtn'),false);
+}
+function payShare(){
+  const rows=payRows(payMonth);if(!rows.length){toastMsg('Bu ay ödeme yok');return}
+  const tot=rows.reduce((a,r)=>a+r.amount,0);
+  const txt=`💰 ${ymName(payMonth)} ödemeleri\n\n`+rows.map(r=>`${r.date.split('-').reverse().slice(0,2).join('.')}  ${r.p.title}${r.total?` (${r.no}/${r.total})`:''}${r.p.type==='cek'?` – çek${r.p.bank?' '+r.p.bank:''}${r.p.no?' no '+r.p.no:''}`:''}: ${money(r.amount)}${isPaid(r.p,r.key)?' ✓ ödendi':''}`).join('\n')+`\n\nToplam: ${money(tot)}`;
+  shareTxt(txt);
+}
+/** Hatırlatmalar: vadeden 1 gün önce ve vade günü 09:00 */
+function payAlarms(want){
+  const now=Date.now(),from=dayKey(now).slice(0,7),to=ymAdd(from,2);
+  for(const p of pays)for(const i of payInst(p,from,to)){
+    if(isPaid(p,i.key))continue;
+    const at=new Date(i.date+'T09:00').getTime(),body=`${money(i.amount)}${i.total?` · ${i.no}/${i.total}. taksit`:''}${p.bank?' · '+p.bank:''}`;
+    if(at>now)want[`pay_${p.id}_${i.key}`]={w:at,title:'💰 Bugün ödeme: '+p.title,body};
+    if(at-864e5>now)want[`payb_${p.id}_${i.key}`]={w:at-864e5,title:'💰 Yarın ödeme: '+p.title,body};
+  }
 }
 // Notu göreve / görevi nota çevir (Geri al ile geri alınır)
 function convertItem(k,id){
@@ -2746,7 +2885,7 @@ function itemMenu(k,id){
 })();
 document.querySelectorAll('.modal').forEach(m=>m.onclick=e=>{if(e.target===m){if(m.id==='mNote')closeNote();else m.classList.remove('on')}});
 $('nav').onclick=e=>{const b=e.target.closest('button');if(!b||!b.dataset.v)return;show(b.dataset.v)};
-function show(v){if(v==='notlar'){iF='not';v='bugun';setTimeout(renderItems,0)}if(!$('v-'+v))v='bugun';if(v==='ayarlar'){renderBackup();renderVocab();renderCallStat()}if(v==='ayarlar')renderPerms();document.querySelectorAll('main>section').forEach(s=>s.classList.toggle('hidden',s.id!=='v-'+v));[...$('nav').children].forEach(b=>b.classList.toggle('act',b.dataset.v===v));$('fab').classList.toggle('hidden',v==='asistan');$('qBar').classList.toggle('hidden',v!=='bugun');document.body.classList.toggle('home',v==='bugun');window.scrollTo(0,0);if(v==='asistan')renderChat()}
+function show(v){if(v==='notlar'){iF='not';v='bugun';setTimeout(renderItems,0)}if(!$('v-'+v))v='bugun';if(v==='ayarlar'){renderBackup();renderVocab();renderCallStat()}if(v==='ayarlar')renderPerms();document.querySelectorAll('main>section').forEach(s=>s.classList.toggle('hidden',s.id!=='v-'+v));[...$('nav').children].forEach(b=>b.classList.toggle('act',b.dataset.v===v));$('fab').classList.toggle('hidden',v==='asistan'||v==='odeme');if(v==='odeme')renderPays();$('qBar').classList.toggle('hidden',v!=='bugun');document.body.classList.toggle('home',v==='bugun');window.scrollTo(0,0);if(v==='asistan')renderChat()}
 function renderAll(){renderToday();renderNotes();renderTasks();renderDiary()}
 // 30 günden önce biten görevler arşive taşınır (silinmez; "🗄 Arşiv" filtresinde durur, işareti kaldırınca geri gelir)
 const ARCHIVE_DAYS=30;
