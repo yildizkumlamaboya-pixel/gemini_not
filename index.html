@@ -521,14 +521,14 @@ details.card[open] summary{margin-bottom:6px}
 
 <!-- AYARLAR -->
 <section id="v-ayarlar" class="hidden">
-  <div class="card">
+  <div class="card hidden"><!-- izinler: uygulama ilk açılışta kendisi sorar -->
     <h3>İzinler ve bildirim</h3>
     <div id="permList"></div>
     <div id="nStat" class="hidden"></div>
     <button class="pri" style="width:100%;margin-top:10px" onclick="askAllPerms()">Tüm izinleri ver</button>
     <div class="row" style="margin-top:8px">
       <button class="sm" onclick="testNotif()">Test bildirimi</button>
-      <label style="margin:0;flex:1;display:flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" id="sSound"> Hatırlatmada ses</label>
+
     </div>
   </div>
   <div class="card hidden" id="scCard">
@@ -537,7 +537,7 @@ details.card[open] summary{margin-bottom:6px}
     <div class="mut" id="bubStat" style="margin-top:4px">Uygulama kapalıyken de her ekranda durur. Sürükleyip istediğin kenara koy; uzun basınca kapanır.</div>
     <div class="row" style="margin-top:10px"><button onclick="pinWidget()">➕ Ana ekrana widget ekle</button></div>
   </div>
-  <div class="card">
+  <div class="card hidden">
     <h3>Telefon görüşmeleri</h3>
     <div id="callStat" class="mut"></div>
     <div class="row" style="margin-top:8px">
@@ -590,6 +590,7 @@ details.card[open] summary{margin-bottom:6px}
       <input type="time" id="sumTime" value="20:00" style="flex:0 0 112px">
     </div>
     <button class="sm" style="margin-top:8px" id="sumNowBtn" onclick="summaryNow()">Özeti şimdi oluştur</button>
+    <label style="margin:10px 0 0;display:flex;align-items:center;gap:6px;font-size:14px;color:var(--tx)"><input type="checkbox" id="sSound"> Hatırlatmada ses</label>
     <div class="row" style="margin-top:12px">
       <span class="mut" style="flex:0 0 auto">Cevap sesi</span>
       <select id="ttsVoice">
@@ -2541,7 +2542,7 @@ async function folderRestore(){
   saveTpls();saveDiary();save();renderAll();toastMsg(`✔ Yüklendi${n?` · ${n} fotoğraf`:''}`);
 }
 // ---- Google Drive yedeği: notlar, görevler, günlük ve fotoğraflar tek dosyada; değişiklikten ~1 dk sonra güncellenir ----
-const HAS_DRIVE=()=>APP&&typeof Android.drivePick==='function';
+const HAS_DRIVE=()=>false; // Google Drive yedeği kaldırıldı (klasör yedeği ve dosyaya aktarma duruyor)
 let drvTimer=null,drvDirty=false,drvBusy=false;
 function renderDrive(){
   if(!HAS_DRIVE())return;$('drvBox').classList.remove('hidden');
@@ -2749,7 +2750,7 @@ function saveEntry(id){const e=diary.find(x=>x.id===id),t=$('dList').querySelect
 
 // ================= TELEFON GÖRÜŞMELERİ =================
 // Samsung'un kendi kaydettiği görüşme dosyalarını alır, bölerek yazıya döker ve günlüğe ekler
-const HAS_CALLS=()=>APP&&typeof Android.pickCallFolder==='function';
+const HAS_CALLS=()=>false; // telefon görüşmesi tarama kaldırıldı
 var callBusy=false,callTimer=null;
 function pickCallFolder(){if(!HAS_CALLS()){toastMsg('Bu özellik uygulamada çalışır');return}Android.pickCallFolder()}
 window.onCallFolderPicked=()=>{
