@@ -215,6 +215,19 @@ body.camonly>*:not(#cam):not(.toast):not(script){display:none!important}body.cam
 .prow .pchk{flex:0 0 auto;width:auto;padding:7px 10px;border-radius:12px;font-size:12.5px;font-weight:700;border:1.5px solid #22c55e;color:#15803d;background:#fff}
 .prow.paid .pchk{background:#22c55e;color:#fff}
 .pdef{display:flex;align-items:center;gap:8px;padding:9px 0;border-top:1px solid var(--line);cursor:pointer}.pdef:first-child{border-top:0}
+.docs{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+.doc{display:flex;align-items:center;gap:10px;padding:9px 11px;border:1px solid var(--line);border-radius:12px;background:#f8fafc;cursor:pointer}
+.doc .di{flex:0 0 34px;height:34px;border-radius:9px;display:grid;place-items:center;font-size:11px;font-weight:800;color:#fff;background:#64748b}
+.doc .di.pdf{background:#ef4444}.doc .di.doc{background:#2563eb}.doc .di.xls{background:#16a34a}.doc .di.ppt{background:#ea580c}.doc .di.zip{background:#7c3aed}
+.doc .dn{flex:1;min-width:0;font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.doc .ds{font-size:11.5px;color:var(--mut)}
+.doc .dx{flex:0 0 auto;width:auto;background:none;border:0;color:var(--mut);font-size:16px;padding:4px 6px}
+.vrow{display:flex;align-items:center;gap:8px;padding:11px 12px;border:1px solid var(--line);border-radius:14px;margin-bottom:8px;background:#fff}
+.vrow .vb{flex:1;min-width:0}.vrow .vt{font-weight:700;font-size:14.5px}.vrow .vu{font-size:12.5px;color:var(--mut);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vrow .vp{font-family:ui-monospace,monospace;font-size:13.5px;margin-top:3px;word-break:break-all}
+.vrow button{flex:0 0 auto;width:auto;padding:7px 9px;font-size:14px}
+.vcat{font-size:12px;font-weight:700;color:var(--mut);margin:12px 0 6px;text-transform:uppercase;letter-spacing:.04em}
+.vlock{text-align:center;padding:26px 10px}.vlock .vi{font-size:44px}.vlock input{text-align:center;font-size:22px;letter-spacing:.3em;max-width:220px;margin:12px auto 0;display:block}
+.hbtn{flex:0 0 auto;width:auto;background:none;border:0;box-shadow:none;padding:6px;font-size:19px;line-height:1}
 .donesep{display:flex;align-items:center;gap:8px;width:100%;font:600 13px inherit;font-family:inherit;color:var(--mut);background:#f8fafc;border:1px dashed var(--line);border-radius:14px;padding:11px 14px;margin-top:8px;cursor:pointer;text-align:left}
 .donesep .cv{margin-left:auto;transition:transform .2s;font-size:12px}.donesep.open .cv{transform:rotate(180deg)}
 .added{font-size:11px;color:var(--mut);white-space:nowrap}
@@ -302,6 +315,7 @@ details.card[open] summary{margin-bottom:6px}
 <header>
   <h1><span class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 4.7 4.7 1.8-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2 2.2.8-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg></span><span>Not <span class="grad-t">Asistanı</span></span></h1>
   <span class="mut" id="clock"></span>
+  <button class="hbtn" onclick="show('parola')" title="İş yeri parolaları">🔐</button>
   <span class="dot" id="aiDot" title="Gemini bağlantısı">AI</span>
 </header>
 
@@ -383,6 +397,25 @@ details.card[open] summary{margin-bottom:6px}
   </div>
   <div class="card"><div id="pList"></div></div>
   <div class="card"><details><summary><b>Tüm ödeme kayıtları</b> <span class="mut" id="pDefCnt"></span></summary><div id="pDefs" style="margin-top:8px"></div></details></div>
+</section>
+
+<section id="v-parola" class="hidden">
+  <div class="card" id="vLockCard">
+    <div class="vlock"><div class="vi">🔐</div><h3 style="margin:8px 0 2px">İş yeri parolaları</h3>
+      <div class="mut" id="vLockMsg" style="font-size:13px"></div>
+      <input id="vPin" type="password" inputmode="numeric" autocomplete="off" placeholder="••••">
+      <input id="vPin2" type="password" inputmode="numeric" autocomplete="off" placeholder="tekrar" class="hidden">
+      <button class="pri" style="margin:14px auto 0;display:block;width:auto;padding:10px 26px" id="vOpenBtn" onclick="vaultOpen()">Aç</button>
+      <div class="mut" style="font-size:11.5px;margin-top:12px">Parolalar bu telefonda şifreli saklanır; AI asistana gönderilmez. PIN'i unutursan kasa açılamaz.</div>
+    </div>
+  </div>
+  <div id="vBox" class="hidden">
+    <div class="card">
+      <div class="row" style="align-items:center"><input id="vSearch" placeholder="🔍 Ara (modem, banka, e-devlet…)" oninput="renderVault()"><button class="pri" style="flex:0 0 auto" onclick="vaultForm()">+ Ekle</button><button class="sm ghost" style="flex:0 0 auto" onclick="vaultLock()" title="Kilitle">🔒</button></div>
+    </div>
+    <div class="card"><div id="vList"></div></div>
+    <div class="mut" style="font-size:12px;text-align:center;margin:-4px 0 10px">3 dakika işlem yapmazsan ya da uygulamadan çıkınca kendiliğinden kilitlenir · <a href="#" onclick="vaultChangePin();return false">PIN'i değiştir</a></div>
+  </div>
 </section>
 
 <section id="v-gunluk" class="hidden">
@@ -552,6 +585,16 @@ details.card[open] summary{margin-bottom:6px}
   <label class="mut" style="font-size:12.5px;display:block;margin:8px 0 4px">Not</label><input id="pfNote" placeholder="İsteğe bağlı">
   <div class="row" style="margin-top:14px"><button class="ghost hidden" id="pfDel" style="flex:0 0 auto;color:var(--bad)" onclick="payDel()">Sil</button><span style="flex:1"></span><button class="pri" style="flex:0 0 auto" onclick="paySave()">Kaydet</button></div>
 </div></div>
+<div class="modal" id="mVault"><div class="sheet">
+  <div class="row" style="align-items:center;margin-bottom:10px"><h2 id="vfTitle" style="flex:1;margin:0;font-size:19px">Parola ekle</h2><button class="sm ghost" style="flex:0 0 auto" onclick="closeM('mVault')">✕</button></div>
+  <label>Ne için</label><input id="vfName" placeholder="Örn: Fabrika modem, İş Bankası internet, e-Devlet, DVR kamera">
+  <label>Grup</label><select id="vfCat"><option>Banka</option><option>Resmi (e-Devlet, SGK, GİB)</option><option>İnternet / Modem / Wi-Fi</option><option>Kamera / DVR</option><option>E-posta</option><option>Program / Site</option><option>Diğer</option></select>
+  <label>Kullanıcı adı / no</label><input id="vfUser" autocomplete="off" autocapitalize="off">
+  <label>Parola</label><div class="row"><input id="vfPass" type="password" autocomplete="off" autocapitalize="off"><button class="sm" style="flex:0 0 auto" onclick="const i=$('vfPass');i.type=i.type==='password'?'text':'password'">👁</button><button class="sm" style="flex:0 0 auto" onclick="$('vfPass').value=genPass();$('vfPass').type='text'" title="Güçlü parola üret">🎲</button></div>
+  <label>Adres (isteğe bağlı)</label><input id="vfUrl" placeholder="192.168.1.1 · site adresi" autocapitalize="off">
+  <label>Not</label><input id="vfNote" placeholder="İsteğe bağlı (ör. Wi-Fi adı, müşteri no)">
+  <div class="row" style="margin-top:14px"><button class="ghost hidden" id="vfDel" style="flex:0 0 auto;color:var(--bad)" onclick="vaultDel()">Sil</button><span style="flex:1"></span><button class="pri" style="flex:0 0 auto" onclick="vaultSave()">Kaydet</button></div>
+</div></div>
 <div class="modal" id="mView"><div class="sheet">
   <div class="row" style="align-items:flex-start;margin-bottom:6px"><h2 id="vTitle" style="flex:1;margin:0;font-size:20px;line-height:1.3"></h2><button class="sm ghost" style="flex:0 0 auto" onclick="closeM('mView')">✕</button></div>
   <div id="vMeta" class="mut" style="margin-bottom:6px"></div>
@@ -581,6 +624,10 @@ details.card[open] summary{margin-bottom:6px}
     <button class="sm" onclick="$('galIn').click()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="m21 15-4.5-4.5L5 21"/></svg> Galeriden</button>
   </div>
   <div class="mut" id="phStat" style="margin-top:6px"></div>
+  <label>Belgeler (PDF, Word, Excel…)</label>
+  <div class="docs" id="nDocs"></div>
+  <div class="row" style="margin-top:8px"><button class="sm" onclick="$('docIn').click()">📎 Belge ekle</button></div>
+  <input type="file" id="docIn" multiple class="hidden">
   <input type="file" id="camIn" accept="image/*" capture="environment" class="hidden">
   <input type="file" id="galIn" accept="image/*" multiple class="hidden">
   <label>Etiketler (virgülle)</label><input id="nTags" placeholder="iş, müşteri, fikir">
@@ -1376,15 +1423,16 @@ let edPhotos=[],edNew=new Set(),edDel=new Set();
 function openNote(id){
   const n=notes.find(x=>x.id===id);curNote=n||null;
   edPhotos=[...(n?.photos||[])];edNew=new Set();edDel=new Set();renderEdPhotos();$('phStat').textContent='';
+  edDocs=[...(n?.files||[])];renderEdDocs();
   $('nTitle').value=n?.title||'';$('nBody').value=n?.body||'';$('nTags').value=(n?.tags||[]).join(', ');$('nPin').checked=!!n?.pinned;
   $('nAIOut').innerHTML='';$('nDel').classList.toggle('hidden',!n);
-  $('nDel').onclick=()=>{if(confirm('Not silinsin mi?')){(n?.photos||[]).concat(edPhotos).forEach(p=>DB.del(p.id).catch(()=>{}));notes=notes.filter(x=>x.id!==id);save();closeM('mNote');renderAll()}};
+  $('nDel').onclick=()=>{if(confirm('Not silinsin mi?')){(n?.photos||[]).concat(edPhotos,n?.files||[],edDocs).forEach(p=>DB.del(p.id).catch(()=>{}));notes=notes.filter(x=>x.id!==id);save();closeM('mNote');renderAll()}};
   $('mNote').classList.add('on');
 }
 function saveNote(){
-  const title=$('nTitle').value.trim()||$('nBody').value.trim().split('\n')[0].slice(0,50)||(edPhotos.length?'Fotoğraflı not · '+stampDate(edPhotos[0].ts):'Başlıksız');
+  const title=$('nTitle').value.trim()||$('nBody').value.trim().split('\n')[0].slice(0,50)||(edPhotos.length?'Fotoğraflı not · '+stampDate(edPhotos[0].ts):edDocs.length?edDocs[0].name:'Başlıksız');
   edDel.forEach(id=>DB.del(id).catch(()=>{}));edNew=new Set();edDel=new Set();
-  const data={title,body:$('nBody').value,tags:$('nTags').value.split(',').map(s=>s.trim()).filter(Boolean),pinned:$('nPin').checked,photos:edPhotos,updated:Date.now()};
+  const data={title,body:$('nBody').value,tags:$('nTags').value.split(',').map(s=>s.trim()).filter(Boolean),pinned:$('nPin').checked,photos:edPhotos,files:edDocs,updated:Date.now()};
   if(curNote){learnFrom(curNote.title+' '+curNote.body,data.title+' '+data.body);Object.assign(curNote,data)}else notes.push({id:uid(),created:Date.now(),src:'manual',...data});
   save();closeM('mNote');renderAll();
 }
@@ -1443,7 +1491,29 @@ function hydrate(root){root.querySelectorAll('img[data-pid]').forEach(async im=>
 const blobToB64=(b,full)=>new Promise(r=>{const f=new FileReader();f.onload=()=>r(full?f.result:f.result.split(',')[1]);f.readAsDataURL(b)});
 function stampDate(ts){const d=new Date(ts);return `${pad(d.getDate())}.${pad(d.getMonth()+1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`}
 function photoNote(){openNote();openCam()}
-function closeNote(){edNew.forEach(id=>DB.del(id).catch(()=>{}));edNew=new Set();closeM('mNote')}
+function closeNote(){edNew.forEach(id=>DB.del(id).catch(()=>{}));edNew=new Set();
+  const keep=new Set((curNote?.files||[]).map(f=>f.id));edDocs.forEach(f=>{if(!keep.has(f.id))DB.del(f.id).catch(()=>{})});closeM('mNote')}
+// ---- Not belgeleri (PDF, Word, Excel, ...) : telefonda saklanır, dokununca uygun uygulamayla açılır ----
+let edDocs=[];
+const docKind=n=>{const e=String(n).split('.').pop().toLowerCase();return /pdf/.test(e)?['pdf','PDF']:/docx?|odt|rtf/.test(e)?['doc','DOC']:/xlsx?|ods|csv/.test(e)?['xls','XLS']:/pptx?|odp/.test(e)?['ppt','PPT']:/zip|rar|7z/.test(e)?['zip','ZIP']:['',e.slice(0,4).toUpperCase()||'?']};
+const fsize=b=>b>1048576?(b/1048576).toFixed(1)+' MB':Math.max(1,Math.round(b/1024))+' KB';
+function docHTML(f,editable){const [c,l]=docKind(f.name);return `<div class="doc" onclick="openDoc('${f.id}')"><span class="di ${c}">${esc(l)}</span><div style="flex:1;min-width:0"><div class="dn">${esc(f.name)}</div><div class="ds">${fsize(f.size||0)} · ${stampDate(f.ts).slice(0,10)}</div></div>${editable?`<button class="dx" onclick="event.stopPropagation();rmDoc('${f.id}')" title="Kaldır">✕</button>`:''}</div>`}
+function renderEdDocs(){$('nDocs').innerHTML=edDocs.length?edDocs.map(f=>docHTML(f,true)).join(''):'<div class="mut" style="font-size:12.5px">Belge yok</div>'}
+function rmDoc(id){edDocs=edDocs.filter(f=>f.id!==id);renderEdDocs()}
+$('docIn').onchange=async e=>{
+  const files=[...e.target.files];e.target.value='';
+  for(const f of files){
+    if(f.size>30*1048576){toastMsg('⚠️ '+esc(f.name)+' çok büyük (en fazla 30 MB)');continue}
+    const id='doc_'+uid();try{await DB.put(id,f);edDocs.push({id,name:f.name,mime:f.type||'application/octet-stream',size:f.size,ts:Date.now()})}catch{toastMsg('⚠️ Belge eklenemedi')}
+  }
+  renderEdDocs();
+};
+async function openDoc(id){
+  const meta=[...notes.flatMap(n=>n.files||[]),...edDocs].find(f=>f.id===id);let b;try{b=await DB.get(id)}catch{}
+  if(!b||!meta){toastMsg('Belge bulunamadı');return}
+  if(APP&&typeof Android.openFile==='function'){Android.openFile(await blobToB64(b),meta.name,meta.mime||b.type||'');return}
+  const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=meta.name;a.target='_blank';a.click();
+}
 $('camIn').onchange=e=>{addPhotoFiles([...e.target.files],true);e.target.value=''};
 $('galIn').onchange=e=>{addPhotoFiles([...e.target.files],false);e.target.value=''};
 function getPos(){return new Promise(r=>{if(!navigator.geolocation)return r(null);navigator.geolocation.getCurrentPosition(p=>r(p.coords),()=>r(null),{enableHighAccuracy:true,timeout:12000,maximumAge:30000})})}
@@ -2135,9 +2205,9 @@ function iMatch(k,x,f){
     default:return true;
   }
 }
-function iText(k,x){return [x.title,x.body,x.note,(x.tags||[]).join(' '),...(x.photos||[]).map(p=>[p.addr,p.tpl,p.title,...Object.values(p.fields||{})].join(' '))].join(' ').toLocaleLowerCase('tr')}
+function iText(k,x){return [x.title,x.body,x.note,(x.tags||[]).join(' '),(x.files||[]).map(f=>f.name).join(' '),...(x.photos||[]).map(p=>[p.addr,p.tpl,p.title,...Object.values(p.fields||{})].join(' '))].join(' ').toLocaleLowerCase('tr')}
 function noteInner(n){
-  return `<div class="ico">${n.photos?.length?'📷':'📝'}</div><div class="bd"><div class="t">${n.pinned?'<span class="pin">📌</span> ':''}${esc(n.title||'Not')}${n.aiBusy?' <span class="tag aibusy">✨ ayrıştırılıyor…</span>':n.aiPending?' <span class="tag">📴 AI bekliyor</span>':''}</div>${n.body?`<div class="prev">${esc(n.body)}</div>`:''}${n.photos?.length?`<div class="nthumbs">${n.photos.slice(0,4).map(p=>`<img data-pid="${p.id}" alt="">`).join('')}${n.photos.length>4?`<span class="mut" style="align-self:center">+${n.photos.length-4}</span>`:''}</div>${n.photos[0].addr?`<div class="ploc">📍 ${esc(n.photos[0].addr)}</div>`:''}`:''}<div>${n.priority?`<span class="tag p-${n.priority}">${PRI[n.priority]}</span>`:''}${isAI(n)?`<span class="tag ai-tag">✨ AI${n.via==='voice'?' · 🎤':''}</span>`:''}${(n.tags||[]).map(t=>`<span class="tag">#${esc(t)}</span>`).join('')}<span class="added"> 🕓 ${fmt(n.created||n.updated)}${n.updated&&n.created&&n.updated-n.created>6e4?' · düzenlendi':''}</span>${audBtn(n)}</div></div>`;
+  return `<div class="ico">${n.photos?.length?'📷':n.files?.length?'📎':'📝'}</div><div class="bd"><div class="t">${n.pinned?'<span class="pin">📌</span> ':''}${esc(n.title||'Not')}${n.aiBusy?' <span class="tag aibusy">✨ ayrıştırılıyor…</span>':n.aiPending?' <span class="tag">📴 AI bekliyor</span>':''}</div>${n.body?`<div class="prev">${esc(n.body)}</div>`:''}${n.photos?.length?`<div class="nthumbs">${n.photos.slice(0,4).map(p=>`<img data-pid="${p.id}" alt="">`).join('')}${n.photos.length>4?`<span class="mut" style="align-self:center">+${n.photos.length-4}</span>`:''}</div>${n.photos[0].addr?`<div class="ploc">📍 ${esc(n.photos[0].addr)}</div>`:''}`:''}<div>${n.priority?`<span class="tag p-${n.priority}">${PRI[n.priority]}</span>`:''}${isAI(n)?`<span class="tag ai-tag">✨ AI${n.via==='voice'?' · 🎤':''}</span>`:''}${n.files?.length?`<span class="tag">📎 ${n.files.length} belge</span>`:''}${(n.tags||[]).map(t=>`<span class="tag">#${esc(t)}</span>`).join('')}<span class="added"> 🕓 ${fmt(n.created||n.updated)}${n.updated&&n.created&&n.updated-n.created>6e4?' · düzenlendi':''}</span>${audBtn(n)}</div></div>`;
 }
 function taskInner(t){
   const late=!t.done&&t.due&&new Date(t.due)<new Date();
@@ -2183,7 +2253,7 @@ function delItem(k,id){
   const arr=k==='n'?notes:tasks,idx=arr.findIndex(y=>y.id===id);if(idx<0)return;const [it]=arr.splice(idx,1);save();renderAll();
   let undone=false;window.undoDel=()=>{undone=true;(k==='n'?notes:tasks).splice(idx,0,it);save();renderAll();toastMsg('↶ Geri alındı',2000)};
   toastMsg(`<div class="sv"><div class="svh"><span class="svok" style="background:linear-gradient(135deg,#f43f5e,#ef4444)">✕</span><b>Silindi</b><button class="svund" onclick="undoDel()">Geri al</button></div><div class="svi">${esc(it.title||'')}</div></div>`,6000);
-  setTimeout(()=>{if(!undone&&k==='n')(it.photos||[]).forEach(p=>DB.del(p.id).catch(()=>{}));if(!undone&&it.audio&&![...notes,...tasks].some(y=>y.audio===it.audio)){DB.del(it.audio).catch(()=>{});const ix=LS.get('na_auds',{});delete ix[it.audio];LS.set('na_auds',ix)}},7000);
+  setTimeout(()=>{if(!undone&&k==='n')(it.photos||[]).concat(it.files||[]).forEach(p=>DB.del(p.id).catch(()=>{}));if(!undone&&it.audio&&![...notes,...tasks].some(y=>y.audio===it.audio)){DB.del(it.audio).catch(()=>{});const ix=LS.get('na_auds',{});delete ix[it.audio];LS.set('na_auds',ix)}},7000);
 }
 function swAct(e,a,k,id){e.stopPropagation();swCloseAll();if(a==='edit')k==='n'?openNote(id):openTask(id);else delItem(k,id)}
 function swCloseAll(except){document.querySelectorAll('.srow.open').forEach(r=>{if(r!==except){r.classList.remove('open');r.querySelector('.sfront').style.transform=''}})}
@@ -2366,8 +2436,13 @@ async function folderBackup(manual){
       try{const b=await DB.get(p.id);if(!b)continue;const fn=`${dayKey(p.ts)}_${hm(p.ts).replace(':','-')}_${slug(p.tpl)}_${p.id}.jpg`;
         if(Android.writeFile('Fotograflar/'+fn,await blobToB64(b),'image/jpeg',false))saved[p.id]=fn}catch{}
     }
+    for(const n of notes)for(const f of n.files||[]){
+      if(saved[f.id])continue;
+      try{const b=await DB.get(f.id);if(!b)continue;const fn='Belgeler/'+f.id+'_'+String(f.name).replace(/[\\/:*?"<>|]/g,'_');
+        if(Android.writeFile(fn,await blobToB64(b),f.mime||'application/octet-stream',false))saved[f.id]=fn}catch{}
+    }
     LS.set('na_bk_photos',saved);
-    const js=JSON.stringify({notes,tasks,diary,pays,tpls,vocab,logo:LS.get('na_logo',''),photoFiles:saved,v:5,at:Date.now()});
+    const js=JSON.stringify({notes,tasks,diary,pays,vault:LS.get('na_vault',null),tpls,vocab,logo:LS.get('na_logo',''),photoFiles:saved,v:5,at:Date.now()});
     const ok=Android.writeText('NotAsistani-yedek.json',js)&&Android.writeText('Yedekler/yedek-'+dayKey(Date.now())+'.json',js);
     if(ok)LS.set('na_bk_last',Date.now());
     if(manual)toastMsg(ok?'✔ Yedeklendi':'⚠️ Yedeklenemedi — klasörü yeniden seç');
@@ -2380,11 +2455,11 @@ async function folderRestore(){
   let d;try{d=JSON.parse(s)}catch{toastMsg('Yedek dosyası okunamadı');return}
   if(!confirm(`${d.notes?.length||0} not, ${d.tasks?.length||0} görev, ${d.diary?.length||0} günlük kaydı yüklensin mi? (mevcutlara eklenir)`))return;
   const ids=new Set([...notes,...tasks].map(x=>x.id));
-  notes.push(...(d.notes||[]).filter(x=>!ids.has(x.id)));tasks.push(...(d.tasks||[]).filter(x=>!ids.has(x.id)));{const pi=new Set(pays.map(x=>x.id));pays.push(...(d.pays||[]).filter(x=>!pi.has(x.id)));LS.set('na_pays',pays)}
+  notes.push(...(d.notes||[]).filter(x=>!ids.has(x.id)));tasks.push(...(d.tasks||[]).filter(x=>!ids.has(x.id)));{const pi=new Set(pays.map(x=>x.id));pays.push(...(d.pays||[]).filter(x=>!pi.has(x.id)));LS.set('na_pays',pays)}if(d.vault&&d.vault.ct&&!(LS.get('na_vault',null)||{}).ct)LS.set('na_vault',d.vault);
   const di=new Set(diary.map(x=>x.id));diary.push(...(d.diary||[]).filter(x=>!di.has(x.id)));
   if(Array.isArray(d.tpls)){const ti=new Set(tpls.map(x=>x.id));tpls.push(...d.tpls.filter(x=>!ti.has(x.id)).map(normTpl))}
   if(d.logo&&!LS.get('na_logo','')){LS.set('na_logo',d.logo);loadLogo()}
-  let n=0;for(const[id,fn]of Object.entries(d.photoFiles||{})){try{if(await DB.get(id))continue;const b64=Android.readFileB64('Fotograflar/'+fn);if(!b64)continue;await DB.put(id,await (await fetch('data:image/jpeg;base64,'+b64)).blob());n++}catch{}}
+  let n=0;for(const[id,fn]of Object.entries(d.photoFiles||{})){try{if(await DB.get(id))continue;const isDoc=fn.startsWith('Belgeler/');const b64=Android.readFileB64(isDoc?fn:'Fotograflar/'+fn);if(!b64)continue;await DB.put(id,await (await fetch((isDoc?'data:application/octet-stream;base64,':'data:image/jpeg;base64,')+b64)).blob());n++}catch{}}
   LS.set('na_bk_photos',{...LS.get('na_bk_photos',{}),...(d.photoFiles||{})});
   saveTpls();saveDiary();save();renderAll();toastMsg(`✔ Yüklendi${n?` · ${n} fotoğraf`:''}`);
 }
@@ -2405,7 +2480,7 @@ async function driveBackup(manual){
   if(drvBusy||!Android.driveBegin()){clearTimeout(drvTimer);drvTimer=setTimeout(()=>{drvTimer=null;driveBackup(manual)},20000);return}
   drvBusy=true;drvDirty=false;driveBackup.manual=manual;
   try{
-    Android.driveAppend(JSON.stringify({app:'NotAsistani',v:6,at:Date.now(),notes,tasks,diary,pays,tpls,vocab,sugg,logo:LS.get('na_logo','')})+'\n');
+    Android.driveAppend(JSON.stringify({app:'NotAsistani',v:6,at:Date.now(),notes,tasks,diary,pays,vault:LS.get('na_vault',null),tpls,vocab,sugg,logo:LS.get('na_logo','')})+'\n');
     let n=0;for(const x of notes)for(const p of x.photos||[]){try{const b=await DB.get(p.id);if(b){Android.driveAppend('P\t'+p.id+'\t'+await blobToB64(b)+'\n');n++}}catch{}}
     Android.driveCommit();if(manual)toastMsg('☁️ Drive\'a yükleniyor…',1500);
   }catch(e){drvBusy=false;LS.set('na_drv_err',e.message);renderDrive()}
@@ -2418,7 +2493,7 @@ window.onDriveRestore=async ok=>{
   let d;try{d=JSON.parse(Android.driveReadLine()||'')}catch{toastMsg('Bu bir Not Asistanı yedeği değil');return}
   if(!confirm(`${d.notes?.length||0} not, ${d.tasks?.length||0} görev, ${d.diary?.length||0} günlük kaydı yüklensin mi? (mevcutlara eklenir)`)){while(Android.driveReadLine()!==null);renderDrive();return}
   const ids=new Set([...notes,...tasks].map(x=>x.id));
-  notes.push(...(d.notes||[]).filter(x=>!ids.has(x.id)));tasks.push(...(d.tasks||[]).filter(x=>!ids.has(x.id)));{const pi=new Set(pays.map(x=>x.id));pays.push(...(d.pays||[]).filter(x=>!pi.has(x.id)));LS.set('na_pays',pays)}
+  notes.push(...(d.notes||[]).filter(x=>!ids.has(x.id)));tasks.push(...(d.tasks||[]).filter(x=>!ids.has(x.id)));{const pi=new Set(pays.map(x=>x.id));pays.push(...(d.pays||[]).filter(x=>!pi.has(x.id)));LS.set('na_pays',pays)}if(d.vault&&d.vault.ct&&!(LS.get('na_vault',null)||{}).ct)LS.set('na_vault',d.vault);
   const di=new Set(diary.map(x=>x.id));diary.push(...(d.diary||[]).filter(x=>!di.has(x.id)));
   if(Array.isArray(d.tpls)){const ti=new Set(tpls.map(x=>x.id));tpls.push(...d.tpls.filter(x=>!ti.has(x.id)).map(normTpl))}
   if(d.logo&&!LS.get('na_logo','')){LS.set('na_logo',d.logo);loadLogo()}
@@ -2693,10 +2768,10 @@ async function checkServer(){
     :'ℹ️ Sunucu bulunamadı (Vercel\'de yayınlanınca otomatik bağlanır). Şimdilik aşağıya kendi anahtarını girebilirsin.';
   setDot(!!cfg.key||(srv.ok&&srv.hasKey));
 }
-async function exportData(){toastMsg('Yedek hazırlanıyor...');const photos={};for(const n of notes)for(const p of n.photos||[]){try{const b=await DB.get(p.id);if(b)photos[p.id]=await blobToB64(b,true)}catch{}}const js=JSON.stringify({notes,tasks,diary,pays,photos,tpls,logo:LS.get('na_logo',''),v:4});const fn='not-asistani-yedek-'+toLocal(new Date()).slice(0,10)+'.json';
+async function exportData(){toastMsg('Yedek hazırlanıyor...');const photos={};for(const n of notes)for(const p of [...(n.photos||[]),...(n.files||[])]){try{const b=await DB.get(p.id);if(b)photos[p.id]=await blobToB64(b,true)}catch{}}const js=JSON.stringify({notes,tasks,diary,pays,vault:LS.get('na_vault',null),photos,tpls,logo:LS.get('na_logo',''),v:4});const fn='not-asistani-yedek-'+toLocal(new Date()).slice(0,10)+'.json';
   if(APP){const r=new FileReader();r.onload=()=>Android.saveFile(r.result.split(',')[1],fn,'application/json');r.readAsDataURL(new Blob([js],{type:'application/json'}));return}
   const b=new Blob([js],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='not-asistani-yedek-'+toLocal(new Date()).slice(0,10)+'.json';a.click()}
-$('impFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const d=JSON.parse(await f.text());if(confirm(`${d.notes?.length||0} not, ${d.tasks?.length||0} görev içe aktarılsın mı? (mevcutlara eklenir)`)){const ids=new Set([...notes,...tasks].map(x=>x.id));notes.push(...(d.notes||[]).filter(x=>!ids.has(x.id)));tasks.push(...(d.tasks||[]).filter(x=>!ids.has(x.id)));{const pi=new Set(pays.map(x=>x.id));pays.push(...(d.pays||[]).filter(x=>!pi.has(x.id)));LS.set('na_pays',pays)}if(Array.isArray(d.tpls)){const ti=new Set(tpls.map(x=>x.id));tpls.push(...d.tpls.filter(x=>!ti.has(x.id)).map(normTpl));saveTpls()}if(d.logo&&!LS.get('na_logo','')){LS.set('na_logo',d.logo);loadLogo()}{const di=new Set(diary.map(x=>x.id));diary.push(...(d.diary||[]).filter(x=>!di.has(x.id)));saveDiary()}for(const[k,v]of Object.entries(d.photos||{})){try{await DB.put(k,await (await fetch(v)).blob())}catch{}}save();renderAll();toastMsg('✔ İçe aktarıldı')}}catch{toastMsg('Dosya okunamadı')}};
+$('impFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const d=JSON.parse(await f.text());if(confirm(`${d.notes?.length||0} not, ${d.tasks?.length||0} görev içe aktarılsın mı? (mevcutlara eklenir)`)){const ids=new Set([...notes,...tasks].map(x=>x.id));notes.push(...(d.notes||[]).filter(x=>!ids.has(x.id)));tasks.push(...(d.tasks||[]).filter(x=>!ids.has(x.id)));{const pi=new Set(pays.map(x=>x.id));pays.push(...(d.pays||[]).filter(x=>!pi.has(x.id)));LS.set('na_pays',pays)}if(d.vault&&d.vault.ct&&!(LS.get('na_vault',null)||{}).ct)LS.set('na_vault',d.vault);if(Array.isArray(d.tpls)){const ti=new Set(tpls.map(x=>x.id));tpls.push(...d.tpls.filter(x=>!ti.has(x.id)).map(normTpl));saveTpls()}if(d.logo&&!LS.get('na_logo','')){LS.set('na_logo',d.logo);loadLogo()}{const di=new Set(diary.map(x=>x.id));diary.push(...(d.diary||[]).filter(x=>!di.has(x.id)));saveDiary()}for(const[k,v]of Object.entries(d.photos||{})){try{await DB.put(k,await (await fetch(v)).blob())}catch{}}save();renderAll();toastMsg('✔ İçe aktarıldı')}}catch{toastMsg('Dosya okunamadı')}};
 function wipe(){if(confirm('TÜM notlar ve görevler silinsin mi?')&&confirm('Emin misin? Geri alınamaz.')){notes=[];tasks=[];chat=[];diary=[];saveDiary();DB.clear().catch(()=>{});save();renderAll()}}
 
 // ================= GENEL =================
@@ -2852,6 +2927,82 @@ function payAlarms(want){
     if(at-864e5>now)want[`payb_${p.id}_${i.key}`]={w:at-864e5,title:'💰 Yarın ödeme: '+p.title,body};
   }
 }
+// ================= İŞ YERİ PAROLALARI: PIN ile şifreli kasa (AES-GCM, PBKDF2) =================
+let vaultKey=null,vaultItems=[],vaultTimer=null,curVault=null;
+const b64e=u=>{let s='';u=new Uint8Array(u);for(let i=0;i<u.length;i+=8192)s+=String.fromCharCode.apply(null,u.subarray(i,i+8192));return btoa(s)};
+const b64d=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+async function vaultDerive(pin,salt){const base=await crypto.subtle.importKey('raw',new TextEncoder().encode(pin),'PBKDF2',false,['deriveKey']);
+  return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:250000,hash:'SHA-256'},base,{name:'AES-GCM',length:256},false,['encrypt','decrypt'])}
+async function vaultWrite(){
+  const v=LS.get('na_vault',null),iv=crypto.getRandomValues(new Uint8Array(12));
+  const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv},vaultKey,new TextEncoder().encode(JSON.stringify(vaultItems)));
+  LS.set('na_vault',{salt:v.salt,iv:b64e(iv),ct:b64e(ct),v:1,at:Date.now()});afterChange();
+}
+function vaultScreen(){
+  const has=!!LS.get('na_vault',null);
+  if(vaultKey){$('vLockCard').classList.add('hidden');$('vBox').classList.remove('hidden');renderVault();vaultTouch();return}
+  $('vLockCard').classList.remove('hidden');$('vBox').classList.add('hidden');
+  $('vLockMsg').textContent=has?'Kasayı açmak için PIN gir':'İlk kullanım: kasa için en az 4 haneli bir PIN belirle';
+  $('vPin2').classList.toggle('hidden',has);$('vOpenBtn').textContent=has?'Aç':'PIN belirle';
+  $('vPin').value='';$('vPin2').value='';setTimeout(()=>$('vPin').focus(),100);
+}
+$('vPin').addEventListener('keydown',e=>{if(e.key==='Enter')vaultOpen()});
+async function vaultOpen(){
+  const pin=$('vPin').value.trim(),v=LS.get('na_vault',null);
+  if(pin.length<4){toastMsg('PIN en az 4 hane olmalı');return}
+  if(!crypto?.subtle){toastMsg('Bu cihazda şifreleme desteklenmiyor');return}
+  try{
+    if(!v){
+      if(pin!==$('vPin2').value.trim()){toastMsg('PIN\'ler aynı değil');return}
+      const salt=crypto.getRandomValues(new Uint8Array(16));LS.set('na_vault',{salt:b64e(salt),iv:'',ct:'',v:1});
+      vaultKey=await vaultDerive(pin,salt);vaultItems=[];await vaultWrite();toastMsg('🔐 Kasa oluşturuldu');
+    }else{
+      const key=await vaultDerive(pin,b64d(v.salt));
+      const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:b64d(v.iv)},key,b64d(v.ct));
+      vaultItems=JSON.parse(new TextDecoder().decode(pt));vaultKey=key;
+    }
+    try{Android.secure(true)}catch{}
+    vaultScreen();
+  }catch(e){$('vPin').value='';toastMsg('✕ PIN yanlış');try{navigator.vibrate?.(120)}catch{}}
+}
+function vaultLock(quiet){vaultKey=null;vaultItems=[];clearTimeout(vaultTimer);try{Android.secure(false)}catch{}closeM('mVault');if(!$('v-parola').classList.contains('hidden'))vaultScreen();if(!quiet)toastMsg('🔒 Kasa kilitlendi',1500)}
+function vaultTouch(){clearTimeout(vaultTimer);vaultTimer=setTimeout(()=>{if(vaultKey)vaultLock()},180000)}
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&vaultKey)vaultLock(true)});
+['pointerdown','keydown'].forEach(ev=>document.addEventListener(ev,()=>{if(vaultKey)vaultTouch()},{passive:true}));
+const VCAT=['Banka','Resmi (e-Devlet, SGK, GİB)','İnternet / Modem / Wi-Fi','Kamera / DVR','E-posta','Program / Site','Diğer'];
+let vShown=new Set();
+function renderVault(){
+  const q=($('vSearch').value||'').toLocaleLowerCase('tr').trim();
+  const l=vaultItems.filter(x=>!q||[x.name,x.user,x.url,x.note,x.cat].join(' ').toLocaleLowerCase('tr').includes(q));
+  if(!l.length){$('vList').innerHTML=`<div class="empty">${vaultItems.length?'Eşleşen kayıt yok':'Henüz parola yok — "+ Ekle" ile başla'}</div>`;return}
+  $('vList').innerHTML=VCAT.map(c=>{const g=l.filter(x=>(x.cat||'Diğer')===c).sort((a,b)=>a.name.localeCompare(b.name,'tr'));if(!g.length)return'';
+    return `<div class="vcat">${esc(c)}</div>`+g.map(x=>`<div class="vrow"><div class="vb" onclick="vaultForm('${x.id}')"><div class="vt">${esc(x.name)}</div>${x.user?`<div class="vu">👤 ${esc(x.user)}</div>`:''}${x.url?`<div class="vu">🌐 ${esc(x.url)}</div>`:''}<div class="vp">${vShown.has(x.id)?esc(x.pass||''):'••••••••'}</div>${x.note?`<div class="vu">${esc(x.note)}</div>`:''}</div>
+      <button class="sm ghost" onclick="vShown.has('${x.id}')?vShown.delete('${x.id}'):vShown.add('${x.id}');renderVault()" title="Göster">👁</button>${x.user?`<button class="sm" onclick="vCopy('${x.id}','user')" title="Kullanıcı adını kopyala">👤</button>`:''}<button class="sm" onclick="vCopy('${x.id}','pass')" title="Parolayı kopyala">📋</button></div>`).join('')}).join('');
+}
+async function vCopy(id,f){
+  const x=vaultItems.find(y=>y.id===id);if(!x)return;const t=f==='user'?x.user:x.pass;
+  try{await navigator.clipboard.writeText(t||'')}catch{const ta=document.createElement('textarea');ta.value=t||'';document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove()}
+  toastMsg(f==='user'?'👤 Kullanıcı adı kopyalandı':'📋 Parola kopyalandı',1500);
+}
+function genPass(){const a='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#%*-_',r=crypto.getRandomValues(new Uint32Array(14));return [...r].map(n=>a[n%a.length]).join('')}
+function vaultForm(id){
+  curVault=id?vaultItems.find(x=>x.id===id):null;const x=curVault||{};
+  $('vfTitle').textContent=curVault?'Parolayı düzenle':'Parola ekle';$('vfDel').classList.toggle('hidden',!curVault);
+  $('vfName').value=x.name||'';$('vfCat').value=x.cat||'Diğer';$('vfUser').value=x.user||'';$('vfPass').value=x.pass||'';$('vfPass').type='password';$('vfUrl').value=x.url||'';$('vfNote').value=x.note||'';
+  $('mVault').classList.add('on');
+}
+async function vaultSave(){
+  if(!vaultKey){closeM('mVault');vaultScreen();return}
+  const d={name:$('vfName').value.trim(),cat:$('vfCat').value,user:$('vfUser').value.trim(),pass:$('vfPass').value,url:$('vfUrl').value.trim(),note:$('vfNote').value.trim(),updated:Date.now()};
+  if(!d.name){toastMsg('Ne için olduğunu yaz');return}
+  if(curVault)Object.assign(curVault,d);else vaultItems.push({id:uid(),created:Date.now(),...d});
+  await vaultWrite();closeM('mVault');renderVault();toastMsg('🔐 Kaydedildi',1500);
+}
+async function vaultDel(){if(!curVault||!confirm(`"${curVault.name}" silinsin mi?`))return;vaultItems=vaultItems.filter(x=>x!==curVault);await vaultWrite();closeM('mVault');renderVault()}
+async function vaultChangePin(){
+  if(!vaultKey)return;const p1=prompt('Yeni PIN (en az 4 hane)');if(!p1||p1.trim().length<4)return;if(prompt('Yeni PIN tekrar')!==p1)return toastMsg('PIN\'ler aynı değil');
+  const salt=crypto.getRandomValues(new Uint8Array(16));LS.set('na_vault',{salt:b64e(salt),iv:'',ct:'',v:1});vaultKey=await vaultDerive(p1.trim(),salt);await vaultWrite();toastMsg('✔ PIN değişti');
+}
 // Notu göreve / görevi nota çevir (Geri al ile geri alınır)
 function convertItem(k,id){
   const src=k==='n'?notes:tasks,i=src.findIndex(x=>x.id===id);if(i<0)return;const x=src[i];
@@ -2881,7 +3032,7 @@ function viewNote(id){
   $('vTitle').textContent=n.title||'Not';
   $('vMeta').innerHTML=`📝 ${fmt(toLocal(new Date(n.created||n.updated)))}${n.updated&&n.updated!==n.created?' · düzenlendi '+fmt(toLocal(new Date(n.updated))):''}${isAI(n)?' · <span class="tag ai-tag">✨ AI'+(n.via==='voice'?' · 🎤':'')+'</span>':''}${n.pinned?' · 📌':''}`;
   $('vBody').textContent=n.body||'';
-  edPhotos=[...(n.photos||[])];$('vPhotos').innerHTML=edPhotos.map((p,i)=>`<img data-pid="${p.id}" onclick="viewPhoto(${i})" alt="">`).join('');hydrate($('vPhotos'));
+  edPhotos=[...(n.photos||[])];$('vPhotos').innerHTML=edPhotos.map((p,i)=>`<img data-pid="${p.id}" onclick="viewPhoto(${i})" alt="">`).join('')+(n.files?.length?`<div class="docs" style="grid-column:1/-1;width:100%">${n.files.map(f=>docHTML(f,false)).join('')}</div>`:'');hydrate($('vPhotos'));
   $('vTags').innerHTML=(n.tags||[]).map(t=>`<span class="tag">#${esc(t)}</span>`).join('');
   $('vAct').innerHTML=`${n.audio?`<button class="audbtn big" onclick="playAud('${n.audio}',this)">▶ Sesi dinle${n.audioDur?' · '+n.audioDur+' sn':''}</button><button class="sm ghost" style="flex:0 0 auto;width:auto" onclick="saveAud('${n.audio}')" title="Ses dosyasını kaydet">⬇</button>`:''}<button onclick="shareItem('n','${n.id}')">📤 Paylaş</button><button onclick="convertItem('n','${n.id}')">✅ Göreve çevir</button>`;
   if(n.audio)$('vMeta').insertAdjacentHTML('beforeend',` · <span class="mut">🎤 ses ${audLeft(n.audio)} daha saklanır</span>`);
@@ -2930,7 +3081,7 @@ function itemMenu(k,id){
 })();
 document.querySelectorAll('.modal').forEach(m=>m.onclick=e=>{if(e.target===m){if(m.id==='mNote')closeNote();else m.classList.remove('on')}});
 $('nav').onclick=e=>{const b=e.target.closest('button');if(!b||!b.dataset.v)return;show(b.dataset.v)};
-function show(v){if(v==='notlar'){iF='not';v='bugun';setTimeout(renderItems,0)}if(!$('v-'+v))v='bugun';if(v==='ayarlar'){renderBackup();renderVocab();renderCallStat()}if(v==='ayarlar')renderPerms();document.querySelectorAll('main>section').forEach(s=>s.classList.toggle('hidden',s.id!=='v-'+v));[...$('nav').children].forEach(b=>b.classList.toggle('act',b.dataset.v===v));$('fab').classList.toggle('hidden',v==='asistan'||v==='odeme');if(v==='odeme')renderPays();$('qBar').classList.toggle('hidden',v!=='bugun');document.body.classList.toggle('home',v==='bugun');window.scrollTo(0,0);if(v==='asistan')renderChat()}
+function show(v){if(v==='notlar'){iF='not';v='bugun';setTimeout(renderItems,0)}if(!$('v-'+v))v='bugun';if(v==='ayarlar'){renderBackup();renderVocab();renderCallStat()}if(v==='ayarlar')renderPerms();document.querySelectorAll('main>section').forEach(s=>s.classList.toggle('hidden',s.id!=='v-'+v));[...$('nav').children].forEach(b=>b.classList.toggle('act',b.dataset.v===v));$('fab').classList.toggle('hidden',v==='asistan'||v==='odeme'||v==='parola');if(v==='odeme')renderPays();if(v==='parola')vaultScreen();else if(vaultKey)vaultLock(true);$('qBar').classList.toggle('hidden',v!=='bugun');document.body.classList.toggle('home',v==='bugun');window.scrollTo(0,0);if(v==='asistan')renderChat()}
 function renderAll(){renderToday();renderNotes();renderTasks();renderDiary()}
 // 30 günden önce biten görevler arşive taşınır (silinmez; "🗄 Arşiv" filtresinde durur, işareti kaldırınca geri gelir)
 const ARCHIVE_DAYS=30;

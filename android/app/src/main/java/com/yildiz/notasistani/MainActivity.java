@@ -1055,6 +1055,41 @@ public class MainActivity extends Activity {
             }
         }
 
+        /** Not belgesini (PDF, Word, Excel…) telefondaki uygun uygulamayla aç. */
+        @JavascriptInterface
+        public boolean openFile(String b64, String name, String mime) {
+            try {
+                File dir = new File(getCacheDir(), "belge");
+                dir.mkdirs();
+                File f = new File(dir, name.replaceAll("[\\\\/:*?\"<>|]", "_"));
+                try (FileOutputStream os = new FileOutputStream(f)) {
+                    os.write(Base64.decode(b64, Base64.DEFAULT));
+                }
+                Uri u = FileProvider.getUriForFile(MainActivity.this, AUTH, f);
+                Intent i = new Intent(Intent.ACTION_VIEW).setDataAndType(u, mime == null || mime.isEmpty() ? "*/*" : mime)
+                        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+                runOnUiThread(() -> {
+                    try {
+                        startActivity(Intent.createChooser(i, "Belgeyi aç").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                    } catch (Exception e) {
+                        Toast.makeText(MainActivity.this, "Bu belgeyi açacak uygulama yok", Toast.LENGTH_SHORT).show();
+                    }
+                });
+                return true;
+            } catch (Exception e) {
+                return false;
+            }
+        }
+
+        /** Parola kasası açıkken ekran görüntüsü / son uygulamalar önizlemesi engellensin. */
+        @JavascriptInterface
+        public void secure(boolean on) {
+            runOnUiThread(() -> {
+                if (on) getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+                else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
+            });
+        }
+
         @JavascriptInterface
         public String version() {
             return "3";
