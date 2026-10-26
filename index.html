@@ -379,7 +379,7 @@ details.card[open] summary{margin-bottom:6px}
   </div>
   <div class="card">
     <div class="row"><textarea id="pAI" rows="2" placeholder="Yaz, AI eklesin: &quot;Garanti kredi 12 taksit ayda 15.000, her ayın 5'i&quot; · &quot;Akbank çek 25 Kasım 48.500 Borataş'a&quot; · &quot;Kira her ayın 1'i 20.000&quot;"></textarea></div>
-    <div class="row" style="margin-top:8px;flex-wrap:wrap"><button class="pri" style="flex:0 0 auto" id="pAIBtn" onclick="payAI()">✨ AI ile ekle</button><button class="sm" onclick="payForm()">+ Elle ekle</button><button class="sm" onclick="payShare()">📤 Muhasebeye gönder</button></div>
+    <div class="row" style="margin-top:8px;flex-wrap:wrap"><button class="pri" style="flex:0 0 auto" id="pAIBtn" onclick="payAI()">✨ AI ile ekle</button><button class="sm" onclick="payForm()">+ Elle ekle</button><button class="sm" onclick="payShare()">📊 Muhasebeye Excel gönder</button></div>
   </div>
   <div class="card"><div id="pList"></div></div>
   <div class="card"><details><summary><b>Tüm ödeme kayıtları</b> <span class="mut" id="pDefCnt"></span></summary><div id="pDefs" style="margin-top:8px"></div></details></div>
@@ -535,7 +535,7 @@ details.card[open] summary{margin-bottom:6px}
   <button data-v="bugun" class="act"><b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg></b>Ana sayfa</button>
   <button data-v="gunluk"><b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 10v4M6 6v12M10 3v18M14 8v8M18 5v14M22 10v4"/></svg></b>Günlük</button>
   <button data-v="asistan"><b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 4.7 4.7 1.8-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2 2.2.8-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg></b>Asistan</button>
-  <button data-v="odeme"><b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5.5" width="19" height="13" rx="2.5"/><path d="M2.5 10h19M6.5 15h4"/></svg></b>Ödemeler</button>
+  <button data-v="odeme"><b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5.5" width="19" height="13" rx="2.5"/><path d="M2.5 10h19M6.5 15h4"/></svg></b>Ödeme Takibi</button>
   <button data-v="ayarlar"><b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></b>Ayarlar</button>
 </nav>
 
@@ -2791,11 +2791,56 @@ type: taksit = belli sayıda aylık taksit (kredi, kredi kartı taksiti, borç);
   }catch(e){toastMsg('⚠️ '+esc(e.message))}
   busy($('pAIBtn'),false);
 }
+// ---- Excel (.xlsx) üretimi: kütüphanesiz, internetsiz çalışır ----
+const CRC_T=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
+function crc32(u){let c=0xFFFFFFFF;for(let i=0;i<u.length;i++)c=CRC_T[(c^u[i])&255]^(c>>>8);return (c^0xFFFFFFFF)>>>0}
+function zipStore(files){ // [{name,data:string}] → Uint8Array (sıkıştırmasız zip)
+  const enc=new TextEncoder(),parts=[],cen=[];let off=0;
+  for(const f of files){const nm=enc.encode(f.name),d=enc.encode(f.data),crc=crc32(d);
+    const h=new DataView(new ArrayBuffer(30));h.setUint32(0,0x04034b50,true);h.setUint16(4,20,true);h.setUint16(8,0,true);h.setUint32(14,crc,true);h.setUint32(18,d.length,true);h.setUint32(22,d.length,true);h.setUint16(26,nm.length,true);
+    parts.push(new Uint8Array(h.buffer),nm,d);
+    const c=new DataView(new ArrayBuffer(46));c.setUint32(0,0x02014b50,true);c.setUint16(4,20,true);c.setUint16(6,20,true);c.setUint32(16,crc,true);c.setUint32(20,d.length,true);c.setUint32(24,d.length,true);c.setUint16(28,nm.length,true);c.setUint32(42,off,true);
+    cen.push(new Uint8Array(c.buffer),nm);off+=30+nm.length+d.length}
+  const cs=cen.reduce((a,x)=>a+x.length,0),e=new DataView(new ArrayBuffer(22));e.setUint32(0,0x06054b50,true);e.setUint16(8,files.length,true);e.setUint16(10,files.length,true);e.setUint32(12,cs,true);e.setUint32(16,off,true);
+  const all=[...parts,...cen,new Uint8Array(e.buffer)],out=new Uint8Array(all.reduce((a,x)=>a+x.length,0));let o=0;for(const x of all){out.set(x,o);o+=x.length}return out;
+}
+/** rows: hücre dizileri; hücre = string | number | {v, s} (s: 1 kalın başlık, 2 para, 3 kalın para, 4 tarih metni) */
+function makeXlsx(sheet,rows,widths){
+  const x=v=>String(v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const col=i=>{let s='';i++;while(i){const m=(i-1)%26;s=String.fromCharCode(65+m)+s;i=Math.floor((i-1)/26)}return s};
+  const body=rows.map((r,ri)=>`<row r="${ri+1}">`+r.map((c,ci)=>{if(c==null||c==='')return '';const o=typeof c==='object'?c:{v:c};const ref=col(ci)+(ri+1),st=o.s?` s="${o.s}"`:'';
+    return typeof o.v==='number'?`<c r="${ref}"${st}><v>${o.v}</v></c>`:`<c r="${ref}" t="inlineStr"${st}><is><t xml:space="preserve">${x(o.v)}</t></is></c>`}).join('')+'</row>').join('');
+  const cols=widths?`<cols>${widths.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join('')}</cols>`:'';
+  return zipStore([
+    {name:'[Content_Types].xml',data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>'},
+    {name:'_rels/.rels',data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'},
+    {name:'xl/workbook.xml',data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${x(sheet.slice(0,31))}" sheetId="1" r:id="rId1"/></sheets></workbook>`},
+    {name:'xl/_rels/workbook.xml.rels',data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'},
+    {name:'xl/styles.xml',data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="164" formatCode="#,##0.00 &quot;₺&quot;"/></numFmts><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFDBEAFE"/></patternFill></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="5"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="164" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>'},
+    {name:'xl/worksheets/sheet1.xml',data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">${cols}<sheetData>${body}</sheetData></worksheet>`},
+  ]);
+}
 function payShare(){
-  const rows=payRows(payMonth);if(!rows.length){toastMsg('Bu ay ödeme yok');return}
-  const tot=rows.reduce((a,r)=>a+r.amount,0);
-  const txt=`💰 ${ymName(payMonth)} ödemeleri\n\n`+rows.map(r=>`${r.date.split('-').reverse().slice(0,2).join('.')}  ${r.p.title}${r.total?` (${r.no}/${r.total})`:''}${r.p.type==='cek'?` – çek${r.p.bank?' '+r.p.bank:''}${r.p.no?' no '+r.p.no:''}`:''}: ${money(r.amount)}${isPaid(r.p,r.key)?' ✓ ödendi':''}`).join('\n')+`\n\nToplam: ${money(tot)}`;
-  shareTxt(txt);
+  const rows=payRows(payMonth),today=dayKey(Date.now());
+  const od=payMonth===today.slice(0,7)?payOverdue().filter(r=>r.date.slice(0,7)<payMonth):[];
+  const all=[...od,...rows];if(!all.length){toastMsg('Bu ay ödeme yok');return}
+  const dt=d=>d.split('-').reverse().join('.');
+  const head=['Vade','Tür','Açıklama','Taksit','Banka','Çek No','Tutar','Durum','Ödeme Tarihi','Not'].map(v=>({v,s:1}));
+  const data=all.map(r=>{const pd=isPaid(r.p,r.key);return [dt(r.date),PTYPE[r.p.type].replace(/^\S+\s/,''),r.p.title||'',r.total?`${r.no}/${r.total}`:'',r.p.bank||'',r.p.no||'',{v:r.amount,s:2},pd?'Ödendi':r.date<today?'Gecikti':'Bekliyor',pd?stampDate(r.p.paid[r.key]).slice(0,10):'',r.p.note||'']});
+  const sum=f=>all.filter(f).reduce((a,r)=>a+r.amount,0);
+  const xs=makeXlsx(ymName(payMonth)+' Ödemeler',[
+    [{v:`${ymName(payMonth)} Ödeme Listesi`,s:4}],[],head,...data,[],
+    ['','','Toplam','','','',{v:sum(()=>true),s:3}],
+    ['','','Ödenen','','','',{v:sum(r=>isPaid(r.p,r.key)),s:3}],
+    ['','','Kalan','','','',{v:sum(r=>!isPaid(r.p,r.key)),s:3}],
+  ],[12,13,30,9,14,14,16,11,14,30]);
+  const name=`odemeler-${payMonth}.xlsx`,mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  let bin='';for(let i=0;i<xs.length;i+=8192)bin+=String.fromCharCode.apply(null,xs.subarray(i,i+8192));
+  const b64=btoa(bin),msg=`${ymName(payMonth)} ödeme listesi (toplam ${money(sum(()=>true))})`;
+  if(APP&&typeof Android.share==='function'){Android.share(b64,name,mime,msg);return}
+  const file=new File([xs],name,{type:mime});
+  if(navigator.canShare&&navigator.canShare({files:[file]})){navigator.share({files:[file],text:msg}).catch(()=>{});return}
+  const a=document.createElement('a');a.href=URL.createObjectURL(file);a.download=name;a.click();
 }
 /** Hatırlatmalar: vadeden 1 gün önce ve vade günü 09:00 */
 function payAlarms(want){
