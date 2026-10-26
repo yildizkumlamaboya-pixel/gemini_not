@@ -245,6 +245,24 @@ body.camonly>*:not(#cam):not(.toast):not(script){display:none!important}body.cam
 .citem{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:14px;margin-bottom:7px;background:#fff;cursor:pointer}
 .citem .ct{flex:0 0 44px;font-size:12.5px;font-weight:700;color:var(--mut);text-align:center}.citem .cb{flex:1;min-width:0}.citem .cn{font-weight:700;font-size:14px}.citem .cm{font-size:12px;color:var(--mut)}
 .citem i.bar{width:4px;align-self:stretch;border-radius:3px;flex:0 0 4px}
+/* ---- Bilgisayar tarayıcısı (fare ile) ---- */
+.hint-pc{display:none}
+@media (hover:hover) and (pointer:fine){
+  .srow:hover .sact{z-index:3}
+  .srow .sact{padding:8px}.srow .sbtn{width:58px;font-size:11px}
+  .sfront{cursor:pointer}.sfront:hover{border-color:#bfdbfe!important}
+  .hint-touch{display:none}.hint-pc{display:inline}
+  nav{justify-content:center}nav button{flex:0 1 150px}
+  nav button:hover b{background:#eff6ff}
+  .cal .cd:hover{border-color:#bfdbfe}
+  .prow:hover,.citem:hover,.vrow:hover{border-color:#bfdbfe}
+}
+@media (min-width:900px){
+  main{max-width:860px}
+  .modal .sheet{max-width:640px;border-radius:24px;margin-bottom:24px}
+  .modal{align-items:center}
+  .cal .cd{min-height:68px}
+}
 .donesep{display:flex;align-items:center;gap:8px;width:100%;font:600 13px inherit;font-family:inherit;color:var(--mut);background:#f8fafc;border:1px dashed var(--line);border-radius:14px;padding:11px 14px;margin-top:8px;cursor:pointer;text-align:left}
 .donesep .cv{margin-left:auto;transition:transform .2s;font-size:12px}.donesep.open .cv{transform:rotate(180deg)}
 .added{font-size:11px;color:var(--mut);white-space:nowrap}
@@ -369,7 +387,7 @@ details.card[open] summary{margin-bottom:6px}
     <div id="planOut"></div>
     <div id="taskList" class="hidden"></div>
     <div id="itemList"></div>
-    <div class="mut" style="font-size:12px;text-align:center;margin-top:8px">Dokun: görüntüle · Sola kaydır: düzenle / sil</div>
+    <div class="mut" style="font-size:12px;text-align:center;margin-top:8px"><span class="hint-touch">Dokun: görüntüle · Sola kaydır: düzenle / sil</span><span class="hint-pc">Tıkla: görüntüle · Üzerine gel: düzenle / sil · Enter: AI ile ekle</span></div>
   </div>
 </section>
 
@@ -633,7 +651,7 @@ details.card[open] summary{margin-bottom:6px}
   <div id="vPhotos" class="vphotos"></div>
   <div id="vTags" style="margin-top:8px"></div>
   <div class="row" id="vAct" style="margin-top:14px;flex-wrap:wrap"></div>
-  <div class="mut" style="font-size:12px;margin-top:10px;text-align:center">Düzenlemek veya silmek için listede sola kaydır</div>
+  <div class="mut" style="font-size:12px;margin-top:10px;text-align:center"><span class="hint-touch">Düzenlemek veya silmek için listede sola kaydır</span><span class="hint-pc">Düzenlemek veya silmek için listede üzerine gel · Esc: kapat</span></div>
 </div></div>
 <div class="modal" id="mAct"><div class="sheet actsheet">
   <div class="acthead"><span class="actic" id="aIcon"></span><div style="min-width:0;flex:1"><div class="mut" id="aKind" style="font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase"></div><div id="aTitle" class="acttitle"></div></div></div>
@@ -947,6 +965,9 @@ Kişi ve firma adlarını metinde geçtiği gibi aynen kullan; değiştirme, kı
 Sadece JSON döndür: {"notes":[{"title":"","body":"","tags":[""]}],"tasks":[{"title":"","note":"","due":null,"remind":null,"priority":"orta","repeat":""}]}  (repeat: "", "gunluk","haftalik","aylik")`+extra}
 $('iSearch').addEventListener('input',()=>renderItems());
 $('qText').addEventListener('input',e=>{const t=e.target;t.style.height='auto';t.style.height=Math.min(140,t.scrollHeight)+'px'});
+// Bilgisayarda: Enter = AI ile ekle, Shift+Enter = yeni satır
+$('qText').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing&&matchMedia('(pointer:fine)').matches){e.preventDefault();$('qBtn').click()}});
+$('pAI')?.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&matchMedia('(pointer:fine)').matches){e.preventDefault();payAI()}});
 const OFFLINE_ERR=/internet bağlantısı|ulaşılamadı|failed to fetch|network/i;
 // AI ile ekle: yazı HEMEN listeye girer, alan temizlenir (beklemeden yenisini yazabilirsin); ayrıştırma arkada yapılır
 $('qBtn').onclick=async()=>{
@@ -2447,6 +2468,9 @@ async function askAllPerms(){
 
 window.onNativePerms=async()=>{renderNStat();const all=await renderPerms();if(all&&$('mPerm').classList.contains('on')){closeM('mPerm');toastMsg('✔ Tüm izinler verildi')}};
 // Android geri tuşu: açık pencereyi kapat / ana sayfaya dön
+// Bilgisayarda Esc: açık pencereyi kapat; modal dışına tıklayınca kapanır
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.querySelector('.modal.on')){e.preventDefault();window.nativeBack()}});
+document.addEventListener('mousedown',e=>{const m=e.target.classList?.contains('modal')&&e.target.classList.contains('on')?e.target:null;if(m&&!['mRec','mPerm'].includes(m.id)){m.id==='mNote'?closeNote():m.classList.remove('on')}});
 window.nativeBack=()=>{for(const id of['mTplEd','mTpls'])if($(id).classList.contains('on')){closeM(id);return true}
   if(!$('cam').classList.contains('hidden')){closeCam();return true}
   const m=[...document.querySelectorAll('.modal.on')].pop();if(m){if(m.id==='mNote')closeNote();else if(m.id==='mRec')recCancel();else m.classList.remove('on');return true}
@@ -3183,7 +3207,7 @@ function itemMenu(k,id){
 })();
 document.querySelectorAll('.modal').forEach(m=>m.onclick=e=>{if(e.target===m){if(m.id==='mNote')closeNote();else m.classList.remove('on')}});
 $('nav').onclick=e=>{const b=e.target.closest('button');if(!b||!b.dataset.v)return;show(b.dataset.v)};
-function show(v){if(v==='notlar'){iF='not';v='bugun';setTimeout(renderItems,0)}if(!$('v-'+v))v='bugun';if(v==='ayarlar'){renderBackup();renderVocab();renderCallStat()}if(v==='ayarlar')renderPerms();document.querySelectorAll('main>section').forEach(s=>s.classList.toggle('hidden',s.id!=='v-'+v));[...$('nav').children].forEach(b=>b.classList.toggle('act',b.dataset.v===v));$('fab').classList.toggle('hidden',v==='asistan'||v==='odeme'||v==='parola'||v==='takvim');if(v==='odeme')renderPays();if(v==='takvim')renderCal();if(v==='parola')vaultScreen();else if(vaultKey)vaultLock(true);$('qBar').classList.toggle('hidden',v!=='bugun');document.body.classList.toggle('home',v==='bugun');window.scrollTo(0,0);if(v==='asistan')renderChat()}
+function show(v){if(v==='notlar'){iF='not';v='bugun';setTimeout(renderItems,0)}if(!$('v-'+v))v='bugun';if(v==='ayarlar'){renderBackup();renderVocab();renderCallStat()}if(v==='ayarlar')renderPerms();document.querySelectorAll('main>section').forEach(s=>s.classList.toggle('hidden',s.id!=='v-'+v));[...$('nav').children].forEach(b=>b.classList.toggle('act',b.dataset.v===v));$('fab').classList.toggle('hidden',v!=='bugun'&&v!=='gunluk');if(v==='odeme')renderPays();if(v==='takvim')renderCal();if(v==='parola')vaultScreen();else if(vaultKey)vaultLock(true);$('qBar').classList.toggle('hidden',v!=='bugun');document.body.classList.toggle('home',v==='bugun');window.scrollTo(0,0);if(v==='asistan')renderChat()}
 function renderAll(){renderToday();renderNotes();renderTasks();renderDiary();if($('v-takvim')&&!$('v-takvim').classList.contains('hidden'))renderCal()}
 // 30 günden önce biten görevler arşive taşınır (silinmez; "🗄 Arşiv" filtresinde durur, işareti kaldırınca geri gelir)
 const ARCHIVE_DAYS=30;
@@ -3205,7 +3229,7 @@ if(window.CAMONLY){setTimeout(()=>{try{openCam()}catch(e){toastMsg('Kamera açı
 if(!window.CAMONLY){checkServer();renderNStat();renderAll();checkReminders();syncAlarms();renderBackup();importNativeSummary();pollVoice();vBusy();startCallWatch();setTimeout(()=>retryAll(false),6000);setTimeout(processAIQueue,3000);renderSugg();if(APP){setTimeout(window.nativeAct,700);setTimeout(importBubble,400)}setTimeout(()=>suggScan(false),8000);}
 if(NATIVE_DIARY){pullResults();pullChunks();let st={};try{st=JSON.parse(Android.diaryState())}catch{}if(st.on){dr.on=true;dr.native=true;diaryUI(true);nativeTick()}}
 if(APP&&cfg.sumOn&&typeof Android.setSummary==='function')sumSettings();
-renderPerms().then(all=>{if(!all&&!LS.get('na_perm',0))setTimeout(()=>$('mPerm').classList.add('on'),900)});
+renderPerms().then(all=>{if(APP&&!all&&!LS.get('na_perm',0))setTimeout(()=>$('mPerm').classList.add('on'),900)});
 setTimeout(()=>{if(!cfg.key&&!(srv.ok&&srv.hasKey))toastMsg('📴 Gemini\'ye şu an ulaşılamıyor — internet gelince kendiliğinden bağlanır.',5000)},1500);
 const sv=new URLSearchParams(location.search).get('v');if(sv)show(sv);
 try{const pv=sessionStorage.getItem('na_ptr');if(pv){sessionStorage.removeItem('na_ptr');show(pv);setTimeout(()=>toastMsg('✔ Yenilendi',1500),300)}}catch{}
