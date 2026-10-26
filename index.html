@@ -228,6 +228,20 @@ body.camonly>*:not(#cam):not(.toast):not(script){display:none!important}body.cam
 .vcat{font-size:12px;font-weight:700;color:var(--mut);margin:12px 0 6px;text-transform:uppercase;letter-spacing:.04em}
 .vlock{text-align:center;padding:26px 10px}.vlock .vi{font-size:44px}.vlock input{text-align:center;font-size:22px;letter-spacing:.3em;max-width:220px;margin:12px auto 0;display:block}
 .hbtn{flex:0 0 auto;width:auto;background:none;border:0;box-shadow:none;padding:6px;font-size:19px;line-height:1}
+.hgear svg{width:21px;height:21px;color:#475569;display:block}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal .wd{font-size:11px;font-weight:700;color:var(--mut);text-align:center;padding:4px 0}
+.cal .cd{min-height:54px;border-radius:12px;background:#f8fafc;border:1px solid transparent;padding:5px 3px 4px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;position:relative}
+.cal .cd.out{opacity:.35}.cal .cd.today{border-color:#2563eb;background:#eff6ff}.cal .cd.sel{background:#2563eb;color:#fff}.cal .cd.sel .n{color:#fff}
+.cal .cd .n{font-size:14px;font-weight:700;color:#0f172a}.cal .cd.wk .n{color:#64748b}
+.cal .dots{display:flex;gap:2px;flex-wrap:wrap;justify-content:center;max-width:40px}
+.cal .dots i{width:7px;height:7px;border-radius:50%;display:block}
+.cal .amt{font-size:9.5px;font-weight:700;color:#b45309;line-height:1}.cal .cd.sel .amt{color:#fde68a}
+.c-hi{background:#ef4444}.c-me{background:#f59e0b}.c-lo{background:#10b981}.c-pay{background:#7c3aed}.c-late{background:#dc2626;box-shadow:0 0 0 1.5px #fecaca}.c-paid{background:#94a3b8}.c-note{background:#3b82f6}.c-dia{background:#ec4899}.c-done{background:#cbd5e1}
+.clegend{display:flex;flex-wrap:wrap;gap:10px;font-size:11.5px;color:var(--mut);margin-top:10px}.clegend span{display:flex;align-items:center;gap:4px}.clegend i{width:8px;height:8px;border-radius:50%;display:inline-block}
+.citem{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:14px;margin-bottom:7px;background:#fff;cursor:pointer}
+.citem .ct{flex:0 0 44px;font-size:12.5px;font-weight:700;color:var(--mut);text-align:center}.citem .cb{flex:1;min-width:0}.citem .cn{font-weight:700;font-size:14px}.citem .cm{font-size:12px;color:var(--mut)}
+.citem i.bar{width:4px;align-self:stretch;border-radius:3px;flex:0 0 4px}
 .donesep{display:flex;align-items:center;gap:8px;width:100%;font:600 13px inherit;font-family:inherit;color:var(--mut);background:#f8fafc;border:1px dashed var(--line);border-radius:14px;padding:11px 14px;margin-top:8px;cursor:pointer;text-align:left}
 .donesep .cv{margin-left:auto;transition:transform .2s;font-size:12px}.donesep.open .cv{transform:rotate(180deg)}
 .added{font-size:11px;color:var(--mut);white-space:nowrap}
@@ -316,6 +330,7 @@ details.card[open] summary{margin-bottom:6px}
   <h1><span class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 4.7 4.7 1.8-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2 2.2.8-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg></span><span>Not <span class="grad-t">Asistanı</span></span></h1>
   <span class="mut" id="clock"></span>
   <button class="hbtn" onclick="show('parola')" title="İş yeri parolaları">🔐</button>
+  <button class="hbtn hgear" onclick="show('ayarlar')" title="Ayarlar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
   <span class="dot" id="aiDot" title="Gemini bağlantısı">AI</span>
 </header>
 
@@ -415,6 +430,18 @@ details.card[open] summary{margin-bottom:6px}
     </div>
     <div class="card"><div id="vList"></div></div>
     <div class="mut" style="font-size:12px;text-align:center;margin:-4px 0 10px">3 dakika işlem yapmazsan ya da uygulamadan çıkınca kendiliğinden kilitlenir · <a href="#" onclick="vaultChangePin();return false">PIN'i değiştir</a></div>
+  </div>
+</section>
+
+<section id="v-takvim" class="hidden">
+  <div class="card">
+    <div class="row" style="align-items:center;margin-bottom:8px"><button class="sm ghost dnav" onclick="calShift(-1)">‹</button><b id="cMonth" style="flex:1;text-align:center;font-size:17px" onclick="calToday()"></b><button class="sm ghost dnav" onclick="calShift(1)">›</button></div>
+    <div class="cal" id="cGrid"></div>
+    <div class="clegend"><span><i class="c-hi"></i>Acil görev</span><span><i class="c-me"></i>Görev</span><span><i class="c-lo"></i>Düşük</span><span><i class="c-pay"></i>Ödeme</span><span><i class="c-late"></i>Geciken</span><span><i class="c-note"></i>Not</span><span><i class="c-dia"></i>Günlük</span><span><i class="c-paid"></i>Biten / ödenen</span></div>
+  </div>
+  <div class="card">
+    <div class="row" style="align-items:center;margin-bottom:8px"><b id="cDayT" style="flex:1;font-size:16px"></b><button class="sm" style="flex:0 0 auto" onclick="calAddTask()">+ Görev</button><button class="sm" style="flex:0 0 auto" onclick="calAddPay()">+ Ödeme</button></div>
+    <div id="cDay"></div>
   </div>
 </section>
 
@@ -568,8 +595,8 @@ details.card[open] summary{margin-bottom:6px}
   <button data-v="bugun" class="act"><b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg></b>Ana sayfa</button>
   <button data-v="gunluk"><b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 10v4M6 6v12M10 3v18M14 8v8M18 5v14M22 10v4"/></svg></b>Günlük</button>
   <button data-v="asistan"><b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 4.7 4.7 1.8-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2 2.2.8-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg></b>Asistan</button>
+  <button data-v="takvim"><b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="16.5" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/><circle cx="8" cy="14" r=".9" fill="currentColor"/><circle cx="12" cy="14" r=".9" fill="currentColor"/><circle cx="16" cy="14" r=".9" fill="currentColor"/></svg></b>Takvim</button>
   <button data-v="odeme"><b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5.5" width="19" height="13" rx="2.5"/><path d="M2.5 10h19M6.5 15h4"/></svg></b>Ödeme Takibi</button>
-  <button data-v="ayarlar"><b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></b>Ayarlar</button>
 </nav>
 
 <!-- NOT DÜZENLE -->
@@ -2184,7 +2211,15 @@ function taskRow(t){
 }
 const sortT=(a,b)=>(a.due||'9999').localeCompare(b.due||'9999')||({yuksek:0,orta:1,dusuk:2}[a.priority]-{yuksek:0,orta:1,dusuk:2}[b.priority]);
 // ================= Notlar + görevler tek listede =================
-let iF=LS.get('na_iF','all'),iTag='',doneOpen=!!LS.get('na_doneOpen',false);
+let iF=LS.get('na_iF','all'),iTag='',doneOpen=!!LS.get('na_doneOpen',false),arcOpen=!!LS.get('na_arcOpen',false);
+function archiveNote(id){
+  const n=notes.find(x=>x.id===id);if(!n)return;
+  if(n.archived){delete n.archived;delete n.archivedAt;toastMsg('↩ Arşivden çıkarıldı',2000)}
+  else{n.archived=true;n.archivedAt=Date.now();n.pinned=false;
+    window.undoArc=()=>{delete n.archived;delete n.archivedAt;save();renderAll();toastMsg('↶ Geri alındı',1500)};
+    toastMsg(`🗄 Arşive alındı <button class="sm" style="margin-left:8px" onclick="undoArc()">Geri al</button>`,5000)}
+  save();renderAll();closeM('mView');
+}
 const IF={all:'Tümü',gorev:'✅ Görev',not:'📝 Not',bugun:'Bugün',geciken:'Geciken',biten:'Biten',arsiv:'🗄 Arşiv',photo:'📷 Fotoğraflı',ai:'✨ AI',gunluk:'🎙 Günlük',pin:'📌 Sabit'};
 function setIF(k){iF=k;LS.set('na_iF',k);renderItems()}
 function iMatch(k,x,f){
@@ -2245,7 +2280,10 @@ function renderItems(){
   const open=l.filter(i=>grp(i)!==9),done=l.filter(i=>grp(i)===9);
   // Bitenler katlanır: kapalıyken sadece başlık görünür (Biten filtresinde veya başka kayıt yoksa açık)
   const dOpen=doneOpen||iF==='biten'||iF==='arsiv'||!open.length;
-  $('itemList').innerHTML=l.length?open.map(([k,x])=>rowHTML(k,x)).join('')+(done.length&&open.length&&iF!=='biten'&&iF!=='arsiv'?`<button class="donesep ${dOpen?'open':''}" onclick="doneOpen=!doneOpen;LS.set('na_doneOpen',doneOpen);renderItems()">✓ Bitenler · ${done.length}<span class="cv">▼</span></button>`:'')+(dOpen?done.map(([k,x])=>rowHTML(k,x)).join(''):'')
+  // Arşiv (arşive alınan notlar + eski bitmiş görevler): en altta katlanır liste
+  const arch=iF==='all'?all.filter(([k,x])=>x.archived&&(!iTag||(x.tags||[]).includes(iTag))&&(!q||iText(k,x).includes(q))).sort((a,b)=>(b[1].archivedAt||b[1].doneAt||0)-(a[1].archivedAt||a[1].doneAt||0)):[];
+  const archHTML=arch.length?`<button class="donesep ${arcOpen?'open':''}" onclick="arcOpen=!arcOpen;LS.set('na_arcOpen',arcOpen);renderItems()">🗄 Arşiv · ${arch.length}<span class="cv">▼</span></button>`+(arcOpen?arch.map(([k,x])=>rowHTML(k,x)).join(''):''):'';
+  $('itemList').innerHTML=(l.length||arch.length)?open.map(([k,x])=>rowHTML(k,x)).join('')+(done.length&&open.length&&iF!=='biten'&&iF!=='arsiv'?`<button class="donesep ${dOpen?'open':''}" onclick="doneOpen=!doneOpen;LS.set('na_doneOpen',doneOpen);renderItems()">✓ Bitenler · ${done.length}<span class="cv">▼</span></button>`:'')+(dOpen?done.map(([k,x])=>rowHTML(k,x)).join(''):'')+archHTML
     :`<div class="empty">${q||iTag?'Eşleşen kayıt yok':iF==='all'?'Henüz not ya da görev yok':'Bu filtrede kayıt yok'}</div>`;
   hydrate($('itemList'));
 }
@@ -2787,7 +2825,7 @@ function priSel(k,x){
   $('vPri').innerHTML=`<span class="mut" style="font-size:12.5px;align-self:center;margin-right:2px">Öncelik:</span>`+opts.map(([v,l])=>`<button class="p-${v}${cur===v?' on':''}" onclick="setPri('${k}','${x.id}','${v}')">${l}</button>`).join('');
 }
 // ================= ÖDEMELER: taksit, çek, aylık sabit, tek seferlik (muhasebe takibi) =================
-const savePays=()=>{LS.set('na_pays',pays);syncAlarms();afterChange()};
+const savePays=()=>{LS.set('na_pays',pays);syncAlarms();afterChange();if($('v-takvim')&&!$('v-takvim').classList.contains('hidden'))setTimeout(renderCal,0)};
 const PTYPE={taksit:'💳 Taksit',cek:'🧾 Çek',aylik:'🔁 Aylık',tek:'📌 Tek ödeme'};
 const AYLAR=['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
 let payMonth=dayKey(Date.now()).slice(0,7),curPay=null,pfType='taksit';
@@ -3003,6 +3041,54 @@ async function vaultChangePin(){
   if(!vaultKey)return;const p1=prompt('Yeni PIN (en az 4 hane)');if(!p1||p1.trim().length<4)return;if(prompt('Yeni PIN tekrar')!==p1)return toastMsg('PIN\'ler aynı değil');
   const salt=crypto.getRandomValues(new Uint8Array(16));LS.set('na_vault',{salt:b64e(salt),iv:'',ct:'',v:1});vaultKey=await vaultDerive(p1.trim(),salt);await vaultWrite();toastMsg('✔ PIN değişti');
 }
+// ================= TAKVİM: görevler, hatırlatmalar, ödemeler, notlar ve günlük tek ekranda =================
+let calMonth=dayKey(Date.now()).slice(0,7),calSel=dayKey(Date.now());
+const GUNK=['Pzt','Sal','Çar','Per','Cum','Cmt','Paz'];
+function calShift(k){calMonth=ymAdd(calMonth,k);const t=dayKey(Date.now());calSel=t.slice(0,7)===calMonth?t:calMonth+'-01';renderCal()}
+function calToday(){calMonth=dayKey(Date.now()).slice(0,7);calSel=dayKey(Date.now());renderCal()}
+function calPick(d){calSel=d;if(d.slice(0,7)!==calMonth)calMonth=d.slice(0,7);renderCal()}
+/** Ay için gün gün olaylar: {gün:[{k,cls,time,title,meta,id,...}]} */
+function calEvents(fromYm,toYm){
+  const ev={},add=(d,e)=>{(ev[d]=ev[d]||[]).push(e)},today=dayKey(Date.now()),inR=d=>d&&d.slice(0,7)>=fromYm&&d.slice(0,7)<=toYm;
+  for(const t of tasks){
+    const when=t.due||t.remind;if(!when)continue;const d=when.slice(0,10);if(!inR(d))continue;
+    const late=!t.done&&new Date(when)<new Date();
+    add(d,{k:'t',id:t.id,cls:t.done?'c-paid':late?'c-late':t.priority==='yuksek'?'c-hi':t.priority==='dusuk'?'c-lo':'c-me',time:when.length>10?when.slice(11,16):'',title:t.title,meta:[t.done?'✓ bitti':late?'⚠️ gecikti':'',t.remind?'⏰ '+t.remind.slice(11,16):'',PRI[t.priority]||''].filter(Boolean).join(' · '),done:t.done});
+  }
+  for(const p of pays)for(const i of payInst(p,fromYm,toYm)){
+    const pd=isPaid(p,i.key);add(i.date,{k:'p',pid:p.id,key:i.key,cls:pd?'c-paid':i.date<today?'c-late':'c-pay',time:'',title:p.title,amount:i.amount,meta:[PTYPE[p.type],i.total?i.no+'/'+i.total:'',p.bank,pd?'✓ ödendi':i.date<today?'⚠️ gecikti':''].filter(Boolean).join(' · '),paid:pd});
+  }
+  for(const n of notes){if(fromG(n))continue;const d=dayKey(n.created||n.updated||0);if(!inR(d))continue;add(d,{k:'n',id:n.id,cls:'c-note',time:hm(n.created||n.updated),title:n.title||'Not',meta:'📝 not'+(n.files?.length?' · 📎':'')+(n.photos?.length?' · 📷':'')})}
+  const dc={};for(const e of diary){const d=dayKey(e.ts);if(inR(d)&&e.text)dc[d]=(dc[d]||0)+1}
+  for(const[d,c]of Object.entries(dc))add(d,{k:'g',cls:'c-dia',time:'',title:'Sesli günlük',meta:c+' kayıt'});
+  return ev;
+}
+function renderCal(){
+  if(!$('cGrid'))return;
+  const [y,m]=calMonth.split('-').map(Number),first=new Date(y,m-1,1),start=(first.getDay()+6)%7,today=dayKey(Date.now());
+  const fromYm=ymAdd(calMonth,-1),toYm=ymAdd(calMonth,1),ev=calEvents(fromYm,toYm);
+  $('cMonth').textContent=ymName(calMonth);
+  let h=GUNK.map(g=>`<div class="wd">${g}</div>`).join('');
+  for(let i=0;i<42;i++){
+    const d=new Date(y,m-1,1-start+i),k=dayKey(d.getTime()),es=ev[k]||[];
+    if(i>=35&&d.getMonth()!==m-1)break;
+    const order=['c-late','c-hi','c-pay','c-me','c-lo','c-note','c-dia','c-paid'];
+    const cls=[...new Set(es.map(e=>e.cls))].sort((a,b)=>order.indexOf(a)-order.indexOf(b)).slice(0,6);
+    const due=es.filter(e=>e.k==='p'&&!e.paid).reduce((a,e)=>a+e.amount,0);
+    h+=`<div class="cd${d.getMonth()!==m-1?' out':''}${k===today?' today':''}${k===calSel?' sel':''}${d.getDay()%6===0?' wk':''}" onclick="calPick('${k}')"><span class="n">${d.getDate()}</span><span class="dots">${cls.map(c=>`<i class="${c}"></i>`).join('')}</span>${due?`<span class="amt">${due>=1000?Math.round(due/1000)+'b':Math.round(due)}</span>`:''}</div>`;
+  }
+  $('cGrid').innerHTML=h;
+  const sd=new Date(calSel+'T12:00'),es=(ev[calSel]||[]).sort((a,b)=>(a.k==='p'?'0':a.k==='t'?'1':'2').localeCompare(b.k==='p'?'0':b.k==='t'?'1':'2')||String(a.time).localeCompare(String(b.time)));
+  $('cDayT').textContent=`${sd.getDate()} ${AYLAR[sd.getMonth()]} ${['Pazar','Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi'][sd.getDay()]}${calSel===today?' · Bugün':''}`;
+  const tot=es.filter(e=>e.k==='p'&&!e.paid).reduce((a,e)=>a+e.amount,0);
+  $('cDay').innerHTML=es.length?(tot?`<div class="mut" style="font-weight:700;margin-bottom:8px">💰 Bu gün ödenecek: ${money(tot)}</div>`:'')+es.map(e=>{
+    const click=e.k==='t'?`viewTask('${e.id}')`:e.k==='n'?`viewNote('${e.id}')`:e.k==='p'?`payForm('${e.pid}')`:`show('gunluk');$('dDate').value='${calSel}';renderDiary()`;
+    const right=e.k==='p'?`<b style="white-space:nowrap">${money(e.amount)}</b><button class="sm" style="flex:0 0 auto;width:auto" onclick="event.stopPropagation();payToggle('${e.pid}','${e.key}');renderCal()">${e.paid?'↺':'Ödendi'}</button>`:e.k==='t'?`<button class="sm" style="flex:0 0 auto;width:auto" onclick="event.stopPropagation();toggle('${e.id}');renderCal()">${e.done?'↺':'✓'}</button>`:'';
+    return `<div class="citem" onclick="${click}"><i class="bar ${e.cls}"></i>${e.time?`<div class="ct">${e.time}</div>`:''}<div class="cb"><div class="cn"${e.done||e.paid?' style="text-decoration:line-through;color:#94a3b8"':''}>${esc(e.title)}</div><div class="cm">${esc(e.meta||'')}</div></div>${right}</div>`}).join('')
+    :`<div class="empty">Bu gün için kayıt yok</div>`;
+}
+function calAddTask(){openTask();$('tDue').value=calSel+'T09:00'}
+function calAddPay(){payForm();pfType='tek';$('pfDate').value=calSel;pfSync()}
 // Notu göreve / görevi nota çevir (Geri al ile geri alınır)
 function convertItem(k,id){
   const src=k==='n'?notes:tasks,i=src.findIndex(x=>x.id===id);if(i<0)return;const x=src[i];
@@ -3034,7 +3120,7 @@ function viewNote(id){
   $('vBody').textContent=n.body||'';
   edPhotos=[...(n.photos||[])];$('vPhotos').innerHTML=edPhotos.map((p,i)=>`<img data-pid="${p.id}" onclick="viewPhoto(${i})" alt="">`).join('')+(n.files?.length?`<div class="docs" style="grid-column:1/-1;width:100%">${n.files.map(f=>docHTML(f,false)).join('')}</div>`:'');hydrate($('vPhotos'));
   $('vTags').innerHTML=(n.tags||[]).map(t=>`<span class="tag">#${esc(t)}</span>`).join('');
-  $('vAct').innerHTML=`${n.audio?`<button class="audbtn big" onclick="playAud('${n.audio}',this)">▶ Sesi dinle${n.audioDur?' · '+n.audioDur+' sn':''}</button><button class="sm ghost" style="flex:0 0 auto;width:auto" onclick="saveAud('${n.audio}')" title="Ses dosyasını kaydet">⬇</button>`:''}<button onclick="shareItem('n','${n.id}')">📤 Paylaş</button><button onclick="convertItem('n','${n.id}')">✅ Göreve çevir</button>`;
+  $('vAct').innerHTML=`${n.audio?`<button class="audbtn big" onclick="playAud('${n.audio}',this)">▶ Sesi dinle${n.audioDur?' · '+n.audioDur+' sn':''}</button><button class="sm ghost" style="flex:0 0 auto;width:auto" onclick="saveAud('${n.audio}')" title="Ses dosyasını kaydet">⬇</button>`:''}<button onclick="shareItem('n','${n.id}')">📤 Paylaş</button><button onclick="convertItem('n','${n.id}')">✅ Göreve çevir</button><button onclick="archiveNote('${n.id}')">${n.archived?'↩ Arşivden çıkar':'🗄 Arşive al'}</button>`;
   if(n.audio)$('vMeta').insertAdjacentHTML('beforeend',` · <span class="mut">🎤 ses ${audLeft(n.audio)} daha saklanır</span>`);
   $('mView').classList.add('on');
 }
@@ -3081,8 +3167,8 @@ function itemMenu(k,id){
 })();
 document.querySelectorAll('.modal').forEach(m=>m.onclick=e=>{if(e.target===m){if(m.id==='mNote')closeNote();else m.classList.remove('on')}});
 $('nav').onclick=e=>{const b=e.target.closest('button');if(!b||!b.dataset.v)return;show(b.dataset.v)};
-function show(v){if(v==='notlar'){iF='not';v='bugun';setTimeout(renderItems,0)}if(!$('v-'+v))v='bugun';if(v==='ayarlar'){renderBackup();renderVocab();renderCallStat()}if(v==='ayarlar')renderPerms();document.querySelectorAll('main>section').forEach(s=>s.classList.toggle('hidden',s.id!=='v-'+v));[...$('nav').children].forEach(b=>b.classList.toggle('act',b.dataset.v===v));$('fab').classList.toggle('hidden',v==='asistan'||v==='odeme'||v==='parola');if(v==='odeme')renderPays();if(v==='parola')vaultScreen();else if(vaultKey)vaultLock(true);$('qBar').classList.toggle('hidden',v!=='bugun');document.body.classList.toggle('home',v==='bugun');window.scrollTo(0,0);if(v==='asistan')renderChat()}
-function renderAll(){renderToday();renderNotes();renderTasks();renderDiary()}
+function show(v){if(v==='notlar'){iF='not';v='bugun';setTimeout(renderItems,0)}if(!$('v-'+v))v='bugun';if(v==='ayarlar'){renderBackup();renderVocab();renderCallStat()}if(v==='ayarlar')renderPerms();document.querySelectorAll('main>section').forEach(s=>s.classList.toggle('hidden',s.id!=='v-'+v));[...$('nav').children].forEach(b=>b.classList.toggle('act',b.dataset.v===v));$('fab').classList.toggle('hidden',v==='asistan'||v==='odeme'||v==='parola'||v==='takvim');if(v==='odeme')renderPays();if(v==='takvim')renderCal();if(v==='parola')vaultScreen();else if(vaultKey)vaultLock(true);$('qBar').classList.toggle('hidden',v!=='bugun');document.body.classList.toggle('home',v==='bugun');window.scrollTo(0,0);if(v==='asistan')renderChat()}
+function renderAll(){renderToday();renderNotes();renderTasks();renderDiary();if($('v-takvim')&&!$('v-takvim').classList.contains('hidden'))renderCal()}
 // 30 günden önce biten görevler arşive taşınır (silinmez; "🗄 Arşiv" filtresinde durur, işareti kaldırınca geri gelir)
 const ARCHIVE_DAYS=30;
 function autoArchive(){
