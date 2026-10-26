@@ -238,6 +238,9 @@ body.camonly>*:not(#cam):not(.toast):not(script){display:none!important}body.cam
 .cal .dots i{width:7px;height:7px;border-radius:50%;display:block}
 .cal .amt{font-size:9.5px;font-weight:700;color:#b45309;line-height:1}.cal .cd.sel .amt{color:#fde68a}
 .c-hi{background:#ef4444}.c-me{background:#f59e0b}.c-lo{background:#10b981}.c-pay{background:#7c3aed}.c-late{background:#dc2626;box-shadow:0 0 0 1.5px #fecaca}.c-paid{background:#94a3b8}.c-note{background:#3b82f6}.c-dia{background:#ec4899}.c-done{background:#cbd5e1}
+.cpop{position:absolute;z-index:4;background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 12px 30px rgba(15,23,42,.18);padding:6px;display:flex;flex-direction:column;gap:2px;min-width:150px;animation:pop .15s ease-out}
+.cpop button{background:none;border:0;box-shadow:none;text-align:left;padding:10px 12px;border-radius:10px;font-size:14px;font-weight:600;width:100%;justify-content:flex-start}
+.cpop button:active{background:#eff6ff}
 .clegend{display:flex;flex-wrap:wrap;gap:10px;font-size:11.5px;color:var(--mut);margin-top:10px}.clegend span{display:flex;align-items:center;gap:4px}.clegend i{width:8px;height:8px;border-radius:50%;display:inline-block}
 .citem{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:14px;margin-bottom:7px;background:#fff;cursor:pointer}
 .citem .ct{flex:0 0 44px;font-size:12.5px;font-weight:700;color:var(--mut);text-align:center}.citem .cb{flex:1;min-width:0}.citem .cn{font-weight:700;font-size:14px}.citem .cm{font-size:12px;color:var(--mut)}
@@ -436,11 +439,11 @@ details.card[open] summary{margin-bottom:6px}
 <section id="v-takvim" class="hidden">
   <div class="card">
     <div class="row" style="align-items:center;margin-bottom:8px"><button class="sm ghost dnav" onclick="calShift(-1)">‹</button><b id="cMonth" style="flex:1;text-align:center;font-size:17px" onclick="calToday()"></b><button class="sm ghost dnav" onclick="calShift(1)">›</button></div>
-    <div class="cal" id="cGrid"></div>
+    <div style="position:relative"><div class="cal" id="cGrid"></div><div class="cpop hidden" id="cPop"><button onclick="calAddTask()">✅ Görev ekle</button><button onclick="calAddPay()">💳 Ödeme ekle</button><button onclick="calAddNote()">📝 Not ekle</button></div></div>
     <div class="clegend"><span><i class="c-hi"></i>Acil görev</span><span><i class="c-me"></i>Görev</span><span><i class="c-lo"></i>Düşük</span><span><i class="c-pay"></i>Ödeme</span><span><i class="c-late"></i>Geciken</span><span><i class="c-note"></i>Not</span><span><i class="c-dia"></i>Günlük</span><span><i class="c-paid"></i>Biten / ödenen</span></div>
   </div>
   <div class="card">
-    <div class="row" style="align-items:center;margin-bottom:8px"><b id="cDayT" style="flex:1;font-size:16px"></b><button class="sm" style="flex:0 0 auto" onclick="calAddTask()">+ Görev</button><button class="sm" style="flex:0 0 auto" onclick="calAddPay()">+ Ödeme</button></div>
+    <div class="row" style="align-items:center;margin-bottom:8px"><b id="cDayT" style="flex:1;font-size:16px"></b></div>
     <div id="cDay"></div>
   </div>
 </section>
@@ -3046,7 +3049,18 @@ let calMonth=dayKey(Date.now()).slice(0,7),calSel=dayKey(Date.now());
 const GUNK=['Pzt','Sal','Çar','Per','Cum','Cmt','Paz'];
 function calShift(k){calMonth=ymAdd(calMonth,k);const t=dayKey(Date.now());calSel=t.slice(0,7)===calMonth?t:calMonth+'-01';renderCal()}
 function calToday(){calMonth=dayKey(Date.now()).slice(0,7);calSel=dayKey(Date.now());renderCal()}
-function calPick(d){calSel=d;if(d.slice(0,7)!==calMonth)calMonth=d.slice(0,7);renderCal()}
+function calPick(d,el){
+  const other=d.slice(0,7)!==calMonth;calSel=d;if(other)calMonth=d.slice(0,7);renderCal();
+  if(other)return;
+  // seçilen günün altında küçük menü: görev / ödeme / not ekle
+  const cell=[...$('cGrid').querySelectorAll('.cd')].find(c=>c.dataset.d===d),pop=$('cPop');if(!cell)return;
+  const g=$('cGrid').getBoundingClientRect(),r=cell.getBoundingClientRect();
+  pop.classList.remove('hidden');
+  const w=pop.offsetWidth,left=Math.min(Math.max(0,r.left-g.left+r.width/2-w/2),g.width-w);
+  const below=r.bottom-g.top+4,above=r.top-g.top-pop.offsetHeight-4;
+  pop.style.left=left+'px';pop.style.top=(r.top-g.top>g.height*0.55&&above>0?above:below)+'px';
+}
+document.addEventListener('pointerdown',e=>{const p=$('cPop');if(p&&!p.classList.contains('hidden')&&!e.target.closest('#cPop')&&!e.target.closest('.cd'))p.classList.add('hidden')});
 /** Ay için gün gün olaylar: {gün:[{k,cls,time,title,meta,id,...}]} */
 function calEvents(fromYm,toYm){
   const ev={},add=(d,e)=>{(ev[d]=ev[d]||[]).push(e)},today=dayKey(Date.now()),inR=d=>d&&d.slice(0,7)>=fromYm&&d.slice(0,7)<=toYm;
@@ -3075,9 +3089,9 @@ function renderCal(){
     const order=['c-late','c-hi','c-pay','c-me','c-lo','c-note','c-dia','c-paid'];
     const cls=[...new Set(es.map(e=>e.cls))].sort((a,b)=>order.indexOf(a)-order.indexOf(b)).slice(0,6);
     const due=es.filter(e=>e.k==='p'&&!e.paid).reduce((a,e)=>a+e.amount,0);
-    h+=`<div class="cd${d.getMonth()!==m-1?' out':''}${k===today?' today':''}${k===calSel?' sel':''}${d.getDay()%6===0?' wk':''}" onclick="calPick('${k}')"><span class="n">${d.getDate()}</span><span class="dots">${cls.map(c=>`<i class="${c}"></i>`).join('')}</span>${due?`<span class="amt">${due>=1000?Math.round(due/1000)+'b':Math.round(due)}</span>`:''}</div>`;
+    h+=`<div class="cd${d.getMonth()!==m-1?' out':''}${k===today?' today':''}${k===calSel?' sel':''}${d.getDay()%6===0?' wk':''}" data-d="${k}" onclick="calPick('${k}')"><span class="n">${d.getDate()}</span><span class="dots">${cls.map(c=>`<i class="${c}"></i>`).join('')}</span>${due?`<span class="amt">${due>=1000?Math.round(due/1000)+'b':Math.round(due)}</span>`:''}</div>`;
   }
-  $('cGrid').innerHTML=h;
+  $('cGrid').innerHTML=h;$('cPop').classList.add('hidden');
   const sd=new Date(calSel+'T12:00'),es=(ev[calSel]||[]).sort((a,b)=>(a.k==='p'?'0':a.k==='t'?'1':'2').localeCompare(b.k==='p'?'0':b.k==='t'?'1':'2')||String(a.time).localeCompare(String(b.time)));
   $('cDayT').textContent=`${sd.getDate()} ${AYLAR[sd.getMonth()]} ${['Pazar','Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi'][sd.getDay()]}${calSel===today?' · Bugün':''}`;
   const tot=es.filter(e=>e.k==='p'&&!e.paid).reduce((a,e)=>a+e.amount,0);
@@ -3087,8 +3101,9 @@ function renderCal(){
     return `<div class="citem" onclick="${click}"><i class="bar ${e.cls}"></i>${e.time?`<div class="ct">${e.time}</div>`:''}<div class="cb"><div class="cn"${e.done||e.paid?' style="text-decoration:line-through;color:#94a3b8"':''}>${esc(e.title)}</div><div class="cm">${esc(e.meta||'')}</div></div>${right}</div>`}).join('')
     :`<div class="empty">Bu gün için kayıt yok</div>`;
 }
-function calAddTask(){openTask();$('tDue').value=calSel+'T09:00'}
-function calAddPay(){payForm();pfType='tek';$('pfDate').value=calSel;pfSync()}
+function calAddTask(){$('cPop').classList.add('hidden');openTask();$('tDue').value=calSel+'T09:00'}
+function calAddPay(){$('cPop').classList.add('hidden');payForm();pfType='tek';$('pfDate').value=calSel;pfSync()}
+function calAddNote(){$('cPop').classList.add('hidden');openNote()}
 // Notu göreve / görevi nota çevir (Geri al ile geri alınır)
 function convertItem(k,id){
   const src=k==='n'?notes:tasks,i=src.findIndex(x=>x.id===id);if(i<0)return;const x=src[i];
