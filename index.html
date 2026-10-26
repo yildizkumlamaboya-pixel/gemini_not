@@ -3050,8 +3050,9 @@ const GUNK=['Pzt','Sal','Çar','Per','Cum','Cmt','Paz'];
 function calShift(k){calMonth=ymAdd(calMonth,k);const t=dayKey(Date.now());calSel=t.slice(0,7)===calMonth?t:calMonth+'-01';renderCal()}
 function calToday(){calMonth=dayKey(Date.now()).slice(0,7);calSel=dayKey(Date.now());renderCal()}
 function calPick(d,el){
-  const other=d.slice(0,7)!==calMonth;calSel=d;if(other)calMonth=d.slice(0,7);renderCal();
-  if(other)return;
+  // 1. dokunuş: günü seç (kayıtları altta göster) · 2. dokunuş (aynı gün): ekleme menüsü
+  const again=calSel===d,other=d.slice(0,7)!==calMonth;calSel=d;if(other)calMonth=d.slice(0,7);renderCal();
+  if(other||!again)return;
   // seçilen günün altında küçük menü: görev / ödeme / not ekle
   const cell=[...$('cGrid').querySelectorAll('.cd')].find(c=>c.dataset.d===d),pop=$('cPop');if(!cell)return;
   const g=$('cGrid').getBoundingClientRect(),r=cell.getBoundingClientRect();
