@@ -584,6 +584,12 @@ details.card[open] summary{margin-bottom:6px}
     </div>
   </div>
   <div class="card">
+    <h3>Gemini API anahtarı <span class="mut" style="font-weight:500;font-size:13px">(isteğe bağlı)</span></h3>
+    <div class="mut" style="font-size:13px;margin-bottom:8px" id="keyStat"></div>
+    <div class="row"><input id="uKey" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="AIza… (boş bırakırsan uygulamanın anahtarı kullanılır)"><button class="sm" style="flex:0 0 auto" onclick="const i=$('uKey');i.type=i.type==='password'?'text':'password'">👁</button></div>
+    <div class="row" style="margin-top:8px"><button class="pri" style="flex:0 0 auto" onclick="keySave()">Kaydet ve test et</button><button class="sm ghost" style="flex:0 0 auto;color:var(--bad)" id="keyDel" onclick="keyClear()">Anahtarı kaldır</button><a class="sm" style="flex:0 0 auto;align-self:center;font-size:12.5px" href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">Anahtar al ↗</a></div>
+  </div>
+  <div class="card">
     <h3>Asistan</h3>
     <div class="row">
       <label style="margin:0;flex:1;display:flex;align-items:center;gap:6px;font-size:14px;color:var(--tx)"><input type="checkbox" id="sumOn"> Akşam özeti bildirimi</label>
@@ -853,7 +859,7 @@ let pays=LS.get('na_pays',[]); // ödemeler: [{id,type,title,amount,date,count,e
 notes.forEach(n=>{if(n.aiBusy){delete n.aiBusy;n.aiPending=true}});
 let cfg=LS.get('na_cfg',{key:'',model:'gemini-flash-latest',sound:true});
 // Gemini ayarları tamamen otomatik: sunucudaki anahtar + en güncel hızlı model (eski manuel ayarlar temizlenir)
-cfg.key='';cfg.model='gemini-flash-latest';LS.set('na_cfg',cfg);
+cfg.model='gemini-flash-latest';LS.set('na_cfg',cfg); // anahtar isteğe bağlı: Ayarlar'dan girilirse o kullanılır
 const APP=typeof window.Android!=='undefined';
 // ---- Özel isimler sözlüğü: Gemini'ye doğru yazımları öğretir + yanlış duyulanları düzeltir ----
 let vocab=LS.get('na_vocab',null);
@@ -931,7 +937,10 @@ async function callGemini(payload){
     }
     if(payload.op==='models'){const r=await fetch(base+'/models?pageSize=200',{headers:{'x-goog-api-key':cfg.key}});const d=await r.json();if(!r.ok)throw new Error(trErr(r.status,d.error?.message));return d}
     let last;
-    for(const m of [cfg.model,...FALLBACK.filter(x=>x!==cfg.model)]){
+    const first=payload.model||cfg.model,fast=!!payload.body?.generationConfig?.thinkingConfig;
+    const thinkFor=m=>/2\.5-pro/.test(m)?{thinkingBudget:128}:/2\.5|2\.0/.test(m)?{thinkingBudget:0}:/pro/.test(m)?{thinkingLevel:'low'}:{thinkingLevel:'minimal'};
+    for(const m of [first,...FALLBACK.filter(x=>x!==first)]){
+      if(fast)payload.body.generationConfig.thinkingConfig=thinkFor(m);
       const r=await fetch(`${base}/models/${m}:generateContent`,{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':cfg.key},body:JSON.stringify(payload.body)});
       let d=await r.json().catch(()=>({}));
       if(r.status===400&&payload.body?.generationConfig?.thinkingConfig){delete payload.body.generationConfig.thinkingConfig;const r2=await fetch(`${base}/models/${m}:generateContent`,{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':cfg.key},body:JSON.stringify(payload.body)});d=await r2.json().catch(()=>({}));if(r2.ok)return d}
@@ -2831,6 +2840,19 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden&&HAS_CALLS
 // ================= AYARLAR =================
 function saveSettings(){cfg.key=$('sKey').value.trim();cfg.code=$('sCode').value.trim();cfg.model=$('sModel').value;cfg.sound=$('sSound').checked;LS.set('na_cfg',cfg);$('sOut').textContent='✔ Kaydedildi'}
 $('sSound').onchange=()=>{cfg.sound=$('sSound').checked;LS.set('na_cfg',cfg)};
+function renderKey(){
+  if(!$('keyStat'))return;const k=cfg.key||'';
+  $('keyStat').innerHTML=k?`✔ Kendi anahtarın kullanılıyor (…${esc(k.slice(-4))}). Kullanım senin Google hesabına yazılır.`:'Şu an uygulamanın anahtarı kullanılıyor. Kendi anahtarını girersen tüm AI istekleri onunla yapılır.';
+  $('keyDel').classList.toggle('hidden',!k);$('uKey').value='';
+}
+async function keySave(){
+  const k=$('uKey').value.trim();if(!k){toastMsg('Anahtarı yapıştır');return}
+  if(!/^[A-Za-z0-9_\-]{20,}$/.test(k)){toastMsg('Anahtar biçimi hatalı görünüyor');return}
+  const old=cfg.key;cfg.key=k;
+  try{const r=await gemini('Tek kelimeyle "Hazır" de.');LS.set('na_cfg',cfg);renderKey();toastMsg('✔ Anahtar çalışıyor, kaydedildi')}
+  catch(e){cfg.key=old;toastMsg('✕ Anahtar çalışmadı: '+esc(e.message),6000)}
+}
+function keyClear(){if(!confirm('Kendi anahtarın kaldırılsın mı? Uygulamanın anahtarına dönülür.'))return;cfg.key='';LS.set('na_cfg',cfg);renderKey();toastMsg('Uygulamanın anahtarı kullanılıyor')}
 async function testAI(){saveSettings();$('sOut').innerHTML='<span class="spin"></span> Test ediliyor...';try{const r=await gemini('Tek kelimeyle "Hazır" de.');$('sOut').textContent='✔ Çalışıyor: '+r.trim()}catch(e){setDot(false);$('sOut').textContent='✕ '+e.message}}
 async function loadModels(){
   saveSettings();
@@ -3243,7 +3265,7 @@ function itemMenu(k,id){
 })();
 document.querySelectorAll('.modal').forEach(m=>m.onclick=e=>{if(e.target===m){if(m.id==='mNote')closeNote();else m.classList.remove('on')}});
 $('nav').onclick=e=>{const b=e.target.closest('button');if(!b||!b.dataset.v)return;show(b.dataset.v)};
-function show(v){if(v==='notlar'){iF='not';v='bugun';setTimeout(renderItems,0)}if(!$('v-'+v))v='bugun';if(v==='ayarlar'){renderBackup();renderVocab();renderCallStat()}if(v==='ayarlar')renderPerms();document.querySelectorAll('main>section').forEach(s=>s.classList.toggle('hidden',s.id!=='v-'+v));[...$('nav').children].forEach(b=>b.classList.toggle('act',b.dataset.v===v));$('fab').classList.toggle('hidden',v!=='bugun'&&v!=='gunluk');if(v==='odeme')renderPays();if(v==='takvim')renderCal();if(v==='parola')vaultScreen();else if(vaultKey)vaultLock(true);$('qBar').classList.toggle('hidden',v!=='bugun');document.body.classList.toggle('home',v==='bugun');window.scrollTo(0,0);if(v==='asistan')renderChat()}
+function show(v){if(v==='notlar'){iF='not';v='bugun';setTimeout(renderItems,0)}if(!$('v-'+v))v='bugun';if(v==='ayarlar'){renderBackup();renderVocab();renderCallStat();renderKey()}if(v==='ayarlar')renderPerms();document.querySelectorAll('main>section').forEach(s=>s.classList.toggle('hidden',s.id!=='v-'+v));[...$('nav').children].forEach(b=>b.classList.toggle('act',b.dataset.v===v));$('fab').classList.toggle('hidden',v!=='bugun'&&v!=='gunluk');if(v==='odeme')renderPays();if(v==='takvim')renderCal();if(v==='parola')vaultScreen();else if(vaultKey)vaultLock(true);$('qBar').classList.toggle('hidden',v!=='bugun');document.body.classList.toggle('home',v==='bugun');window.scrollTo(0,0);if(v==='asistan')renderChat()}
 function renderAll(){renderToday();renderNotes();renderTasks();renderDiary();if($('v-takvim')&&!$('v-takvim').classList.contains('hidden'))renderCal()}
 // 30 günden önce biten görevler arşive taşınır (silinmez; "🗄 Arşiv" filtresinde durur, işareti kaldırınca geri gelir)
 const ARCHIVE_DAYS=30;
