@@ -2507,7 +2507,7 @@ var bkTimer,snapTimer;
 function afterChange(){
   driveSoon();
   if(HAS_FOLDER()&&Android.folderName()){clearTimeout(bkTimer);bkTimer=setTimeout(()=>folderBackup(false),2500)}
-  else if(!HAS_FOLDER()&&WFS&&WFS.on){clearTimeout(bkTimer);bkTimer=setTimeout(()=>webBackup(false),2500)}
+  else if(!HAS_FOLDER()&&WFS&&WFS.on){clearTimeout(bkTimer);wPend=true;bkTimer=setTimeout(()=>{wPend=false;webBackup(false)},1200)}
   if(typeof window.Android!=='undefined'&&typeof Android.saveSnapshot==='function'){clearTimeout(snapTimer);snapTimer=setTimeout(pushSnapshot,3000)}
 }
 function pickFolder(){if(!HAS_FOLDER()){if(WEB_FS())return webPick();toastMsg('Klasöre otomatik yedek Chrome / Edge ya da uygulamada çalışır');return}Android.pickFolder()}
@@ -2625,6 +2625,11 @@ async function webRestore(){
   saveTpls();saveDiary();save();renderAll();toastMsg(`✔ Yüklendi${n?` · ${n} fotoğraf/belge`:''}`);
 }
 setTimeout(webInit,500);
+// Sekme kapanırken / başka sekmeye geçerken bekleyen yedeği hemen yaz
+var wPend=false;
+const wFlush=()=>{if(wPend&&WFS.on){clearTimeout(bkTimer);wPend=false;webBackup(false)}};
+document.addEventListener('visibilitychange',()=>{if(document.hidden)wFlush()});
+window.addEventListener('pagehide',wFlush);
 // ---- Google Drive yedeği: notlar, görevler, günlük ve fotoğraflar tek dosyada; değişiklikten ~1 dk sonra güncellenir ----
 const HAS_DRIVE=()=>false; // Google Drive yedeği kaldırıldı (klasör yedeği ve dosyaya aktarma duruyor)
 let drvTimer=null,drvDirty=false,drvBusy=false;
