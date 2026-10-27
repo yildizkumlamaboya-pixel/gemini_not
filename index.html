@@ -3444,7 +3444,7 @@ if(!window.CAMONLY){checkServer();renderNStat();renderAll();checkReminders();syn
 if(NATIVE_DIARY){pullResults();pullChunks();let st={};try{st=JSON.parse(Android.diaryState())}catch{}if(st.on){dr.on=true;dr.native=true;diaryUI(true);nativeTick()}}
 if(APP&&cfg.sumOn&&typeof Android.setSummary==='function')sumSettings();
 renderPerms().then(all=>{if(APP&&!all&&!LS.get('na_perm',0))setTimeout(()=>$('mPerm').classList.add('on'),900)});
-setTimeout(()=>{if(!cfg.key&&!(srv.ok&&srv.hasKey))toastMsg('📴 Gemini\'ye şu an ulaşılamıyor — internet gelince kendiliğinden bağlanır.',5000)},1500);
+// Gemini bağlantı uyarısı gösterilmez (bağlantı durumu sağ üstteki AI noktasında görünür)
 const sv=new URLSearchParams(location.search).get('v');if(sv)show(sv);
 try{const pv=sessionStorage.getItem('na_ptr');if(pv){sessionStorage.removeItem('na_ptr');show(pv);setTimeout(()=>toastMsg('✔ Yenilendi',1500),300)}}catch{}
 </script>
