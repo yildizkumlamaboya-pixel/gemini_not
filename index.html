@@ -461,7 +461,7 @@ details.card[open] summary{margin-bottom:6px}
       <div class="row" style="align-items:center"><input id="vSearch" placeholder="🔍 Ara (modem, banka, e-devlet…)" oninput="renderVault()"><button class="pri" style="flex:0 0 auto" onclick="vaultForm()">+ Ekle</button><button class="sm ghost" style="flex:0 0 auto" onclick="vaultLock()" title="Kilitle">🔒</button></div>
     </div>
     <div class="card"><div id="vList"></div></div>
-    <div class="mut" style="font-size:12px;text-align:center;margin:-4px 0 10px">3 dakika işlem yapmazsan ya da uygulamadan çıkınca kendiliğinden kilitlenir · <a href="#" onclick="vaultChangePin();return false">PIN'i değiştir</a></div>
+    <div class="mut" style="font-size:12px;text-align:center;margin:-4px 0 10px">Uygulamayı kapatıp açınca kilitlenir · <a href="#" onclick="vaultLock();return false">Şimdi kilitle</a> · <a href="#" onclick="vaultChangePin();return false">PIN'i değiştir</a> · <a href="#" onclick="vaultExcel();return false">Excel'e aktar</a></div>
   </div>
 </section>
 
@@ -3152,9 +3152,7 @@ async function vaultOpen(){
   }catch(e){$('vPin').value='';toastMsg('✕ PIN yanlış');try{navigator.vibrate?.(120)}catch{}}
 }
 function vaultLock(quiet){vaultKey=null;vaultItems=[];clearTimeout(vaultTimer);try{Android.secure(false)}catch{}closeM('mVault');if(!$('v-parola').classList.contains('hidden'))vaultScreen();if(!quiet)toastMsg('🔒 Kasa kilitlendi',1500)}
-function vaultTouch(){clearTimeout(vaultTimer);vaultTimer=setTimeout(()=>{if(vaultKey)vaultLock()},180000)}
-document.addEventListener('visibilitychange',()=>{if(document.hidden&&vaultKey)vaultLock(true)});
-['pointerdown','keydown'].forEach(ev=>document.addEventListener(ev,()=>{if(vaultKey)vaultTouch()},{passive:true}));
+function vaultTouch(){} // otomatik kilit yok: uygulama kapatılıp açılınca kilitli gelir
 const VCAT=['Banka','Resmi (e-Devlet, SGK, GİB)','İnternet / Modem / Wi-Fi','Kamera / DVR','E-posta','Program / Site','Diğer'];
 let vShown=new Set();
 function renderVault(){
@@ -3185,6 +3183,16 @@ async function vaultSave(){
   await vaultWrite();closeM('mVault');renderVault();toastMsg('🔐 Kaydedildi',1500);
 }
 async function vaultDel(){if(!curVault||!confirm(`"${curVault.name}" silinsin mi?`))return;vaultItems=vaultItems.filter(x=>x!==curVault);await vaultWrite();closeM('mVault');renderVault()}
+function vaultExcel(){
+  if(!vaultKey||!vaultItems.length){toastMsg('Kasada kayıt yok');return}
+  if(!confirm('Excel dosyasında parolalar AÇIK (şifresiz) yazılır. Dosyayı kimseyle paylaşma ve işin bitince sil. Devam edilsin mi?'))return;
+  const rows=[...vaultItems].sort((a,b)=>(VCAT.indexOf(a.cat||'Diğer')-VCAT.indexOf(b.cat||'Diğer'))||a.name.localeCompare(b.name,'tr'))
+    .map(x=>[x.cat||'Diğer',x.name||'',x.user||'',x.pass||'',x.url||'',x.note||'',x.updated?stampDate(x.updated):'']);
+  const xs=makeXlsx('Parolalar',[[{v:'İş yeri parolaları · '+stampDate(Date.now()),s:4}],[],['Grup','Ne için','Kullanıcı adı','Parola','Adres','Not','Güncelleme'].map(v=>({v,s:1})),...rows],[22,30,24,22,26,30,17]);
+  const name='is-yeri-parolalari-'+dayKey(Date.now())+'.xlsx',mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  if(APP&&typeof Android.saveFile==='function'){let bin='';for(let i=0;i<xs.length;i+=8192)bin+=String.fromCharCode.apply(null,xs.subarray(i,i+8192));Android.saveFile(btoa(bin),name,mime);return}
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([xs],{type:mime}));a.download=name;a.click();toastMsg('📊 Excel indirildi');
+}
 async function vaultChangePin(){
   if(!vaultKey)return;const p1=prompt('Yeni PIN (en az 4 hane)');if(!p1||p1.trim().length<4)return;if(prompt('Yeni PIN tekrar')!==p1)return toastMsg('PIN\'ler aynı değil');
   const salt=crypto.getRandomValues(new Uint8Array(16));LS.set('na_vault',{salt:b64e(salt),iv:'',ct:'',v:1});vaultKey=await vaultDerive(p1.trim(),salt);await vaultWrite();toastMsg('✔ PIN değişti');
@@ -3351,7 +3359,7 @@ function itemMenu(k,id){
 })();
 document.querySelectorAll('.modal').forEach(m=>m.onclick=e=>{if(e.target===m){if(m.id==='mNote')closeNote();else m.classList.remove('on')}});
 $('nav').onclick=e=>{const b=e.target.closest('button');if(!b||!b.dataset.v)return;show(b.dataset.v)};
-function show(v){if(v==='notlar'){iF='not';v='bugun';setTimeout(renderItems,0)}if(!$('v-'+v))v='bugun';if(v==='ayarlar'){renderBackup();renderVocab();renderCallStat();renderKey()}if(v==='ayarlar')renderPerms();document.querySelectorAll('main>section').forEach(s=>s.classList.toggle('hidden',s.id!=='v-'+v));[...$('nav').children].forEach(b=>b.classList.toggle('act',b.dataset.v===v));$('fab').classList.toggle('hidden',v!=='bugun'&&v!=='gunluk');if(v==='odeme')renderPays();if(v==='takvim')renderCal();if(v==='parola')vaultScreen();else if(vaultKey)vaultLock(true);$('qBar').classList.toggle('hidden',v!=='bugun');document.body.classList.toggle('home',v==='bugun');window.scrollTo(0,0);if(v==='asistan')renderChat()}
+function show(v){if(v==='notlar'){iF='not';v='bugun';setTimeout(renderItems,0)}if(!$('v-'+v))v='bugun';if(v==='ayarlar'){renderBackup();renderVocab();renderCallStat();renderKey()}if(v==='ayarlar')renderPerms();document.querySelectorAll('main>section').forEach(s=>s.classList.toggle('hidden',s.id!=='v-'+v));[...$('nav').children].forEach(b=>b.classList.toggle('act',b.dataset.v===v));$('fab').classList.toggle('hidden',v!=='bugun'&&v!=='gunluk');if(v==='odeme')renderPays();if(v==='takvim')renderCal();if(v==='parola')vaultScreen();try{Android.secure(v==='parola'&&!!vaultKey)}catch{}$('qBar').classList.toggle('hidden',v!=='bugun');document.body.classList.toggle('home',v==='bugun');window.scrollTo(0,0);if(v==='asistan')renderChat()}
 function renderAll(){renderToday();renderNotes();renderTasks();renderDiary();if($('v-takvim')&&!$('v-takvim').classList.contains('hidden'))renderCal()}
 // 30 günden önce biten görevler arşive taşınır (silinmez; "🗄 Arşiv" filtresinde durur, işareti kaldırınca geri gelir)
 const ARCHIVE_DAYS=30;
