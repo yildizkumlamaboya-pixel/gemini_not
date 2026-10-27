@@ -2507,13 +2507,15 @@ var bkTimer,snapTimer;
 function afterChange(){
   driveSoon();
   if(HAS_FOLDER()&&Android.folderName()){clearTimeout(bkTimer);bkTimer=setTimeout(()=>folderBackup(false),2500)}
+  else if(!HAS_FOLDER()&&WFS&&WFS.on){clearTimeout(bkTimer);bkTimer=setTimeout(()=>webBackup(false),2500)}
   if(typeof window.Android!=='undefined'&&typeof Android.saveSnapshot==='function'){clearTimeout(snapTimer);snapTimer=setTimeout(pushSnapshot,3000)}
 }
-function pickFolder(){if(!HAS_FOLDER()){toastMsg('Klasöre otomatik yedek uygulamada çalışır');return}Android.pickFolder()}
+function pickFolder(){if(!HAS_FOLDER()){if(WEB_FS())return webPick();toastMsg('Klasöre otomatik yedek Chrome / Edge ya da uygulamada çalışır');return}Android.pickFolder()}
 window.onFolderPicked=()=>{LS.set('na_bk_photos',{});renderBackup();folderBackup(true)};
 const slug=s=>String(s||'').toLocaleLowerCase('tr').replace(/[çğıöşü]/g,c=>({ç:'c',ğ:'g',ı:'i',ö:'o',ş:'s',ü:'u'}[c])).replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,30)||'foto';
 var bkBusy=false;
 async function folderBackup(manual){
+  if(!HAS_FOLDER()&&WEB_FS())return webBackup(manual);
   if(!HAS_FOLDER()||!Android.folderName()){if(manual)toastMsg('Önce yedek klasörünü seç');return}
   if(bkBusy){bkTimer=setTimeout(()=>folderBackup(manual),3000);return}bkBusy=true;
   try{
@@ -2537,6 +2539,7 @@ async function folderBackup(manual){
   bkBusy=false;renderBackup();
 }
 async function folderRestore(){
+  if(!HAS_FOLDER()&&WEB_FS())return webRestore();
   if(!HAS_FOLDER()||!Android.folderName()){toastMsg('Önce yedek klasörünü seç');return}
   const s=Android.readText('NotAsistani-yedek.json');if(!s){toastMsg('Klasörde yedek bulunamadı');return}
   let d;try{d=JSON.parse(s)}catch{toastMsg('Yedek dosyası okunamadı');return}
@@ -2550,6 +2553,78 @@ async function folderRestore(){
   LS.set('na_bk_photos',{...LS.get('na_bk_photos',{}),...(d.photoFiles||{})});
   saveTpls();saveDiary();save();renderAll();toastMsg(`✔ Yüklendi${n?` · ${n} fotoğraf`:''}`);
 }
+// ---- Bilgisayar tarayıcısında klasöre otomatik yedek (Chrome / Edge: File System Access) — uygulamada kullanılmaz ----
+function WEB_FS(){return !HAS_FOLDER()&&typeof window.showDirectoryPicker==='function'}
+var WFS={h:null,on:false};
+async function wDir(path,create){let d=WFS.h;const parts=path.split('/');const name=parts.pop();for(const p of parts)d=await d.getDirectoryHandle(p,{create});return [d,name]}
+async function wWrite(path,data){const [d,n]=await wDir(path,true);const fh=await d.getFileHandle(n,{create:true});const w=await fh.createWritable();await w.write(data);await w.close();return true}
+async function wRead(path){try{const [d,n]=await wDir(path,false);return await (await d.getFileHandle(n)).getFile()}catch{return null}}
+async function webInit(){
+  if(!WEB_FS())return;
+  try{WFS.h=await DB.get('web_bk_dir')||null}catch{}
+  if(!WFS.h)return;
+  try{WFS.on=(await WFS.h.queryPermission({mode:'readwrite'}))==='granted'}catch{WFS.on=false}
+  if(!WFS.on)setTimeout(()=>toastMsg(`📁 Yedek klasörüne devam etmek için izin ver <button class="sm" style="margin-left:6px" onclick="webGrant()">İzin ver</button>`,10000),3500);
+}
+async function webGrant(){
+  if(!WFS.h)return webPick();
+  try{WFS.on=(await WFS.h.requestPermission({mode:'readwrite'}))==='granted'}catch{WFS.on=false}
+  if(WFS.on){hideToast?.();toastMsg('✔ Yedekleme devam ediyor');webBackup(false)}else toastMsg('İzin verilmedi');
+  renderBackup();
+}
+async function webPick(){
+  try{
+    const h=await window.showDirectoryPicker({id:'notasistani-yedek',mode:'readwrite',startIn:'documents'});
+    WFS.h=h;WFS.on=(await h.queryPermission({mode:'readwrite'}))==='granted'||(await h.requestPermission({mode:'readwrite'}))==='granted';
+    await DB.put('web_bk_dir',h);LS.set('na_wbk_files',{});renderBackup();
+    if(WFS.on){toastMsg('📁 Klasör seçildi, ilk yedek alınıyor…');webBackup(true)}
+  }catch(e){if(e?.name!=='AbortError')toastMsg('⚠️ Klasör seçilemedi: '+esc(e.message||e))}
+}
+let wBusy=false;
+async function webBackup(manual){
+  if(!WFS.h){if(manual)toastMsg('Önce yedek klasörünü seç');return}
+  if(!WFS.on){if(manual)await webGrant();if(!WFS.on)return}
+  if(wBusy){clearTimeout(bkTimer);bkTimer=setTimeout(()=>webBackup(manual),3000);return}wBusy=true;
+  try{
+    const saved=LS.get('na_wbk_files',{});
+    if(LS.get('na_bk_ph',true))for(const n of notes)for(const p of n.photos||[]){
+      if(saved[p.id])continue;
+      try{const b=await DB.get(p.id);if(!b)continue;const fn=`${dayKey(p.ts)}_${hm(p.ts).replace(':','-')}_${slug(p.tpl)}_${p.id}.jpg`;
+        await wWrite('Fotograflar/'+fn,b);saved[p.id]=fn}catch{}
+    }
+    for(const n of notes)for(const f of n.files||[]){
+      if(saved[f.id])continue;
+      try{const b=await DB.get(f.id);if(!b)continue;const fn='Belgeler/'+f.id+'_'+String(f.name).replace(/[\\/:*?"<>|]/g,'_');
+        await wWrite(fn,b);saved[f.id]=fn}catch{}
+    }
+    LS.set('na_wbk_files',saved);
+    const js=JSON.stringify({notes,tasks,diary,pays,vault:LS.get('na_vault',null),tpls,vocab,logo:LS.get('na_logo',''),photoFiles:saved,v:5,at:Date.now(),from:'web'});
+    await wWrite('NotAsistani-yedek.json',js);await wWrite('Yedekler/yedek-'+dayKey(Date.now())+'.json',js);
+    LS.set('na_wbk_last',Date.now());if(manual)toastMsg('✔ Yedeklendi');
+  }catch(e){
+    if(/NotAllowed|permission/i.test(e?.name+e?.message)){WFS.on=false}
+    if(manual)toastMsg('⚠️ Yedeklenemedi: '+esc(e.message||e));
+  }
+  wBusy=false;if($('v-ayarlar')&&!$('v-ayarlar').classList.contains('hidden'))renderBackup();
+}
+async function webRestore(){
+  if(!WFS.h){toastMsg('Önce yedek klasörünü seç');return}
+  if(!WFS.on){await webGrant();if(!WFS.on)return}
+  const f=await wRead('NotAsistani-yedek.json');if(!f){toastMsg('Klasörde yedek bulunamadı');return}
+  let d;try{d=JSON.parse(await f.text())}catch{toastMsg('Yedek dosyası okunamadı');return}
+  if(!confirm(`${d.notes?.length||0} not, ${d.tasks?.length||0} görev, ${d.pays?.length||0} ödeme, ${d.diary?.length||0} günlük kaydı yüklensin mi? (mevcutlara eklenir)`))return;
+  const ids=new Set([...notes,...tasks].map(x=>x.id));
+  notes.push(...(d.notes||[]).filter(x=>!ids.has(x.id)));tasks.push(...(d.tasks||[]).filter(x=>!ids.has(x.id)));
+  {const pi=new Set(pays.map(x=>x.id));pays.push(...(d.pays||[]).filter(x=>!pi.has(x.id)));LS.set('na_pays',pays)}
+  if(d.vault&&d.vault.ct&&!(LS.get('na_vault',null)||{}).ct)LS.set('na_vault',d.vault);
+  const di=new Set(diary.map(x=>x.id));diary.push(...(d.diary||[]).filter(x=>!di.has(x.id)));
+  if(Array.isArray(d.tpls)){const ti=new Set(tpls.map(x=>x.id));tpls.push(...d.tpls.filter(x=>!ti.has(x.id)).map(normTpl))}
+  if(d.logo&&!LS.get('na_logo','')){LS.set('na_logo',d.logo);loadLogo()}
+  let n=0;for(const[id,fn]of Object.entries(d.photoFiles||{})){try{if(await DB.get(id))continue;const file=await wRead(fn.startsWith('Belgeler/')?fn:'Fotograflar/'+fn);if(!file)continue;await DB.put(id,file);n++}catch{}}
+  LS.set('na_wbk_files',{...LS.get('na_wbk_files',{}),...(d.photoFiles||{})});
+  saveTpls();saveDiary();save();renderAll();toastMsg(`✔ Yüklendi${n?` · ${n} fotoğraf/belge`:''}`);
+}
+setTimeout(webInit,500);
 // ---- Google Drive yedeği: notlar, görevler, günlük ve fotoğraflar tek dosyada; değişiklikten ~1 dk sonra güncellenir ----
 const HAS_DRIVE=()=>false; // Google Drive yedeği kaldırıldı (klasör yedeği ve dosyaya aktarma duruyor)
 let drvTimer=null,drvDirty=false,drvBusy=false;
@@ -2645,6 +2720,12 @@ function pinWidget(){if(!Android.widgetPin())toastMsg('Ana ekranda boş bir yere
 function renderBackup(){
   renderShortcuts();
   renderDrive();
+  if(!HAS_FOLDER()&&WEB_FS()){ // bilgisayar tarayıcısı: seçilen klasöre otomatik yedek
+    const last=LS.get('na_wbk_last',0),name=WFS.h?.name||'',need=WFS.h&&!WFS.on;
+    $('bkStat').innerHTML=name?(need?`📁 <b>${esc(name)}</b> · <span style="color:var(--bad)">yedeklemeye devam için izin gerekiyor</span> <button class="sm" onclick="webGrant()">İzin ver</button>`:`📁 <b>${esc(name)}</b> · her değişiklikte bu bilgisayardaki klasöre otomatik yedeklenir${last?`<br>Son yedek: ${fmt(toLocal(new Date(last)))}`:''}`):'Bilgisayarında bir klasör seç: her değişiklikten sonra notlar, görevler, ödemeler, belgeler ve fotoğraflar oraya otomatik yedeklenir. Tarayıcı verisi silinirse oradan geri yüklersin.';
+    $('bkRow').classList.remove('hidden');$('bkRestore').classList.toggle('hidden',!name);$('bkPhotoL').classList.toggle('hidden',!name);
+    $('bkPhotos').checked=LS.get('na_bk_ph',true);return;
+  }
   const app=HAS_FOLDER(),name=app?Android.folderName():'',last=LS.get('na_bk_last',0);
   $('bkStat').innerHTML=!app?'Klasöre otomatik yedek uygulamada çalışır.':name?`📁 <b>${esc(name)}</b> · her değişiklikte otomatik yedeklenir${last?`<br>Son yedek: ${fmt(toLocal(new Date(last)))}`:''}`:'Klasör seçersen her not, görev ve kayıttan sonra oraya otomatik yedek alınır.';
   $('bkRow').classList.toggle('hidden',!app);$('bkRestore').classList.toggle('hidden',!app||!name);$('bkPhotoL').classList.toggle('hidden',!app||!name);
