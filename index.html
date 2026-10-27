@@ -274,6 +274,13 @@ body.camonly>*:not(#cam):not(.toast):not(script){display:none!important}body.cam
   .modal{align-items:center}
   .cal .cd{min-height:68px}
 }
+.tagpick{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.tagpick button{flex:0 0 auto;width:auto;padding:6px 11px;border-radius:999px;font-size:12.5px;font-weight:600;border:1.5px solid var(--line);background:#fff;color:#475569;box-shadow:none}
+.tagpick button.on{background:#ede9fe;border-color:#a78bfa;color:#5b21b6}
+.tagpick button.add{border-style:dashed;color:#2563eb}
+.tagpick input{flex:0 0 140px;width:140px;padding:6px 10px;border-radius:999px;font-size:13px}
+.tmrow{display:flex;align-items:center;gap:8px;padding:9px 0;border-top:1px solid var(--line)}.tmrow:first-child{border-top:0}
+.tmrow b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}.tmrow button{flex:0 0 auto;width:auto;padding:6px 9px}
 .donesep{display:flex;align-items:center;gap:8px;width:100%;font:600 13px inherit;font-family:inherit;color:var(--mut);background:#f8fafc;border:1px dashed var(--line);border-radius:14px;padding:11px 14px;margin-top:8px;cursor:pointer;text-align:left}
 .donesep .cv{margin-left:auto;transition:transform .2s;font-size:12px}.donesep.open .cv{transform:rotate(180deg)}
 .added{font-size:11px;color:var(--mut);white-space:nowrap}
@@ -662,6 +669,12 @@ details.card[open] summary{margin-bottom:6px}
   <label>Not</label><input id="vfNote" placeholder="İsteğe bağlı (ör. Wi-Fi adı, müşteri no)">
   <div class="row" style="margin-top:14px"><button class="ghost hidden" id="vfDel" style="flex:0 0 auto;color:var(--bad)" onclick="vaultDel()">Sil</button><span style="flex:1"></span><button class="pri" style="flex:0 0 auto" onclick="vaultSave()">Kaydet</button></div>
 </div></div>
+<div class="modal" id="mTagMan"><div class="sheet">
+  <div class="row" style="align-items:center;margin-bottom:8px"><h2 style="flex:1;margin:0;font-size:19px">🏷 Etiketler</h2><button class="sm ghost" style="flex:0 0 auto" onclick="closeM('mTagMan')">✕</button></div>
+  <div class="row" style="margin-bottom:10px"><input id="tmNew" placeholder="Yeni etiket adı"><button class="pri" style="flex:0 0 auto" onclick="tagCreate()">Ekle</button></div>
+  <div id="tmList"></div>
+  <div class="mut" style="font-size:12px;margin-top:10px">Yeniden adlandırınca tüm not ve görevlerde değişir. Aynı ada çevirirsen iki etiket birleşir. Silince sadece etiket kalkar, notlar silinmez.</div>
+</div></div>
 <div class="modal" id="mView"><div class="sheet">
   <div class="row" style="align-items:flex-start;margin-bottom:6px"><h2 id="vTitle" style="flex:1;margin:0;font-size:20px;line-height:1.3"></h2><button class="sm ghost" style="flex:0 0 auto" onclick="closeM('mView')">✕</button></div>
   <div id="vMeta" class="mut" style="margin-bottom:6px"></div>
@@ -697,7 +710,8 @@ details.card[open] summary{margin-bottom:6px}
   <input type="file" id="docIn" multiple class="hidden">
   <input type="file" id="camIn" accept="image/*" capture="environment" class="hidden">
   <input type="file" id="galIn" accept="image/*" multiple class="hidden">
-  <label>Etiketler (virgülle)</label><input id="nTags" placeholder="iş, müşteri, fikir">
+  <label>Etiketler</label><input id="nTags" placeholder="iş, müşteri, fikir" oninput="formTagsRender('nTags','nTagPick')">
+  <div class="tagpick" id="nTagPick"></div>
   <label><input type="checkbox" id="nPin" style="width:auto"> 📌 Sabitle</label>
   <div class="row" style="margin-top:10px">
     <button class="sm" onclick="voice('note')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3.5"/></svg> Sesle yaz</button>
@@ -745,7 +759,8 @@ details.card[open] summary{margin-bottom:6px}
   <div class="row"><h3 style="margin:0">Görev</h3><button class="sm ghost" style="flex:0 0 auto" onclick="closeM('mTask')">✕</button></div>
   <label>Görev</label><input id="tTitle">
   <label>Açıklama</label><textarea id="tNote" style="min-height:60px"></textarea>
-  <label>Etiketler (virgülle)</label><input id="tTags" placeholder="iş, müşteri, sevkiyat">
+  <label>Etiketler</label><input id="tTags" placeholder="iş, müşteri, sevkiyat" oninput="formTagsRender('tTags','tTagPick')">
+  <div class="tagpick" id="tTagPick"></div>
   <div class="row">
     <div><label>Tarih/saat</label><input type="datetime-local" id="tDue"></div>
     <div><label>Öncelik</label><select id="tPri"><option value="yuksek">Yüksek</option><option value="orta" selected>Orta</option><option value="dusuk">Düşük</option></select></div>
@@ -1497,7 +1512,7 @@ function openNote(id){
   const n=notes.find(x=>x.id===id);curNote=n||null;
   edPhotos=[...(n?.photos||[])];edNew=new Set();edDel=new Set();renderEdPhotos();$('phStat').textContent='';
   edDocs=[...(n?.files||[])];renderEdDocs();
-  $('nTitle').value=n?.title||'';$('nBody').value=n?.body||'';$('nTags').value=(n?.tags||[]).join(', ');$('nPin').checked=!!n?.pinned;
+  $('nTitle').value=n?.title||'';$('nBody').value=n?.body||'';$('nTags').value=(n?.tags||[]).join(', ');formTagsRender('nTags','nTagPick');$('nPin').checked=!!n?.pinned;
   $('nAIOut').innerHTML='';$('nDel').classList.toggle('hidden',!n);
   $('nDel').onclick=()=>{if(confirm('Not silinsin mi?')){(n?.photos||[]).concat(edPhotos,n?.files||[],edDocs).forEach(p=>DB.del(p.id).catch(()=>{}));notes=notes.filter(x=>x.id!==id);save();closeM('mNote');renderAll()}};
   $('mNote').classList.add('on');
@@ -1523,7 +1538,7 @@ async function noteAI(mode){
     }else if(mode==='etiket'){
       const r=await gemini(`Bu not için 2-4 kısa Türkçe etiket öner. Mevcut etiketler: ${notes.flatMap(n=>n.tags).filter((v,i,a)=>a.indexOf(v)===i).join(', ')||'yok'} (uygunsa bunları tercih et). JSON: {"tags":[]}\n\nBaşlık: ${title}\n${body}`,{json:true});
       const ex=$('nTags').value.split(',').map(s=>s.trim()).filter(Boolean);
-      $('nTags').value=[...new Set([...ex,...(r.tags||[])])].join(', ');out.innerHTML='';
+      $('nTags').value=[...new Set([...ex,...(r.tags||[])])].join(', ');formTagsRender('nTags','nTagPick');out.innerHTML='';
     }else if(mode==='gorev'){
       const r=await gemini(`Bu nottaki yapılacak işleri çıkar:\n\n${body}`,{json:true,system:`${nowCtx()} Sadece JSON: {"tasks":[{"title":"","note":"","due":null,"remind":null,"priority":"orta"}]}. Tarih yoksa null.`});
       const ts=r.tasks||[];
@@ -2226,7 +2241,7 @@ window.addEventListener('beforeunload',e=>{if(dr.on){e.preventDefault();e.return
 let curTask=null,tF='bugun';
 function openTask(id){
   const t=tasks.find(x=>x.id===id);curTask=t||null;
-  $('tTitle').value=t?.title||'';$('tNote').value=t?.note||'';$('tDue').value=t?.due||'';$('tRem').value=t?.remind||'';$('tPri').value=t?.priority||'orta';$('tRep').value=t?.repeat||'';$('tTags').value=(t?.tags||[]).join(', ');
+  $('tTitle').value=t?.title||'';$('tNote').value=t?.note||'';$('tDue').value=t?.due||'';$('tRem').value=t?.remind||'';$('tPri').value=t?.priority||'orta';$('tRep').value=t?.repeat||'';$('tTags').value=(t?.tags||[]).join(', ');formTagsRender('tTags','tTagPick');
   $('tDel').classList.toggle('hidden',!t);
   $('tDel').onclick=()=>{if(confirm('Görev silinsin mi?')){tasks=tasks.filter(x=>x.id!==id);save();closeM('mTask');renderAll()}};
   $('mTask').classList.add('on');
@@ -2311,7 +2326,8 @@ function renderItems(){
   $('iFilter').innerHTML=Object.entries(IF).map(([k,l])=>{const c=cnt(k);return (c||k==='all'||k===iF||['gorev','not','bugun'].includes(k))?`<button class="${k===iF?'act':''}" onclick="setIF('${k}')">${l}${c&&k!=='all'?` <span class="cnt${k==='geciken'?' bad':''}">${c}</span>`:''}</button>`:''}).join('');
   const tags=[...new Set(all.filter(([k,x])=>!fromG(x)||iF==='gunluk').flatMap(([k,x])=>x.tags||[]))].sort((a,b)=>a.localeCompare(b,'tr'));
   if(iTag&&!tags.includes(iTag))iTag='';
-  $('iTags').innerHTML=tags.map(t=>`<button class="sm ${iTag===t?'act':''}" onclick="iTag=iTag==='${esc(t)}'?'':'${esc(t)}';renderItems()">#${esc(t)}</button>`).join('');
+  window._it=tags;
+  $('iTags').innerHTML=tags.map((t,i)=>`<button class="sm ${iTag===t?'act':''}" onclick="iTag=iTag===_it[${i}]?'':_it[${i}];renderItems()">#${esc(t)}</button>`).join('')+`<button class="sm ghost" onclick="openTagMan()">🏷 Etiketleri düzenle</button>`;
   let l=all.filter(([k,x])=>iMatch(k,x,iF)&&(!iTag||(x.tags||[]).includes(iTag))&&(!q||iText(k,x).includes(q)));
   const now=new Date(),end=new Date(now.getFullYear(),now.getMonth(),now.getDate(),23,59);
   // En son eklenen en üstte (sabitlenenler önde, bitenler en altta)
@@ -2967,6 +2983,52 @@ function hideToast(){$('toast').classList.remove('on')}
 $('toast').onclick=e=>{if(e.target===$('toast'))hideToast()};
 function closeM(id){$(id).classList.remove('on')}
 // ---- Görüntüleme (dokun) ve Düzenle/Sil menüsü (basılı tut) ----
+// ================= ETİKETLER: ekle, yeniden adlandır, birleştir, sil; notta / görevde hızlı değiştir =================
+function allTags(){
+  const m=new Map();for(const x of [...notes,...tasks])for(const t of x.tags||[]){const k=String(t).trim();if(k)m.set(k,(m.get(k)||0)+1)}
+  for(const t of LS.get('na_tagsx',[]))if(!m.has(t))m.set(t,0);
+  return [...m.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0],'tr'));
+}
+const tagNorm=t=>String(t||'').replace(/^#/,'').replace(/,/g,' ').replace(/\s+/g,' ').trim().slice(0,30);
+function openTagMan(){renderTagMan();$('mTagMan').classList.add('on');setTimeout(()=>$('tmNew').focus(),100)}
+function renderTagMan(){
+  const l=allTags();window._tm=l.map(x=>x[0]);
+  $('tmList').innerHTML=l.length?l.map(([t,c],i)=>`<div class="tmrow"><span>🏷</span><b>${esc(t)}</b><span class="mut" style="font-size:12px">${c} kayıt</span><button class="sm" onclick="tagRename(${i})" title="Yeniden adlandır">✏️</button><button class="sm ghost" style="color:var(--bad)" onclick="tagDelete(${i})" title="Sil">🗑</button></div>`).join(''):'<div class="mut">Henüz etiket yok</div>';
+}
+function tagCreate(){const t=tagNorm($('tmNew').value);if(!t)return;const x=LS.get('na_tagsx',[]);if(!x.includes(t)&&!allTags().some(a=>a[0]===t)){x.push(t);LS.set('na_tagsx',x)}$('tmNew').value='';renderTagMan();toastMsg('🏷 '+esc(t)+' eklendi',1500)}
+function tagRename(i){
+  const old=window._tm[i];const nu=tagNorm(prompt('Yeni ad:',old));if(!nu||nu===old)return;
+  for(const x of [...notes,...tasks])if(x.tags?.includes(old)){x.tags=[...new Set(x.tags.map(t=>t===old?nu:t))]}
+  LS.set('na_tagsx',[...new Set(LS.get('na_tagsx',[]).map(t=>t===old?nu:t))]);
+  if(iTag===old)iTag=nu;save();renderAll();renderTagMan();toastMsg('✔ Etiket güncellendi',1500);
+}
+function tagDelete(i){
+  const t=window._tm[i],c=[...notes,...tasks].filter(x=>x.tags?.includes(t)).length;
+  if(!confirm(`"${t}" etiketi silinsin mi?${c?` (${c} kayıttan kaldırılır, kayıtlar silinmez)`:''}`))return;
+  for(const x of [...notes,...tasks])if(x.tags?.includes(t))x.tags=x.tags.filter(y=>y!==t);
+  LS.set('na_tagsx',LS.get('na_tagsx',[]).filter(y=>y!==t));if(iTag===t)iTag='';save();renderAll();renderTagMan();
+}
+// Görüntüleme penceresinde: etikete dokun = ekle/çıkar, "+ yeni" = yeni etiket
+function viewTagsRender(k,x){
+  const cur=new Set(x.tags||[]),l=[...new Set([...(x.tags||[]),...allTags().map(a=>a[0])])];window._vt={k,id:x.id,l};
+  $('vTags').innerHTML=`<div class="tagpick">${l.map((t,i)=>`<button class="${cur.has(t)?'on':''}" onclick="viewTagToggle(${i})">#${esc(t)}</button>`).join('')}<button class="add" onclick="viewTagNew()">+ etiket</button></div>`;
+}
+function viewTagToggle(i){const v=window._vt;const x=(v.k==='n'?notes:tasks).find(y=>y.id===v.id);if(!x)return;const t=v.l[i];
+  x.tags=x.tags?.includes(t)?x.tags.filter(y=>y!==t):[...(x.tags||[]),t];if(v.k==='n')x.updated=x.updated||Date.now();save();renderAll();viewTagsRender(v.k,x)}
+function viewTagNew(){
+  const box=$('vTags').querySelector('.tagpick');if(box.querySelector('input'))return;
+  const inp=document.createElement('input');inp.placeholder='yeni etiket';box.insertBefore(inp,box.lastElementChild);inp.focus();
+  const done=()=>{const t=tagNorm(inp.value);const v=window._vt;const x=(v.k==='n'?notes:tasks).find(y=>y.id===v.id);if(t&&x){x.tags=[...new Set([...(x.tags||[]),t])];save();renderAll()}if(x)viewTagsRender(v.k,x)};
+  inp.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();done()}else if(e.key==='Escape'){e.stopPropagation();viewTagsRender(window._vt.k,(window._vt.k==='n'?notes:tasks).find(y=>y.id===window._vt.id))}};
+  inp.onblur=done;
+}
+// Not / görev formunda: mevcut etiketlere dokunarak ekle/çıkar
+function formTagsRender(inpId,boxId){
+  const inp=$(inpId),cur=inp.value.split(',').map(tagNorm).filter(Boolean),set=new Set(cur);
+  const l=[...new Set([...cur,...allTags().map(a=>a[0])])].slice(0,40);window['_ft_'+boxId]=l;
+  $(boxId).innerHTML=l.map((t,i)=>`<button type="button" class="${set.has(t)?'on':''}" onclick="formTagToggle('${inpId}','${boxId}',${i})">#${esc(t)}</button>`).join('')+`<button type="button" class="add" onclick="openTagMan()">🏷 Düzenle</button>`;
+}
+function formTagToggle(inpId,boxId,i){const t=window['_ft_'+boxId][i],inp=$(inpId);let cur=inp.value.split(',').map(tagNorm).filter(Boolean);cur=cur.includes(t)?cur.filter(x=>x!==t):[...cur,t];inp.value=cur.join(', ');formTagsRender(inpId,boxId)}
 function priSel(k,x){
   const opts=k==='n'?[['yok','Yok'],['dusuk','Düşük'],['orta','Orta'],['yuksek','Yüksek']]:[['dusuk','Düşük'],['orta','Orta'],['yuksek','Yüksek']];
   const cur=x.priority||'yok';
@@ -3311,7 +3373,7 @@ function viewNote(id){
   $('vMeta').innerHTML=`📝 ${fmt(toLocal(new Date(n.created||n.updated)))}${n.updated&&n.updated!==n.created?' · düzenlendi '+fmt(toLocal(new Date(n.updated))):''}${isAI(n)?' · <span class="tag ai-tag">✨ AI'+(n.via==='voice'?' · 🎤':'')+'</span>':''}${n.pinned?' · 📌':''}`;
   $('vBody').textContent=n.body||'';
   edPhotos=[...(n.photos||[])];$('vPhotos').innerHTML=edPhotos.map((p,i)=>`<img data-pid="${p.id}" onclick="viewPhoto(${i})" alt="">`).join('')+(n.files?.length?`<div class="docs" style="grid-column:1/-1;width:100%">${n.files.map(f=>docHTML(f,false)).join('')}</div>`:'');hydrate($('vPhotos'));
-  $('vTags').innerHTML=(n.tags||[]).map(t=>`<span class="tag">#${esc(t)}</span>`).join('');
+  viewTagsRender('n',n);
   $('vAct').innerHTML=`${n.audio?`<button class="audbtn big" onclick="playAud('${n.audio}',this)">▶ Sesi dinle${n.audioDur?' · '+n.audioDur+' sn':''}</button><button class="sm ghost" style="flex:0 0 auto;width:auto" onclick="saveAud('${n.audio}')" title="Ses dosyasını kaydet">⬇</button>`:''}<button onclick="shareItem('n','${n.id}')">📤 Paylaş</button><button onclick="convertItem('n','${n.id}')">✅ Göreve çevir</button><button onclick="archiveNote('${n.id}')">${n.archived?'↩ Arşivden çıkar':'🗄 Arşive al'}</button>`;
   if(n.audio)$('vMeta').insertAdjacentHTML('beforeend',` · <span class="mut">🎤 ses ${audLeft(n.audio)} daha saklanır</span>`);
   $('mView').classList.add('on');
@@ -3321,7 +3383,7 @@ function viewTask(id){
   $('vTitle').textContent=(t.done?'✓ ':'')+t.title;
   const late=!t.done&&t.due&&new Date(t.due)<new Date();
   $('vMeta').innerHTML=[t.due?`<span class="${late?'late':''}">📅 ${fmt(t.due)}</span>`:'',t.remind?`⏰ ${fmt(t.remind)}`:'',t.repeat?'🔁 '+t.repeat:'',t.done&&t.doneAt?'✓ bitti '+fmt(toLocal(new Date(t.doneAt))):''].filter(Boolean).join(' · ');
-  $('vBody').textContent=t.note||'';$('vPhotos').innerHTML='';$('vTags').innerHTML='';
+  $('vBody').textContent=t.note||'';$('vPhotos').innerHTML='';viewTagsRender('t',t);
   $('vAct').innerHTML=`<button class="${t.done?'':'pri'}" onclick="toggle('${t.id}');viewTask('${t.id}')">${t.done?'↺ Geri al':'✓ Tamamlandı'}</button><button onclick="shareItem('t','${t.id}')">📤 Paylaş</button>${t.audio?`<button class="audbtn big" onclick="playAud('${t.audio}',this)">▶ Sesi dinle</button><button class="sm ghost" style="flex:0 0 auto;width:auto" onclick="saveAud('${t.audio}')" title="Ses dosyasını kaydet">⬇</button>`:''}<button onclick="convertItem('t','${t.id}')">📝 Nota çevir</button>`;
   $('mView').classList.add('on');
 }
