@@ -468,7 +468,17 @@ details.card[open] summary{margin-bottom:6px}
       <div class="row" style="align-items:center"><input id="vSearch" placeholder="🔍 Ara (modem, banka, e-devlet…)" oninput="renderVault()"><button class="pri" style="flex:0 0 auto" onclick="vaultForm()">+ Ekle</button><button class="sm ghost" style="flex:0 0 auto" onclick="vaultLock()" title="Kilitle">🔒</button></div>
     </div>
     <div class="card"><div id="vList"></div></div>
-    <div class="mut" style="font-size:12px;text-align:center;margin:-4px 0 10px">Uygulamayı kapatıp açınca kilitlenir · <a href="#" onclick="vaultLock();return false">Şimdi kilitle</a> · <a href="#" onclick="vaultChangePin();return false">PIN'i değiştir</a> · <a href="#" onclick="vaultExcel();return false">Excel'e aktar</a></div>
+    <div class="card">
+      <h3 style="margin:0 0 8px">Dışa / içe aktar</h3>
+      <div class="row" style="flex-wrap:wrap">
+        <button class="sm" style="flex:1 1 140px" onclick="vaultExportEnc()">🔒 Şifreli yedek al</button>
+        <button class="sm" style="flex:1 1 140px" onclick="vaultExcel()">📊 Excel'e aktar</button>
+        <button class="sm pri" style="flex:1 1 140px" onclick="$('vImp').click()">⬇ İçe aktar</button>
+      </div>
+      <div class="mut" style="font-size:12px;margin-top:8px">İçe aktarılabilenler: bu uygulamanın şifreli yedeği (.json), Excel (.xlsx) ve CSV (Chrome / Google Parola Yöneticisi dışa aktarımı dahil). Aynı kayıt varsa tekrar eklenmez.</div>
+      <input type="file" id="vImp" accept=".json,.csv,.xlsx,.txt,application/json,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="hidden">
+    </div>
+    <div class="mut" style="font-size:12px;text-align:center;margin:-4px 0 10px">Uygulamayı kapatıp açınca kilitlenir · <a href="#" onclick="vaultLock();return false">Şimdi kilitle</a> · <a href="#" onclick="vaultChangePin();return false">PIN'i değiştir</a></div>
   </div>
 </section>
 
@@ -3245,6 +3255,83 @@ async function vaultSave(){
   await vaultWrite();closeM('mVault');renderVault();toastMsg('🔐 Kaydedildi',1500);
 }
 async function vaultDel(){if(!curVault||!confirm(`"${curVault.name}" silinsin mi?`))return;vaultItems=vaultItems.filter(x=>x!==curVault);await vaultWrite();closeM('mVault');renderVault()}
+// ---- Şifreli yedek (.json): açmak için o yedeğin PIN'i gerekir ----
+async function vaultExportEnc(){
+  if(!vaultKey||!vaultItems.length){toastMsg('Kasada kayıt yok');return}
+  await vaultWrite();const v=LS.get('na_vault',null);
+  const js=JSON.stringify({app:'NotAsistani',type:'parola-kasasi',v:1,at:Date.now(),count:vaultItems.length,vault:{salt:v.salt,iv:v.iv,ct:v.ct}});
+  const name='parola-kasasi-'+dayKey(Date.now())+'.json';
+  if(APP&&typeof Android.saveFile==='function'){Android.saveFile(btoa(unescape(encodeURIComponent(js))),name,'application/json');return}
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([js],{type:'application/json'}));a.download=name;a.click();toastMsg('🔒 Şifreli yedek indirildi');
+}
+// ---- İçe aktar: şifreli yedek / Excel / CSV ----
+function csvParse(t){
+  t=t.replace(/^\uFEFF/,'');const sep=(t.split('\n')[0].match(/;/g)||[]).length>(t.split('\n')[0].match(/,/g)||[]).length?';':',';
+  const rows=[];let row=[],f='',q=false;
+  for(let i=0;i<t.length;i++){const c=t[i];
+    if(q){if(c==='"'){if(t[i+1]==='"'){f+='"';i++}else q=false}else f+=c}
+    else if(c==='"')q=true;else if(c===sep){row.push(f);f=''}else if(c==='\n'){row.push(f.replace(/\r$/,''));rows.push(row);row=[];f=''}else f+=c}
+  if(f||row.length){row.push(f.replace(/\r$/,''));rows.push(row)}
+  return rows.filter(r=>r.some(x=>String(x).trim()));
+}
+async function unzipEntries(u8){ // .xlsx okuma: zip içindeki dosyalar (sıkıştırmasız veya deflate)
+  const dv=new DataView(u8.buffer,u8.byteOffset,u8.byteLength),out={};let e=u8.length-22;
+  while(e>=0&&dv.getUint32(e,true)!==0x06054b50)e--;if(e<0)throw new Error('Excel dosyası okunamadı');
+  const n=dv.getUint16(e+10,true);let p=dv.getUint32(e+16,true);
+  for(let i=0;i<n;i++){
+    const method=dv.getUint16(p+10,true),csize=dv.getUint32(p+20,true),nl=dv.getUint16(p+28,true),xl=dv.getUint16(p+30,true),cl=dv.getUint16(p+32,true),lo=dv.getUint32(p+42,true);
+    const name=new TextDecoder().decode(u8.subarray(p+46,p+46+nl));p+=46+nl+xl+cl;
+    if(!/^xl\/(sharedStrings\.xml|worksheets\/sheet1\.xml|workbook\.xml)$/.test(name))continue;
+    const ds=lo+30+dv.getUint16(lo+26,true)+dv.getUint16(lo+28,true),data=u8.subarray(ds,ds+csize);
+    if(method===0)out[name]=new TextDecoder().decode(data);
+    else if(method===8){const st=new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'));out[name]=await new Response(st).text()}
+  }
+  return out;
+}
+async function xlsxRows(file){
+  const z=await unzipEntries(new Uint8Array(await file.arrayBuffer()));
+  const dp=new DOMParser(),ss=[];
+  if(z['xl/sharedStrings.xml']){const d=dp.parseFromString(z['xl/sharedStrings.xml'],'application/xml');d.querySelectorAll('si').forEach(si=>ss.push([...si.querySelectorAll('t')].map(t=>t.textContent).join('')))}
+  const sh=dp.parseFromString(z['xl/worksheets/sheet1.xml']||'','application/xml'),rows=[];
+  const colIdx=r=>{let n=0;for(const ch of r.replace(/\d+/g,''))n=n*26+ch.charCodeAt(0)-64;return n-1};
+  sh.querySelectorAll('sheetData row').forEach(r=>{const row=[];r.querySelectorAll('c').forEach(c=>{const i=colIdx(c.getAttribute('r')||'A'),t=c.getAttribute('t');let v='';
+    if(t==='inlineStr')v=[...c.querySelectorAll('t')].map(x=>x.textContent).join('');else{const vv=c.querySelector('v')?.textContent??'';v=t==='s'?(ss[+vv]??''):vv}row[i]=v});
+    if(row.some(x=>String(x??'').trim()))rows.push([...row].map(x=>x??''))});
+  return rows;
+}
+const VMAP={name:/^(ne için|ad|isim|name|title|başlık|site|hesap)$/i,user:/^(kullanıcı adı|kullanıcı|username|login|e-?posta|email|user)$/i,pass:/^(parola|şifre|sifre|password|pass)$/i,url:/^(adres|url|website|site adresi|link)$/i,note:/^(not|note|notes|açıklama|aciklama)$/i,cat:/^(grup|kategori|group|category|folder)$/i};
+function rowsToVault(rows){
+  const hi=rows.findIndex(r=>r.some(c=>VMAP.pass.test(String(c).trim())));if(hi<0)throw new Error('Dosyada "Parola" ya da "password" sütunu bulunamadı');
+  const h=rows[hi].map(c=>String(c).trim()),col={};for(const[k,re]of Object.entries(VMAP)){const i=h.findIndex(x=>re.test(x));if(i>=0)col[k]=i}
+  return rows.slice(hi+1).map(r=>{const g=k=>col[k]!=null?String(r[col[k]]??'').trim():'';
+    let name=g('name')||g('url').replace(/^https?:\/\//,'').split('/')[0]||g('user');const cat=VCAT.find(c=>c.toLocaleLowerCase('tr')===g('cat').toLocaleLowerCase('tr'))||'Diğer';
+    return {name,cat,user:g('user'),pass:g('pass'),url:g('url'),note:g('note')}}).filter(x=>x.name&&(x.pass||x.user));
+}
+async function vaultImportItems(list,src){
+  const key=x=>(x.name+'|'+x.user).toLocaleLowerCase('tr');const have=new Set(vaultItems.map(key));
+  const add=list.filter(x=>!have.has(key(x))).map(x=>({id:uid(),created:Date.now(),updated:Date.now(),name:x.name,cat:x.cat||'Diğer',user:x.user||'',pass:x.pass||'',url:x.url||'',note:x.note||''}));
+  if(!add.length){toastMsg(`${src}: eklenecek yeni kayıt yok (${list.length} kayıt zaten var)`);return}
+  vaultItems.push(...add);await vaultWrite();renderVault();
+  toastMsg(`✔ ${add.length} parola eklendi${list.length-add.length?` · ${list.length-add.length} tanesi zaten vardı`:''}`,4000);
+}
+$('vImp').onchange=async e=>{
+  const f=e.target.files[0];e.target.value='';if(!f)return;
+  if(!vaultKey){toastMsg('Önce kasayı aç');return}
+  try{
+    const nm=f.name.toLowerCase();
+    if(nm.endsWith('.json')){
+      const d=JSON.parse(await f.text()),v=d.vault||d;
+      if(!v.salt||!v.ct)throw new Error('Bu dosya parola kasası yedeği değil');
+      const pin=prompt('Bu yedeğin PIN\'ini gir:');if(!pin)return;
+      let items;try{const k=await vaultDerive(pin.trim(),b64d(v.salt));items=JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:b64d(v.iv)},k,b64d(v.ct))))}catch{toastMsg('✕ PIN yanlış ya da dosya bozuk');return}
+      return vaultImportItems(items,'Şifreli yedek');
+    }
+    const rows=nm.endsWith('.xlsx')?await xlsxRows(f):csvParse(await f.text());
+    const list=rowsToVault(rows);if(!list.length){toastMsg('Dosyada parola kaydı bulunamadı');return}
+    if(!confirm(`${list.length} parola bulundu. İçe aktarılsın mı?\n\nNot: Excel / CSV dosyası açık (şifresiz) olduğu için içe aktardıktan sonra o dosyayı silmeni öneririm.`))return;
+    await vaultImportItems(list,nm.endsWith('.xlsx')?'Excel':'CSV');
+  }catch(err){toastMsg('⚠️ '+esc(err.message||err),5000)}
+};
 function vaultExcel(){
   if(!vaultKey||!vaultItems.length){toastMsg('Kasada kayıt yok');return}
   if(!confirm('Excel dosyasında parolalar AÇIK (şifresiz) yazılır. Dosyayı kimseyle paylaşma ve işin bitince sil. Devam edilsin mi?'))return;
